@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — ERP Stage Builder{% endblock %}
+{% block nav_home %}active{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div class="page-title">Dashboard</div>
+    <div class="page-subtitle">Manage your ERP stages and form types</div>
+  </div>
+  <div class="page-actions">
+    <button class="btn btn-primary" onclick="openCreateStageModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      New Stage
+    </button>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-icon blue">🏗️</div>
+    <div class="stat-label">Total Stages</div>
+    <div class="stat-value">{{ total_stages }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green">📋</div>
+    <div class="stat-label">Form Types</div>
+    <div class="stat-value">{{ total_forms }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon orange">🌿</div>
+    <div class="stat-label">Root Stages</div>
+    <div class="stat-value">{{ stages | selectattr('is_root') | list | length }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple">🍃</div>
+    <div class="stat-label">Leaf Stages</div>
+    <div class="stat-value">{{ stages | selectattr('is_leaf') | list | length }}</div>
+  </div>
+</div>
+
+<!-- Stage Tree + Recent Forms -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+  <!-- Stage Hierarchy -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Stage Hierarchy</div>
+        <div class="card-subtitle">{{ total_stages }} stages total</div>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="openCreateStageModal()">+ Add Stage</button>
+    </div>
+    <div id="tree-container">
+      {% if tree %}
+        {% for node in tree %}
+          {{ render_tree(node) }}
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" style="padding:24px">
+          <div class="empty-icon">🏗️</div>
+          <h3>No stages yet</h3>
+          <p>Create your first stage to get started.</p>
+          <button class="btn btn-primary btn-sm" onclick="openCreateStageModal()">Create Stage</button>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Form Types -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Recent Form Types</div>
+        <div class="card-subtitle">{{ total_forms }} forms total</div>
+      </div>
+    </div>
+    {% if form_types %}
+      <div style="display:flex;flex-direction:column;gap:8px">
+        {% for ft in form_types[:12] %}
+        <a href="/form-builder/{{ ft.form_type_id }}" style="text-decoration:none">
+          <div class="d-flex align-center gap-2" style="padding:8px 10px;border-radius:var(--radius);border:1px solid var(--border-light);background:#fff;transition:var(--transition)" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border-light)'">
+            <div style="width:32px;height:32px;background:var(--primary-light);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">📋</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ft.form_name }}</div>
+              <div style="font-size:11px;color:var(--text-muted)">{{ ft.form_path }}</div>
+            </div>
+            <span class="badge badge-gray">v{{ ft.version }}</span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% if total_forms > 12 %}
+        <div style="text-align:center;margin-top:12px">
+          <span style="font-size:12px;color:var(--text-muted)">+{{ total_forms - 12 }} more forms</span>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="empty-state" style="padding:24px">
+        <div class="empty-icon">📋</div>
+        <h3>No form types yet</h3>
+        <p>Create a stage first, then add form types to it.</p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- All Stages Table -->
+<div class="card" style="margin-top:20px">
+  <div class="card-header">
+    <div class="card-title">All Stages</div>
+    <input type="text" class="form-control form-control-sm" style="width:200px" placeholder="Filter stages…" oninput="filterTable(this.value)">
+  </div>
+  <div class="table-wrap">
+    <table id="stages-table">
+      <thead>
+        <tr>
+          <th>Stage Name</th>
+          <th>Path</th>
+          <th>Depth</th>
+          <th>Children</th>
+          <th>Forms</th>
+          <th>Visibility</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for stage in stages %}
+        <tr data-name="{{ stage.stage_name | lower }}">
+          <td>
+            <a href="/stages/{{ stage.stage_id }}" style="font-weight:600">{{ stage.stage_name }}</a>
+            {% if stage.is_root %}<span class="badge badge-blue" style="margin-left:6px">root</span>{% endif %}
+          </td>
+          <td><code style="font-size:11px;color:var(--text-muted)">{{ stage.stage_path }}</code></td>
+          <td>{{ stage.depth_level }}</td>
+          <td>{{ stage.children_count }}</td>
+          <td>{{ stage.formtype_count }}</td>
+          <td>
+            {% if stage.visibility_scope == 'public' %}
+              <span class="badge badge-green">public</span>
+            {% elif stage.visibility_scope == 'restricted' %}
+              <span class="badge badge-orange">restricted</span>
+            {% else %}
+              <span class="badge badge-gray">private</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="d-flex gap-1">
+              <a href="/stages/{{ stage.stage_id }}" class="btn btn-xs btn-secondary">View</a>
+              <button class="btn btn-xs btn-danger" onclick="deleteStage('{{ stage.stage_id }}','{{ stage.stage_name }}')">Delete</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create Stage Modal -->
+<div class="modal-overlay" id="create-stage-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Create New Stage</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('create-stage-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label required">Stage Name</label>
+        <input type="text" class="form-control" id="new-stage-name" placeholder="e.g. Recruitment">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Parent Stage</label>
+        <select class="form-control" id="new-stage-parent">
+          <option value="">— Root (no parent) —</option>
+          {% for stage in stages %}
+          <option value="{{ stage.stage_id }}">{{ stage.stage_path }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Visibility</label>
+        <select class="form-control" id="new-stage-visibility">
+          <option value="private">Private</option>
+          <option value="public">Public</option>
+          <option value="restricted">Restricted</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('create-stage-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createStage()">Create Stage</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% macro render_tree(node, depth=0) %}
+<div style="padding-left:{{ depth * 16 }}px;margin-bottom:2px">
+  <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);transition:var(--transition)" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+    {% if node.children %}
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="color:var(--text-muted);cursor:pointer" onclick="toggleChildren(this)"><path d="m9 18 6-6-6-6"/></svg>
+    {% else %}
+      <span style="width:10px;display:inline-block"></span>
+    {% endif %}
+    <a href="/stages/{{ node.stage_id }}" style="font-size:13px;font-weight:500;color:var(--text);text-decoration:none;flex:1">
+      {{ node.stage_name }}
+    </a>
+    {% if node.formtype_count > 0 %}
+      <span class="badge badge-blue" style="font-size:10px">{{ node.formtype_count }} forms</span>
+    {% endif %}
+    {% if node.children_count > 0 %}
+      <span class="badge badge-gray" style="font-size:10px">{{ node.children_count }}</span>
+    {% endif %}
+  </div>
+  {% if node.children %}
+    <div class="tree-children" style="display:none">
+      {% for child in node.children %}
+        {{ render_tree(child, depth + 1) }}
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% block extra_js %}
+<script>
+function toggleChildren(el) {
+  const parent = el.closest('div[style*="padding-left"]');
+  const children = parent.querySelector('.tree-children');
+  if (!children) return;
+  const open = children.style.display !== 'none';
+  children.style.display = open ? 'none' : 'block';
+  el.style.transform = open ? '' : 'rotate(90deg)';
+}
+
+function filterTable(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#stages-table tbody tr').forEach(tr => {
+    tr.style.display = tr.dataset.name.includes(q) ? '' : 'none';
+  });
+}
+
+function openCreateStageModal() { openModal('create-stage-modal'); }
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+async function createStage() {
+  const name = document.getElementById('new-stage-name').value.trim();
+  const parent = document.getElementById('new-stage-parent').value;
+  const visibility = document.getElementById('new-stage-visibility').value;
+  if (!name) { toast('Stage name is required', 'error'); return; }
+  try {
+    await apiFetch(`${API}/stages`, {
+      method: 'POST',
+      body: { stage_name: name, parent_stage_id: parent || null, visibility_scope: visibility }
+    });
+    toast('Stage created', 'success');
+    closeModal('create-stage-modal');
+    setTimeout(() => location.reload(), 600);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function deleteStage(id, name) {
+  if (!confirm(`Delete stage "${name}"? This cannot be undone.`)) return;
+  try {
+    await apiFetch(`${API}/stages/${id}`, { method: 'DELETE' });
+    toast('Stage deleted', 'success');
+    setTimeout(() => location.reload(), 600);
+  } catch(e) { toast(e.message, 'error'); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,983 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;500;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font-ui: 'Sora', var(--font-sans, sans-serif);
+    --font-mono: 'DM Mono', var(--font-mono, monospace);
+    --c-ink: var(--color-text-primary);
+    --c-muted: var(--color-text-secondary);
+    --c-faint: var(--color-text-tertiary);
+    --c-surface: var(--color-background-primary);
+    --c-raise: var(--color-background-secondary);
+    --c-border: var(--color-border-tertiary);
+    --c-border-hi: var(--color-border-secondary);
+    --c-blue-bg: var(--color-background-info);
+    --c-blue-txt: var(--color-text-info);
+    --c-green-bg: var(--color-background-success);
+    --c-green-txt: var(--color-text-success);
+    --c-amber-bg: var(--color-background-warning);
+    --c-amber-txt: var(--color-text-warning);
+    --c-red-bg: var(--color-background-danger);
+    --c-red-txt: var(--color-text-danger);
+    --r: 8px;
+    --r-lg: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .erp-shell {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: var(--c-ink);
+    background: var(--c-raise);
+    border: 0.5px solid var(--c-border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 700px;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--c-surface);
+    border-bottom: 0.5px solid var(--c-border);
+    flex-shrink: 0;
+  }
+  .topbar-logo {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--c-muted);
+    text-transform: uppercase;
+  }
+  .topbar-sep { flex: 1; }
+  .tab-group { display: flex; gap: 2px; background: var(--c-raise); border-radius: var(--r); padding: 2px; }
+  .tab-btn {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    color: var(--c-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn.active { background: var(--c-surface); color: var(--c-ink); border: 0.5px solid var(--c-border); }
+  .tab-btn:hover:not(.active) { color: var(--c-ink); }
+
+  /* ── BODY ── */
+  .body-area { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    border-right: 0.5px solid var(--c-border);
+    background: var(--c-surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-head {
+    padding: 10px 12px 8px;
+    border-bottom: 0.5px solid var(--c-border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .sidebar-title { font-size: 11px; font-weight: 500; color: var(--c-muted); text-transform: uppercase; letter-spacing: 0.07em; flex: 1; }
+  .icon-btn {
+    width: 22px; height: 22px; border-radius: 5px;
+    border: 0.5px solid var(--c-border);
+    background: var(--c-raise);
+    color: var(--c-muted);
+    font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.12s;
+  }
+  .icon-btn:hover { background: var(--c-surface); color: var(--c-ink); border-color: var(--c-border-hi); }
+  .tree-scroll { flex: 1; overflow-y: auto; padding: 6px 4px; }
+  .tree-node {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px; border-radius: 6px; cursor: pointer;
+    user-select: none; transition: background 0.1s;
+    position: relative;
+  }
+  .tree-node:hover { background: var(--c-raise); }
+  .tree-node.selected { background: var(--c-blue-bg); }
+  .tree-node.selected .tree-label { color: var(--c-blue-txt); font-weight: 500; }
+  .tree-icon { font-size: 11px; flex-shrink: 0; width: 14px; text-align: center; }
+  .tree-label { font-size: 12px; color: var(--c-ink); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tree-badge {
+    font-size: 9px; font-weight: 500;
+    padding: 1px 5px; border-radius: 10px;
+    background: var(--c-raise); color: var(--c-muted);
+    border: 0.5px solid var(--c-border);
+    flex-shrink: 0;
+  }
+  .tree-children { padding-left: 14px; border-left: 1px solid var(--c-border); margin-left: 12px; }
+
+  /* ── MAIN PANEL ── */
+  .main-panel { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  /* ── BREADCRUMB ── */
+  .breadcrumb { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .crumb { font-size: 11px; color: var(--c-muted); cursor: pointer; }
+  .crumb:hover { color: var(--c-ink); text-decoration: underline; }
+  .crumb-sep { font-size: 10px; color: var(--c-faint); }
+  .crumb.active { color: var(--c-ink); font-weight: 500; cursor: default; text-decoration: none; }
+
+  /* ── STAGE DETAIL ── */
+  .stage-header {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--c-surface);
+    border: 0.5px solid var(--c-border);
+    border-radius: var(--r-lg);
+    padding: 14px 16px;
+  }
+  .stage-icon-box {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; border: 0.5px solid var(--c-border);
+    background: var(--c-raise);
+  }
+  .stage-info { flex: 1; }
+  .stage-name { font-size: 16px; font-weight: 600; }
+  .stage-path { font-size: 11px; color: var(--c-muted); font-family: var(--font-mono); margin-top: 2px; }
+  .meta-chips { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .chip {
+    font-size: 10px; font-weight: 500;
+    padding: 2px 8px; border-radius: 20px;
+    border: 0.5px solid var(--c-border);
+    background: var(--c-raise); color: var(--c-muted);
+  }
+  .chip.blue { background: var(--c-blue-bg); color: var(--c-blue-txt); border-color: transparent; }
+  .chip.green { background: var(--c-green-bg); color: var(--c-green-txt); border-color: transparent; }
+  .chip.amber { background: var(--c-amber-bg); color: var(--c-amber-txt); border-color: transparent; }
+  .stage-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .action-btn {
+    font-family: var(--font-ui); font-size: 11px; font-weight: 500;
+    padding: 5px 12px; border-radius: 6px; cursor: pointer;
+    border: 0.5px solid var(--c-border-hi);
+    background: var(--c-surface); color: var(--c-ink);
+    transition: all 0.12s;
+  }
+  .action-btn:hover { background: var(--c-raise); }
+  .action-btn.primary {
+    background: var(--c-ink); color: var(--c-surface); border-color: transparent;
+  }
+  .action-btn.primary:hover { opacity: 0.85; }
+
+  /* ── SECTION LABEL ── */
+  .section-label {
+    font-size: 10px; font-weight: 500; color: var(--c-muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 0.5px; background: var(--c-border); }
+
+  /* ── GRID ── */
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--c-surface);
+    border: 0.5px solid var(--c-border);
+    border-radius: var(--r-lg);
+    padding: 12px 14px;
+  }
+  .card-title { font-size: 11px; font-weight: 500; color: var(--c-muted); margin-bottom: 6px; }
+  .card-val { font-size: 22px; font-weight: 600; }
+  .card-sub { font-size: 11px; color: var(--c-muted); margin-top: 2px; }
+
+  /* ── CHILDREN TABLE ── */
+  .stage-table {
+    background: var(--c-surface);
+    border: 0.5px solid var(--c-border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .table-head {
+    display: grid;
+    grid-template-columns: 1fr 80px 60px 90px 80px;
+    gap: 0;
+    padding: 8px 14px;
+    border-bottom: 0.5px solid var(--c-border);
+    background: var(--c-raise);
+  }
+  .th-cell { font-size: 10px; font-weight: 500; color: var(--c-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+  .table-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 60px 90px 80px;
+    gap: 0;
+    padding: 9px 14px;
+    border-bottom: 0.5px solid var(--c-border);
+    cursor: pointer;
+    transition: background 0.1s;
+    align-items: center;
+  }
+  .table-row:last-child { border-bottom: none; }
+  .table-row:hover { background: var(--c-raise); }
+  .td-cell { font-size: 12px; color: var(--c-ink); }
+  .td-name { display: flex; align-items: center; gap: 8px; }
+  .td-icon { font-size: 13px; }
+
+  /* ── METADATA JSON ── */
+  .json-block {
+    background: var(--c-raise);
+    border: 0.5px solid var(--c-border);
+    border-radius: var(--r);
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--c-ink);
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .jk { color: #7a7a9d; } /* key */
+  .js { color: #4a9d7a; } /* string */
+  .jn { color: #c47a2a; } /* number */
+  .jb { color: #a44080; } /* bool */
+  .jp { color: var(--c-muted); } /* punctuation */
+
+  /* ── PERMISSION TABLE ── */
+  .perm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .perm-table th {
+    font-size: 10px; font-weight: 500; color: var(--c-faint);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 6px 10px; text-align: left;
+    border-bottom: 0.5px solid var(--c-border);
+  }
+  .perm-table td { padding: 7px 10px; border-bottom: 0.5px solid var(--c-border); }
+  .perm-table tr:last-child td { border-bottom: none; }
+  .perm-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    font-size: 10px;
+  }
+  .perm-dot.on { background: var(--c-green-bg); color: var(--c-green-txt); }
+  .perm-dot.off { background: var(--c-raise); color: var(--c-faint); border: 0.5px solid var(--c-border); }
+
+  /* ── LINEAGE TRAIL ── */
+  .lineage-trail { display: flex; align-items: center; gap: 0; overflow-x: auto; }
+  .lineage-node {
+    display: flex; align-items: center; gap: 0;
+  }
+  .lineage-pill {
+    font-size: 11px; font-weight: 500;
+    padding: 3px 10px; border-radius: 20px;
+    background: var(--c-raise); color: var(--c-muted);
+    border: 0.5px solid var(--c-border);
+    white-space: nowrap;
+  }
+  .lineage-pill.active { background: var(--c-blue-bg); color: var(--c-blue-txt); }
+  .lineage-arrow { font-size: 10px; color: var(--c-faint); padding: 0 4px; }
+
+  /* ── FORM TYPES ── */
+  .form-card {
+    background: var(--c-surface);
+    border: 0.5px solid var(--c-border);
+    border-radius: var(--r-lg);
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.12s;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .form-card:hover { border-color: var(--c-border-hi); background: var(--c-raise); }
+  .form-card-top { display: flex; align-items: center; gap: 8px; }
+  .form-icon { font-size: 18px; }
+  .form-name { font-size: 13px; font-weight: 500; }
+  .form-id { font-size: 10px; color: var(--c-muted); font-family: var(--font-mono); }
+  .form-fields { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  /* ── MOVE DIALOG ── */
+  .modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    display: none;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-box {
+    background: var(--c-surface);
+    border: 0.5px solid var(--c-border-hi);
+    border-radius: var(--r-lg);
+    padding: 18px 20px;
+    width: 360px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .modal-title { font-size: 14px; font-weight: 600; }
+  .modal-sub { font-size: 12px; color: var(--c-muted); }
+  .modal-select {
+    font-family: var(--font-ui); font-size: 12px;
+    padding: 7px 10px; border-radius: var(--r);
+    border: 0.5px solid var(--c-border-hi);
+    background: var(--c-raise); color: var(--c-ink);
+    width: 100%;
+  }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ── REGISTRY VIEW ── */
+  .registry-row {
+    display: grid; grid-template-columns: 160px 1fr 80px 100px;
+    gap: 0; padding: 8px 14px;
+    border-bottom: 0.5px solid var(--c-border);
+    font-size: 12px; align-items: center;
+  }
+  .registry-row:hover { background: var(--c-raise); cursor: pointer; }
+  .rr-id { font-family: var(--font-mono); font-size: 10px; color: var(--c-muted); }
+  .rr-path { color: var(--c-blue-txt); font-family: var(--font-mono); font-size: 11px; }
+
+  /* ── API PANEL ── */
+  .api-endpoint {
+    background: var(--c-surface);
+    border: 0.5px solid var(--c-border);
+    border-radius: var(--r);
+    padding: 10px 14px;
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .method-badge {
+    font-size: 10px; font-weight: 500;
+    padding: 3px 7px; border-radius: 4px;
+    min-width: 42px; text-align: center; flex-shrink: 0;
+  }
+  .method-badge.GET { background: var(--c-blue-bg); color: var(--c-blue-txt); }
+  .method-badge.POST { background: var(--c-green-bg); color: var(--c-green-txt); }
+  .method-badge.PATCH { background: var(--c-amber-bg); color: var(--c-amber-txt); }
+  .method-badge.DELETE { background: var(--c-red-bg); color: var(--c-red-txt); }
+  .api-route { font-family: var(--font-mono); font-size: 12px; color: var(--c-ink); flex: 1; }
+  .api-desc { font-size: 11px; color: var(--c-muted); margin-top: 2px; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--c-border-hi); border-radius: 2px; }
+
+  /* ── VIEW PANELS ── */
+  .view-panel { display: none; }
+  .view-panel.active { display: flex; flex-direction: column; gap: 14px; }
+</style>
+
+<div class="erp-shell" style="position:relative">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <span class="topbar-logo">⬡ ERP Stage Builder</span>
+    <span class="topbar-sep"></span>
+    <div class="tab-group">
+      <button class="tab-btn active" onclick="switchTab('stage')">Stage Tree</button>
+      <button class="tab-btn" onclick="switchTab('registry')">Registry</button>
+      <button class="tab-btn" onclick="switchTab('api')">API Design</button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body-area">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-head">
+        <span class="sidebar-title">Stages</span>
+        <button class="icon-btn" onclick="openModal()" title="Add stage">+</button>
+      </div>
+      <div class="tree-scroll" id="tree-root"></div>
+    </div>
+
+    <!-- MAIN PANEL -->
+    <div class="main-panel" id="main-area">
+
+      <!-- STAGE VIEW -->
+      <div class="view-panel active" id="view-stage">
+
+        <!-- BREADCRUMB -->
+        <div class="breadcrumb" id="breadcrumb"></div>
+
+        <!-- STAGE HEADER -->
+        <div class="stage-header" id="stage-header"></div>
+
+        <!-- LINEAGE -->
+        <div>
+          <div class="section-label">Lineage Path</div>
+          <div style="margin-top:8px;"><div class="lineage-trail" id="lineage-trail"></div></div>
+        </div>
+
+        <!-- STATS GRID -->
+        <div>
+          <div class="section-label">Stage Metrics</div>
+          <div class="grid-3" style="margin-top:8px;" id="metrics-grid"></div>
+        </div>
+
+        <!-- CHILDREN STAGES -->
+        <div id="children-section">
+          <div class="section-label">Child Stages</div>
+          <div class="stage-table" style="margin-top:8px;">
+            <div class="table-head">
+              <div class="th-cell">Name</div>
+              <div class="th-cell">Depth</div>
+              <div class="th-cell">Forms</div>
+              <div class="th-cell">Visibility</div>
+              <div class="th-cell">Actions</div>
+            </div>
+            <div id="children-list"></div>
+          </div>
+        </div>
+
+        <!-- FORM TYPES -->
+        <div id="forms-section">
+          <div class="section-label">Form Types</div>
+          <div class="grid-2" style="margin-top:8px;" id="forms-list"></div>
+        </div>
+
+        <!-- PERMISSIONS -->
+        <div>
+          <div class="section-label">Permission Matrix</div>
+          <div class="stage-table" style="margin-top:8px;">
+            <table class="perm-table" id="perm-table"></table>
+          </div>
+        </div>
+
+        <!-- METADATA JSON -->
+        <div>
+          <div class="section-label">Stage Metadata JSON</div>
+          <div class="json-block" style="margin-top:8px;" id="json-display"></div>
+        </div>
+
+      </div><!-- /view-stage -->
+
+      <!-- REGISTRY VIEW -->
+      <div class="view-panel" id="view-registry">
+        <div class="section-label">Master Registry — All Stages</div>
+        <div class="stage-table">
+          <div class="registry-row" style="background:var(--c-raise);font-size:10px;font-weight:500;color:var(--c-faint);text-transform:uppercase;letter-spacing:.06em;cursor:default">
+            <div>Stage ID</div><div>Path</div><div>Depth</div><div>Children</div>
+          </div>
+          <div id="registry-list"></div>
+        </div>
+        <div class="section-label">Master Registry — All Form Types</div>
+        <div class="stage-table">
+          <div class="registry-row" style="background:var(--c-raise);font-size:10px;font-weight:500;color:var(--c-faint);text-transform:uppercase;letter-spacing:.06em;cursor:default">
+            <div>Form ID</div><div>Path</div><div>Stage ID</div><div>Version</div>
+          </div>
+          <div id="registry-forms-list"></div>
+        </div>
+        <div>
+          <div class="section-label">master_stage_metadata.json</div>
+          <div class="json-block" style="margin-top:8px;max-height:240px;" id="master-json"></div>
+        </div>
+      </div><!-- /view-registry -->
+
+      <!-- API VIEW -->
+      <div class="view-panel" id="view-api">
+        <div class="section-label">Stage Endpoints</div>
+        <div style="display:flex;flex-direction:column;gap:8px;" id="api-list"></div>
+        <div class="section-label">Permission Endpoints</div>
+        <div style="display:flex;flex-direction:column;gap:8px;" id="api-perms"></div>
+        <div class="section-label">Move Algorithm</div>
+        <div class="json-block" style="margin-top:8px;max-height:260px;" id="algo-block"></div>
+      </div><!-- /view-api -->
+
+    </div><!-- /main-panel -->
+  </div><!-- /body-area -->
+
+  <!-- MODAL -->
+  <div class="modal-backdrop" id="modal">
+    <div class="modal-box">
+      <div class="modal-title" id="modal-title">Move Stage</div>
+      <div class="modal-sub" id="modal-sub">Select destination parent stage</div>
+      <select class="modal-select" id="modal-select"></select>
+      <div class="modal-actions">
+        <button class="action-btn" onclick="closeModal()">Cancel</button>
+        <button class="action-btn primary" onclick="doMove()">Move Stage</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+const STAGES = {
+  root: { id:'root', name:'Root', icon:'⬡', parent:null, depth:0, path:'/', visibility:'global', desc:'ERP system root' },
+  s_rec: { id:'s_rec', name:'Recruitment', icon:'👥', parent:'root', depth:1, path:'/Recruitment', visibility:'global', desc:'Full recruitment lifecycle management' },
+  s_scr: { id:'s_scr', name:'Screening', icon:'🔍', parent:'s_rec', depth:2, path:'/Recruitment/Screening', visibility:'inherited', desc:'Applicant screening & filtering' },
+  s_int: { id:'s_int', name:'Interviews', icon:'🗣', parent:'s_rec', depth:2, path:'/Recruitment/Interviews', visibility:'inherited', desc:'Interview scheduling & evaluation' },
+  s_off: { id:'s_off', name:'Offer Management', icon:'📋', parent:'s_rec', depth:2, path:'/Recruitment/OfferManagement', visibility:'restricted', desc:'Compensation & offer letters' },
+  s_hr: { id:'s_hr', name:'HR Operations', icon:'🏢', parent:'root', depth:1, path:'/HROperations', visibility:'global', desc:'Core HR processes and records' },
+  s_onb: { id:'s_onb', name:'Onboarding', icon:'🌱', parent:'s_hr', depth:2, path:'/HROperations/Onboarding', visibility:'inherited', desc:'Employee onboarding workflows' },
+  s_pay: { id:'s_pay', name:'Payroll', icon:'💰', parent:'s_hr', depth:2, path:'/HROperations/Payroll', visibility:'restricted', desc:'Payroll processing & compliance' },
+  s_lv: { id:'s_lv', name:'Leave Management', icon:'📅', parent:'s_hr', depth:2, path:'/HROperations/LeaveManagement', visibility:'inherited', desc:'Leave requests & approvals' },
+  s_fin: { id:'s_fin', name:'Finance', icon:'📊', parent:'root', depth:1, path:'/Finance', visibility:'restricted', desc:'Financial operations' },
+  s_ap: { id:'s_ap', name:'Accounts Payable', icon:'📤', parent:'s_fin', depth:2, path:'/Finance/AccountsPayable', visibility:'restricted', desc:'Vendor invoice management' },
+  s_ar: { id:'s_ar', name:'Accounts Receivable', icon:'📥', parent:'s_fin', depth:2, path:'/Finance/AccountsReceivable', visibility:'restricted', desc:'Customer invoice & collections' },
+};
+
+const FORMS = {
+  s_scr: [
+    { id:'f_app', name:'Application Form', icon:'📝', fields:['Full Name','Email','Resume','Experience'], version:'2.1' },
+    { id:'f_ats', name:'ATS Score Sheet', icon:'⚡', fields:['Score','Skills Match','Notes'], version:'1.4' },
+  ],
+  s_int: [
+    { id:'f_int1', name:'Technical Interview', icon:'💻', fields:['Round','Interviewer','Rating','Remarks'], version:'3.0' },
+    { id:'f_int2', name:'HR Interview', icon:'🤝', fields:['Culture Fit','Communication','Score'], version:'1.2' },
+  ],
+  s_off: [
+    { id:'f_off', name:'Offer Letter', icon:'📄', fields:['CTC','Role','Start Date','Terms'], version:'1.0' },
+  ],
+  s_onb: [
+    { id:'f_onb', name:'Onboarding Checklist', icon:'✅', fields:['ID Proof','Bank Details','Equipment'], version:'4.1' },
+    { id:'f_nda', name:'NDA / Policy Forms', icon:'🔒', fields:['Signature','Date','Policy Version'], version:'2.0' },
+  ],
+  s_pay: [
+    { id:'f_pay', name:'Payroll Entry', icon:'💳', fields:['Employee ID','Month','Basic','HRA','Deductions'], version:'5.2' },
+  ],
+  s_lv: [
+    { id:'f_lv', name:'Leave Application', icon:'📆', fields:['Leave Type','From','To','Reason'], version:'2.3' },
+  ],
+  s_ap: [
+    { id:'f_inv', name:'Invoice Register', icon:'🧾', fields:['Vendor','Amount','Due Date','PO Ref'], version:'1.8' },
+  ],
+  s_ar: [
+    { id:'f_rcv', name:'Receipt Voucher', icon:'🏦', fields:['Customer','Invoice','Received','Mode'], version:'1.1' },
+  ],
+};
+
+const PERMS = {
+  root: [ {role:'Super Admin', v:1,c:1,e:1,d:1,m:1}, {role:'Admin', v:1,c:1,e:1,d:0,m:1} ],
+  s_rec: [ {role:'HR Manager', v:1,c:1,e:1,d:0,m:0}, {role:'Recruiter', v:1,c:1,e:0,d:0,m:0}, {role:'Interviewer', v:1,c:0,e:0,d:0,m:0} ],
+  s_scr: [ {role:'Recruiter', v:1,c:1,e:1,d:0,m:0}, {role:'HR Manager', v:1,c:1,e:1,d:1,m:0} ],
+  s_int: [ {role:'Interviewer', v:1,c:1,e:1,d:0,m:0}, {role:'HR Manager', v:1,c:1,e:1,d:1,m:0} ],
+  s_off: [ {role:'HR Manager', v:1,c:1,e:1,d:0,m:0}, {role:'Finance', v:1,c:0,e:0,d:0,m:0} ],
+  s_hr: [ {role:'HR Manager', v:1,c:1,e:1,d:0,m:1}, {role:'Employee', v:1,c:0,e:0,d:0,m:0} ],
+  s_onb: [ {role:'HR Manager', v:1,c:1,e:1,d:0,m:0}, {role:'IT Admin', v:1,c:1,e:1,d:0,m:0} ],
+  s_pay: [ {role:'Payroll Admin', v:1,c:1,e:1,d:0,m:0}, {role:'Finance', v:1,c:0,e:0,d:0,m:0} ],
+  s_lv: [ {role:'Employee', v:1,c:1,e:0,d:0,m:0}, {role:'HR Manager', v:1,c:1,e:1,d:1,m:0} ],
+  s_fin: [ {role:'CFO', v:1,c:1,e:1,d:0,m:1}, {role:'Finance', v:1,c:1,e:1,d:0,m:0} ],
+  s_ap: [ {role:'Finance', v:1,c:1,e:1,d:0,m:0}, {role:'CFO', v:1,c:1,e:1,d:1,m:1} ],
+  s_ar: [ {role:'Finance', v:1,c:1,e:1,d:0,m:0}, {role:'CFO', v:1,c:1,e:1,d:1,m:1} ],
+};
+
+let selectedStage = 's_rec';
+let currentTab = 'stage';
+let movingStage = null;
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function getChildren(pid) {
+  return Object.values(STAGES).filter(s => s.parent === pid);
+}
+function getLineage(id) {
+  const chain = [];
+  let cur = id;
+  while(cur) { chain.unshift(cur); cur = STAGES[cur]?.parent; }
+  return chain;
+}
+function getDescendants(id) {
+  const res = [];
+  function dfs(n) { getChildren(n).forEach(c => { res.push(c.id); dfs(c.id); }); }
+  dfs(id);
+  return res;
+}
+function getFormCount(id) {
+  return (FORMS[id]||[]).length + getDescendants(id).reduce((a,d)=>a+(FORMS[d]||[]).length,0);
+}
+function getChildCount(id) { return getDescendants(id).length; }
+function visChip(v) {
+  const map = { global:['blue','🌐 Global'], inherited:['green','⬇ Inherited'], restricted:['amber','🔒 Restricted'] };
+  const [cls,label] = map[v]||['',''];
+  return `<span class="chip ${cls}">${label}</span>`;
+}
+
+// ── TREE ─────────────────────────────────────────────────────────────────────
+function renderTree(pid, container) {
+  const children = getChildren(pid);
+  children.forEach(s => {
+    const nodeEl = document.createElement('div');
+    nodeEl.className = 'tree-node' + (s.id === selectedStage ? ' selected' : '');
+    nodeEl.dataset.id = s.id;
+    const childCount = getChildren(s.id).length;
+    nodeEl.innerHTML = `
+      <span class="tree-icon">${s.icon}</span>
+      <span class="tree-label">${s.name}</span>
+      ${childCount > 0 ? `<span class="tree-badge">${childCount}</span>` : ''}
+    `;
+    nodeEl.onclick = () => selectStage(s.id);
+    container.appendChild(nodeEl);
+    if(childCount > 0) {
+      const childContainer = document.createElement('div');
+      childContainer.className = 'tree-children';
+      container.appendChild(childContainer);
+      renderTree(s.id, childContainer);
+    }
+  });
+}
+
+function refreshTree() {
+  const root = document.getElementById('tree-root');
+  root.innerHTML = '';
+  // Root node
+  const rootEl = document.createElement('div');
+  rootEl.className = 'tree-node' + (selectedStage==='root'?' selected':'');
+  rootEl.dataset.id = 'root';
+  rootEl.innerHTML = `<span class="tree-icon">⬡</span><span class="tree-label">Root</span>`;
+  rootEl.onclick = () => selectStage('root');
+  root.appendChild(rootEl);
+  const childContainer = document.createElement('div');
+  childContainer.className = 'tree-children';
+  root.appendChild(childContainer);
+  renderTree('root', childContainer);
+}
+
+// ── STAGE DETAIL ─────────────────────────────────────────────────────────────
+function renderStageDetail(id) {
+  const s = STAGES[id];
+  if(!s) return;
+  const lineage = getLineage(id);
+  const children = getChildren(id);
+  const forms = FORMS[id]||[];
+  const perms = PERMS[id]||[];
+
+  // Breadcrumb
+  document.getElementById('breadcrumb').innerHTML = lineage.map((lid,i) => {
+    const ls = STAGES[lid];
+    const isLast = i === lineage.length-1;
+    return `
+      ${i>0?'<span class="crumb-sep">›</span>':''}
+      <span class="crumb ${isLast?'active':''}" onclick="selectStage('${lid}')">${ls.icon} ${ls.name}</span>
+    `;
+  }).join('');
+
+  // Header
+  document.getElementById('stage-header').innerHTML = `
+    <div class="stage-icon-box">${s.icon}</div>
+    <div class="stage-info">
+      <div class="stage-name">${s.name}</div>
+      <div class="stage-path">${s.path}</div>
+      <div class="meta-chips">
+        <span class="chip blue">depth: ${s.depth}</span>
+        ${visChip(s.visibility)}
+        ${children.length===0?'<span class="chip green">🌿 Leaf</span>':''}
+        ${s.parent===null?'<span class="chip">🌳 Root</span>':''}
+      </div>
+    </div>
+    <div class="stage-actions">
+      ${id!=='root'?`<button class="action-btn" onclick="openMoveModal('${id}')">Move</button>`:''}
+      <button class="action-btn" onclick="sendPrompt('Add a new child stage under ${s.name} in the ERP hierarchy')">+ Child ↗</button>
+      <button class="action-btn primary" onclick="sendPrompt('Add a new FormType to the ${s.name} stage')">+ Form ↗</button>
+    </div>
+  `;
+
+  // Lineage
+  document.getElementById('lineage-trail').innerHTML = lineage.map((lid,i) => {
+    const ls = STAGES[lid];
+    const isActive = lid===id;
+    return `
+      <div class="lineage-node">
+        ${i>0?'<span class="lineage-arrow">→</span>':''}
+        <span class="lineage-pill ${isActive?'active':''}">${ls.icon} ${ls.name}</span>
+      </div>
+    `;
+  }).join('');
+
+  // Metrics
+  const totalForms = getFormCount(id);
+  const totalChildren = getDescendants(id).length;
+  document.getElementById('metrics-grid').innerHTML = `
+    <div class="card">
+      <div class="card-title">Direct Children</div>
+      <div class="card-val">${children.length}</div>
+      <div class="card-sub">Sub-stages</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Total Descendants</div>
+      <div class="card-val">${totalChildren}</div>
+      <div class="card-sub">Recursive depth</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Form Types</div>
+      <div class="card-val">${totalForms}</div>
+      <div class="card-sub">${forms.length} direct, ${totalForms-forms.length} inherited</div>
+    </div>
+  `;
+
+  // Children table
+  const cl = document.getElementById('children-list');
+  cl.innerHTML = children.length === 0
+    ? `<div style="padding:14px;font-size:12px;color:var(--c-faint);text-align:center">No child stages — this is a leaf node</div>`
+    : children.map(c => `
+      <div class="table-row" onclick="selectStage('${c.id}')">
+        <div class="td-cell td-name"><span class="td-icon">${c.icon}</span>${c.name}</div>
+        <div class="td-cell"><span class="chip blue">L${c.depth}</span></div>
+        <div class="td-cell">${(FORMS[c.id]||[]).length}</div>
+        <div class="td-cell">${visChip(c.visibility)}</div>
+        <div class="td-cell" style="display:flex;gap:4px">
+          <button class="action-btn" onclick="event.stopPropagation();openMoveModal('${c.id}')">Move</button>
+        </div>
+      </div>
+    `).join('');
+
+  // Form types
+  const fl = document.getElementById('forms-list');
+  fl.innerHTML = forms.length === 0
+    ? `<div style="padding:10px;font-size:12px;color:var(--c-faint)">No form types in this stage yet.</div>`
+    : forms.map(f => `
+      <div class="form-card" onclick="sendPrompt('Show me the full schema for the ${f.name} form type in stage ${s.name}')">
+        <div class="form-card-top">
+          <span class="form-icon">${f.icon}</span>
+          <div>
+            <div class="form-name">${f.name}</div>
+            <div class="form-id">${f.id} · v${f.version}</div>
+          </div>
+        </div>
+        <div class="form-fields">
+          ${f.fields.map(field => `<span class="chip">${field}</span>`).join('')}
+        </div>
+      </div>
+    `).join('');
+
+  // Permission table
+  const permCols = ['VIEW','CREATE','EDIT','DELETE','MANAGE'];
+  const permKeys = ['v','c','e','d','m'];
+  document.getElementById('perm-table').innerHTML = `
+    <thead><tr>
+      <th>Role</th>
+      ${permCols.map(c=>`<th style="text-align:center">${c}</th>`).join('')}
+    </tr></thead>
+    <tbody>
+    ${perms.map(p => `<tr>
+      <td style="font-weight:500">${p.role}</td>
+      ${permKeys.map(k=>`<td style="text-align:center"><span class="perm-dot ${p[k]?'on':'off'}">${p[k]?'✓':'·'}</span></td>`).join('')}
+    </tr>`).join('')}
+    </tbody>
+  `;
+
+  // JSON
+  const jd = {
+    stage_id: id,
+    stage_name: s.name,
+    parent_stage_id: s.parent,
+    depth_level: s.depth,
+    path: s.path,
+    lineage: lineage,
+    children_stage_ids: children.map(c=>c.id),
+    formtype_ids: forms.map(f=>f.id),
+    is_root: s.parent===null,
+    is_leaf: children.length===0,
+    visibility_scope: s.visibility,
+    permissions: perms.map(p=>({role:p.role,access:['view','create','edit','delete','manage_permission'].filter((_,i)=>Object.values(p).slice(1)[i])})),
+    created_at: '2025-01-15T09:30:00Z',
+    updated_at: new Date().toISOString().slice(0,19)+'Z'
+  };
+  document.getElementById('json-display').innerHTML = syntaxHighlight(JSON.stringify(jd, null, 2));
+}
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"([^"]+)":/g,'<span class="jk">"$1"</span>:')
+    .replace(/: "([^"]*)"/g,': <span class="js">"$1"</span>')
+    .replace(/: (\d+\.?\d*)/g,': <span class="jn">$1</span>')
+    .replace(/: (true|false|null)/g,': <span class="jb">$1</span>');
+}
+
+// ── SELECT STAGE ─────────────────────────────────────────────────────────────
+function selectStage(id) {
+  selectedStage = id;
+  refreshTree();
+  if(currentTab === 'stage') renderStageDetail(id);
+}
+
+// ── REGISTRY VIEW ─────────────────────────────────────────────────────────────
+function renderRegistry() {
+  const rl = document.getElementById('registry-list');
+  rl.innerHTML = Object.values(STAGES).map(s => `
+    <div class="registry-row" onclick="switchTab('stage');selectStage('${s.id}')">
+      <div class="rr-id">${s.id}</div>
+      <div class="rr-path">${s.path}</div>
+      <div><span class="chip ${s.depth===0?'amber':''}">${s.depth}</span></div>
+      <div>${getChildren(s.id).length}</div>
+    </div>
+  `).join('');
+
+  const rfl = document.getElementById('registry-forms-list');
+  const allForms = [];
+  Object.entries(FORMS).forEach(([sid, fms]) => fms.forEach(f => allForms.push({...f, sid})));
+  rfl.innerHTML = allForms.map(f => `
+    <div class="registry-row">
+      <div class="rr-id">${f.id}</div>
+      <div class="rr-path">${STAGES[f.sid].path}/${f.name.replace(/ /g,'')}</div>
+      <div class="rr-id">${f.sid}</div>
+      <div><span class="chip">v${f.version}</span></div>
+    </div>
+  `).join('');
+
+  // Master JSON
+  function buildTree(pid) {
+    const s = STAGES[pid];
+    return {
+      stage_id: pid, stage_name: s.name, depth: s.depth,
+      path: s.path,
+      lineage: getLineage(pid),
+      children: getChildren(pid).map(c => buildTree(c.id))
+    };
+  }
+  document.getElementById('master-json').innerHTML = syntaxHighlight(JSON.stringify({root: buildTree('root')}, null, 2));
+}
+
+// ── API VIEW ─────────────────────────────────────────────────────────────────
+function renderAPI() {
+  const endpoints = [
+    {method:'GET',route:'/api/v1/stages',desc:'List all stages with pagination & lineage filter'},
+    {method:'GET',route:'/api/v1/stages/:stage_id',desc:'Get stage metadata including full lineage'},
+    {method:'GET',route:'/api/v1/stages/:stage_id/children',desc:'Get direct children of a stage'},
+    {method:'GET',route:'/api/v1/stages/:stage_id/subtree',desc:'Get full subtree (uses lineage index)'},
+    {method:'POST',route:'/api/v1/stages',desc:'Create a new stage under a parent'},
+    {method:'PATCH',route:'/api/v1/stages/:stage_id',desc:'Update stage name, visibility, or metadata'},
+    {method:'POST',route:'/api/v1/stages/:stage_id/move',desc:'Move stage & recursively update all descendants'},
+    {method:'DELETE',route:'/api/v1/stages/:stage_id',desc:'Delete stage (cascades to children & forms)'},
+    {method:'GET',route:'/api/v1/stages/:stage_id/forms',desc:'List all form types in a stage'},
+    {method:'POST',route:'/api/v1/stages/:stage_id/forms',desc:'Create a new form type in a stage'},
+    {method:'GET',route:'/api/v1/metadata/master',desc:'Get master_stage_metadata.json (full tree)'},
+    {method:'GET',route:'/api/v1/metadata/registry',desc:'Get metadata_registry.json (flat lookup index)'},
+  ];
+  document.getElementById('api-list').innerHTML = endpoints.map(e => `
+    <div class="api-endpoint">
+      <span class="method-badge ${e.method}">${e.method}</span>
+      <div>
+        <div class="api-route">${e.route}</div>
+        <div class="api-desc">${e.desc}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const permEndpoints = [
+    {method:'GET',route:'/api/v1/stages/:stage_id/permissions',desc:'Get all role permissions for a stage'},
+    {method:'POST',route:'/api/v1/stages/:stage_id/permissions',desc:'Assign role permissions to a stage'},
+    {method:'DELETE',route:'/api/v1/stages/:stage_id/permissions/:role',desc:'Revoke a role\'s permissions from a stage'},
+    {method:'GET',route:'/api/v1/users/:user_id/visibility',desc:'Get all stages visible to a user via lineage matching'},
+  ];
+  document.getElementById('api-perms').innerHTML = permEndpoints.map(e => `
+    <div class="api-endpoint">
+      <span class="method-badge ${e.method}">${e.method}</span>
+      <div>
+        <div class="api-route">${e.route}</div>
+        <div class="api-desc">${e.desc}</div>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('algo-block').innerHTML = syntaxHighlight(JSON.stringify({
+    move_stage_algorithm: {
+      step_1: "Validate destination: destination must not be current stage or any of its descendants",
+      step_2: "Compute new path: new_path = destination.path + '/' + stage.name",
+      step_3: "Compute new lineage: new_lineage = [...destination.lineage, stage.id]",
+      step_4: "Compute new depth: new_depth = destination.depth + 1",
+      step_5: "Recursively update all descendants",
+      step_6: "Update master_stage_metadata.json tree structure",
+      step_7: "Update metadata_registry.json index entries",
+      step_8: "Atomic commit: rollback on any failure",
+      recursive_update: {
+        for_each_descendant: "UPDATE path, lineage, depth WHERE stage_id = descendant.id",
+        path_rule: "Replace old_path_prefix with new_path_prefix",
+        lineage_rule: "Replace old_lineage_prefix with new_lineage_prefix",
+        depth_rule: "new_depth = parent_depth + 1",
+        index: "Lineage stored as PostgreSQL ARRAY — uses @> operator for subtree query",
+        performance: "<100ms for trees up to 100,000 nodes using GIN index on lineage[]"
+      },
+      permission_check: {
+        visibility_filter: "SELECT * FROM stages WHERE lineage @> ARRAY['allowed_stage_id']",
+        no_recursion: true,
+        latency: "<10ms for 100K stages with GIN index"
+      }
+    }
+  }, null, 2));
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────────────
+function openModal() {
+  sendPrompt('Add a new child stage under ' + (STAGES[selectedStage]?.name||'Root') + ' — what should it be called and what is its purpose?');
+}
+function openMoveModal(stageId) {
+  movingStage = stageId;
+  const s = STAGES[stageId];
+  const desc = getDescendants(stageId);
+  const excluded = [stageId, ...desc, s.parent];
+  const sel = document.getElementById('modal-select');
+  sel.innerHTML = Object.values(STAGES)
+    .filter(st => !excluded.includes(st.id))
+    .map(st => `<option value="${st.id}">${'  '.repeat(st.depth)}${st.icon} ${st.name} (${st.path})</option>`)
+    .join('');
+  document.getElementById('modal-title').textContent = `Move "${s.name}"`;
+  document.getElementById('modal-sub').textContent = `Select new parent. All descendants and paths will be updated.`;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+  movingStage = null;
+}
+function doMove() {
+  if(!movingStage) return;
+  const newParentId = document.getElementById('modal-select').value;
+  const newParent = STAGES[newParentId];
+  const s = STAGES[movingStage];
+  const oldPath = s.path;
+  const newPath = newParent.path.replace(/\/$/,'') + '/' + s.name.replace(/ /g,'');
+  const newDepth = newParent.depth + 1;
+
+  // Update the stage
+  STAGES[movingStage].parent = newParentId;
+  STAGES[movingStage].path = newPath;
+  STAGES[movingStage].depth = newDepth;
+
+  // Recursively update descendants
+  function updateDesc(pid, oldPfx, newPfx, depthDelta) {
+    getChildren(pid).forEach(c => {
+      STAGES[c.id].path = c.path.replace(oldPfx, newPfx);
+      STAGES[c.id].depth = c.depth + depthDelta;
+      updateDesc(c.id, oldPfx, newPfx, depthDelta);
+    });
+  }
+  updateDesc(movingStage, oldPath, newPath, newDepth - s.depth);
+
+  closeModal();
+  refreshTree();
+  if(currentTab==='stage') renderStageDetail(selectedStage);
+  if(currentTab==='registry') renderRegistry();
+}
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase().replace(/ /g,'').includes(tab.replace('-','').replace('stage','stage')));
+  });
+  // fix active matching
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    const labels = ['stage','registry','api'];
+    b.classList.toggle('active', labels[i]===tab);
+  });
+  document.querySelectorAll('.view-panel').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-'+tab).classList.add('active');
+  if(tab==='stage') renderStageDetail(selectedStage);
+  if(tab==='registry') renderRegistry();
+  if(tab==='api') renderAPI();
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+refreshTree();
+renderStageDetail(selectedStage);
+</script>
