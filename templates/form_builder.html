@@ -411,7 +411,7 @@ function renderTPGrid(q){
     }
     const el=document.createElement('div'); el.className='type-picker-item';
     el.innerHTML=`<div class="tp-icon">${t.icon}</div><div><div class="tp-name">${t.type}</div><div class="tp-desc">${t.desc}</div></div>`;
-    el.addEventListener('click',()=>{ closeTypePicker(); if(_pickerCb) _pickerCb(t.type); });
+    el.addEventListener('click',()=>{ const cb=_pickerCb; closeTypePicker(); if(cb) cb(t.type); });
     grid.appendChild(el);
   });
 }
