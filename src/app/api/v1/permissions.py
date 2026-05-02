@@ -1,6 +1,6 @@
 """Permission API endpoints."""
 
-from typing import Dict
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,8 @@ from src.app.database import get_db
 from src.app.schemas.permission import (
     FormTypePermissionCreate,
     FormTypePermissionResponse,
+    RoleCreate,
+    RoleResponse,
     StagePermissionCreate,
     StagePermissionResponse,
     UserAccessResponse,
@@ -102,6 +104,25 @@ async def assign_user_role(
     return result
 
 
+# Role Management
+@router.post("/roles", response_model=RoleResponse, status_code=201)
+async def create_role(
+    role_data: RoleCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create a new role.
+
+    - **role_name**: Unique role name (lowercase letters, numbers, underscores only)
+    - **description**: Optional description of the role
+    """
+    service = PermissionService(db)
+    try:
+        return await service.create_role(role_data, created_by="system")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/users/{user_id}/roles")
 async def get_user_roles(user_id: str, db: AsyncSession = Depends(get_db)):
     """Get all roles for a user."""
@@ -150,3 +171,57 @@ async def check_stage_permission(
         "permission_type": permission_type,
         "has_permission": has_permission,
     }
+
+
+# List all permissions
+@router.get("/stages", response_model=List[StagePermissionResponse])
+async def list_stage_permissions(
+    role_name: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all stage permissions, optionally filtered by role."""
+    service = PermissionService(db)
+    return await service.list_stage_permissions(role_name)
+
+
+@router.get("/form-types", response_model=List[FormTypePermissionResponse])
+async def list_form_type_permissions(
+    role_name: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all form type permissions, optionally filtered by role."""
+    service = PermissionService(db)
+    return await service.list_form_type_permissions(role_name)
+
+
+@router.get("/roles/{role_name}")
+async def get_role_permissions(role_name: str, db: AsyncSession = Depends(get_db)):
+    """Get all permissions for a specific role."""
+    service = PermissionService(db)
+    return await service.get_role_permissions(role_name)
+
+
+# Roles Management
+@router.get("/roles")
+async def list_all_roles(db: AsyncSession = Depends(get_db)):
+    """List all unique roles in the system."""
+    service = PermissionService(db)
+    return await service.list_all_roles()
+
+
+@router.delete("/roles/{role_name}")
+async def delete_role(role_name: str, db: AsyncSession = Depends(get_db)):
+    """Delete a role and all its associated permissions."""
+    service = PermissionService(db)
+    return await service.delete_role(role_name)
+
+
+@router.put("/roles/{old_role_name}")
+async def rename_role(
+    old_role_name: str,
+    new_role_name: str = Query(..., min_length=1, max_length=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rename a role."""
+    service = PermissionService(db)
+    return await service.rename_role(old_role_name, new_role_name)

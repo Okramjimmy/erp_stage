@@ -1,0 +1,578 @@
+{% extends "base.html" %} {% block title %}Role Permissions — ERP Stage
+Builder{% endblock %} {% block nav_permissions %}active{% endblock %} {% block
+content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Role Permission Manager</div>
+        <div class="page-subtitle">
+            Configure permissions for roles on stages and form types
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="/roles" class="btn btn-primary">+ Create New Role</a>
+    </div>
+</div>
+
+<!-- Role Selector -->
+<div class="card" style="margin-bottom: 20px">
+    <div class="card-header">
+        <div class="card-title">Select Role</div>
+    </div>
+    <div class="card-body">
+        <div style="display: flex; gap: 12px; align-items: center">
+            <div style="flex: 1">
+                <select
+                    id="roleSelect"
+                    class="form-control"
+                    onchange="loadPermissions()"
+                >
+                    <option value="">-- Select a Role --</option>
+                </select>
+            </div>
+            <div style="flex: 1">
+                <input
+                    type="text"
+                    id="newRoleName"
+                    class="form-control"
+                    placeholder="Or enter new role name"
+                    oninput="handleNewRoleInput()"
+                />
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Permission Content (shown when role is selected) -->
+<div id="permission-content" style="display: none">
+    <!-- Tabs -->
+    <div
+        style="
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        "
+    >
+        <button
+            class="tab-btn active"
+            data-tab="stages"
+            onclick="switchTab('stages')"
+        >
+            Stage Permissions
+        </button>
+        <button
+            class="tab-btn"
+            data-tab="formtypes"
+            onclick="switchTab('formtypes')"
+        >
+            Form Type Permissions
+        </button>
+    </div>
+
+    <!-- Stage Permissions Tab -->
+    <div id="stages-tab" class="tab-content">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Stage Permissions</div>
+                <button
+                    class="btn btn-sm btn-secondary"
+                    onclick="showAddStage()"
+                >
+                    + Add Permission
+                </button>
+            </div>
+            <div id="stages-content">
+                <p
+                    style="
+                        padding: 20px;
+                        text-align: center;
+                        color: var(--text-muted);
+                    "
+                >
+                    Select a role to view stage permissions
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Type Permissions Tab -->
+    <div id="formtypes-tab" class="tab-content" style="display: none">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Form Type Permissions</div>
+                <button
+                    class="btn btn-sm btn-secondary"
+                    onclick="showAddFormType()"
+                >
+                    + Add Permission
+                </button>
+            </div>
+            <div id="formtypes-content">
+                <p
+                    style="
+                        padding: 20px;
+                        text-align: center;
+                        color: var(--text-muted);
+                    "
+                >
+                    Select a role to view form type permissions
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} {% block extra_js %}
+<script>
+    let currentRole = '';
+    let stages = [];
+    let formTypes = [];
+
+    // Load stages and form types from template
+    try {
+      stages = {{ stages | tojson }};
+      formTypes = {{ form_types | tojson }};
+    } catch (e) {
+      console.error('Could not parse stages/form_types');
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadRoles();
+        loadExistingPermissions();
+        switchTab('stages');
+    });
+
+    async function loadRoles() {
+      try {
+        const response = await apiFetch('/api/v1/permissions/roles');
+
+        const roleSelect = document.getElementById('roleSelect');
+        roleSelect.innerHTML = '<option value="">-- Select a Role --</option>';
+
+        response.forEach(role => {
+          const option = document.createElement('option');
+          option.value = role.role_name;
+          option.textContent = role.role_name;
+          roleSelect.appendChild(option);
+        });
+
+        // Check if role is set in URL query parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const roleParam = urlParams.get('role');
+        if (roleParam) {
+          roleSelect.value = roleParam;
+          currentRole = roleParam;
+          loadPermissions();
+        }
+      } catch (error) {
+        console.error('Error loading roles:', error);
+        toast('Failed to load roles', 'error');
+      }
+    }
+
+    async function loadExistingPermissions() {
+      // Load stages and form types for the add permission dialogs
+      try {
+        stages = await apiFetch('/api/v1/stages?limit=500')
+          .catch(() => stages);
+        formTypes = await apiFetch('/api/v1/formtypes?limit=500')
+          .catch(() => formTypes);
+      } catch (error) {
+        console.error('Error loading resources:', error);
+      }
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.tab === tabName) btn.classList.add('active');
+      });
+
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.style.display = 'none';
+      });
+
+      document.getElementById(`${tabName}-tab`).style.display = 'block';
+    }
+
+    function handleNewRoleInput() {
+      const newRoleName = document.getElementById('newRoleName').value.trim();
+      currentRole = newRoleName;
+      document.getElementById('roleSelect').value = '';
+
+      if (newRoleName) {
+        loadPermissions();
+      }
+    }
+
+    async function loadPermissions() {
+      const roleName = document.getElementById('roleSelect').value || document.getElementById('newRoleName').value.trim();
+
+      if (!roleName) {
+        document.getElementById('permission-content').style.display = 'none';
+        return;
+      }
+
+      currentRole = roleName;
+      document.getElementById('permission-content').style.display = 'block';
+
+      loadStagePermissions(roleName);
+      loadFormTypePermissions(roleName);
+    }
+
+    async function loadStagePermissions(roleName) {
+      try {
+        const response = await apiFetch(`/api/v1/permissions/stages`);
+        const stagePerms = response.filter(p => p.role_name === roleName);
+        renderStagePermissions(stagePerms);
+      } catch (error) {
+        console.error('Error loading stage permissions:', error);
+        document.getElementById('stages-content').innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted)">Failed to load permissions</p>';
+      }
+    }
+
+    async function loadFormTypePermissions(roleName) {
+      try {
+        const response = await apiFetch(`/api/v1/permissions/form-types`);
+        const ftPerms = response.filter(p => p.role_name === roleName);
+        renderFormTypePermissions(ftPerms);
+      } catch (error) {
+        console.error('Error loading form type permissions:', error);
+        document.getElementById('formtypes-content').innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted)">Failed to load permissions</p>';
+      }
+    }
+
+    function renderStagePermissions(permissions) {
+      const container = document.getElementById('stages-content');
+
+      if (permissions.length === 0) {
+        container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted)">No stage permissions assigned. Click "+ Add Permission" to add one.</p>';
+        return;
+      }
+
+      let html = '<table class="table"><thead><tr><th>Stage</th><th>View</th><th>Create</th><th>Edit</th><th>Delete</th><th>Manage</th><th>Actions</th></tr></thead><tbody>';
+
+      permissions.forEach(perm => {
+        const stage = stages.find(s => s.stage_id === perm.stage_id);
+        const stageName = stage ? stage.stage_name : perm.stage_id;
+        const stagePath = stage ? stage.stage_path : '';
+
+        html += `
+          <tr>
+            <td>
+              <div style="font-weight:600">${stageName}</div>
+              ${stagePath ? `<div style="font-size:12px;color:var(--text-muted)">${stagePath}</div>` : ''}
+            </td>
+            <td><input type="checkbox" ${perm.can_view ? 'checked' : ''} data-type="view" data-id="${perm.stage_id}"></td>
+            <td><input type="checkbox" ${perm.can_create ? 'checked' : ''} data-type="create" data-id="${perm.stage_id}"></td>
+            <td><input type="checkbox" ${perm.can_edit ? 'checked' : ''} data-type="edit" data-id="${perm.stage_id}"></td>
+            <td><input type="checkbox" ${perm.can_delete ? 'checked' : ''} data-type="delete" data-id="${perm.stage_id}"></td>
+            <td><input type="checkbox" ${perm.can_manage_permissions ? 'checked' : ''} data-type="manage" data-id="${perm.stage_id}"></td>
+            <td>
+              <div class="d-flex gap-1">
+                <button class="btn btn-xs btn-primary" onclick="updateStagePermission('${perm.stage_id}')">Save</button>
+                <button class="btn btn-xs btn-danger" onclick="deleteStagePermission('${perm.stage_id}')">Revoke</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function renderFormTypePermissions(permissions) {
+      const container = document.getElementById('formtypes-content');
+
+      if (permissions.length === 0) {
+        container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted)">No form type permissions assigned. Click "+ Add Permission" to add one.</p>';
+        return;
+      }
+
+      let html = '<table class="table"><thead><tr><th>Form Type</th><th>View</th><th>Create</th><th>Edit</th><th>Delete</th><th>Submit</th><th>Manage</th><th>Actions</th></tr></thead><tbody>';
+
+      permissions.forEach(perm => {
+        const formType = formTypes.find(ft => ft.form_type_id === perm.form_type_id);
+        const formName = formType ? formType.form_name : perm.form_type_id;
+
+        html += `
+          <tr>
+            <td style="font-weight:600">${formName}</td>
+            <td><input type="checkbox" ${perm.can_view ? 'checked' : ''} data-type="view" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_create ? 'checked' : ''} data-type="create" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_edit ? 'checked' : ''} data-type="edit" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_delete ? 'checked' : ''} data-type="delete" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_submit ? 'checked' : ''} data-type="submit" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_manage_permissions ? 'checked' : ''} data-type="manage" data-id="${perm.form_type_id}"></td>
+            <td>
+              <div class="d-flex gap-1">
+                <button class="btn btn-xs btn-primary" onclick="updateFormTypePermission('${perm.form_type_id}')">Save</button>
+                <button class="btn btn-xs btn-danger" onclick="deleteFormTypePermission('${perm.form_type_id}')">Revoke</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    async function updateStagePermission(stageId) {
+      const checkboxes = document.querySelectorAll(`#stages-content input[data-id="${stageId}"]`);
+      const permissionData = {
+        role_name: currentRole,
+        can_view: false,
+        can_create: false,
+        can_edit: false,
+        can_delete: false,
+        can_manage_permissions: false
+      };
+
+      checkboxes.forEach(cb => {
+        const type = cb.dataset.type;
+        const key = type === 'manage' ? 'can_manage_permissions' : `can_${type}`;
+        permissionData[key] = cb.checked;
+      });
+
+      try {
+        await apiFetch(`/api/v1/permissions/stages/${stageId}`, {
+          method: 'POST',
+          body: permissionData
+        });
+        toast('Permission updated successfully', 'success');
+        loadStagePermissions(currentRole);
+      } catch (error) {
+        console.error('Error updating permission:', error);
+        toast(error.message || 'Failed to update permission', 'error');
+      }
+    }
+
+    async function deleteStagePermission(stageId) {
+      if (!confirm('Are you sure you want to revoke this permission?')) return;
+
+      try {
+        await apiFetch(`/api/v1/permissions/stages/${stageId}/roles/${encodeURIComponent(currentRole)}`, {
+          method: 'DELETE'
+        });
+        toast('Permission revoked successfully', 'success');
+        loadStagePermissions(currentRole);
+      } catch (error) {
+        console.error('Error revoking permission:', error);
+        toast(error.message || 'Failed to revoke permission', 'error');
+      }
+    }
+
+    async function updateFormTypePermission(formTypeId) {
+      const checkboxes = document.querySelectorAll(`#formtypes-content input[data-id="${formTypeId}"]`);
+      const permissionData = {
+        role_name: currentRole,
+        can_view: false,
+        can_create: false,
+        can_edit: false,
+        can_delete: false,
+        can_submit: false,
+        can_manage_permissions: false
+      };
+
+      checkboxes.forEach(cb => {
+        const type = cb.dataset.type;
+        const key = type === 'manage' ? 'can_manage_permissions' : `can_${type}`;
+        permissionData[key] = cb.checked;
+      });
+
+      try {
+        await apiFetch(`/api/v1/permissions/form-types/${formTypeId}`, {
+          method: 'POST',
+          body: permissionData
+        });
+        toast('Permission updated successfully', 'success');
+        loadFormTypePermissions(currentRole);
+      } catch (error) {
+        console.error('Error updating permission:', error);
+        toast(error.message || 'Failed to update permission', 'error');
+      }
+    }
+
+    async function deleteFormTypePermission(formTypeId) {
+      if (!confirm('Are you sure you want to revoke this permission?')) return;
+
+      try {
+        await apiFetch(`/api/v1/permissions/form-types/${formTypeId}/roles/${encodeURIComponent(currentRole)}`, {
+          method: 'DELETE'
+        });
+        toast('Permission revoked successfully', 'success');
+        loadFormTypePermissions(currentRole);
+      } catch (error) {
+        console.error('Error revoking permission:', error);
+        toast(error.message || 'Failed to revoke permission', 'error');
+      }
+    }
+
+    function showAddStage() {
+      if (!currentRole) {
+        toast('Please select a role first', 'error');
+        return;
+      }
+
+      let options = '<option value="">-- Select a Stage --</option>';
+      stages.forEach(stage => {
+        options += `<option value="${stage.stage_id}">${stage.stage_path}</option>`;
+      });
+
+      const container = document.getElementById('stages-content');
+      window.previousStagesContent = container.innerHTML;
+
+      container.innerHTML = `
+        <div style="padding:20px">
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:8px;font-weight:600">Select Stage:</label>
+            <select id="add-stage-select" class="form-control">${options}</select>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:8px;font-weight:600">Permissions:</label>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+              <label><input type="checkbox" id="add-stage-view" checked> View</label>
+              <label><input type="checkbox" id="add-stage-create"> Create</label>
+              <label><input type="checkbox" id="add-stage-edit"> Edit</label>
+              <label><input type="checkbox" id="add-stage-delete"> Delete</label>
+              <label><input type="checkbox" id="add-stage-manage"> Manage</label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="addStagePermission()">Add Permission</button>
+            <button class="btn btn-secondary" onclick="cancelAddStage()">Cancel</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function addStagePermission() {
+      const stageId = document.getElementById('add-stage-select').value;
+      if (!stageId) {
+        toast('Please select a stage', 'error');
+        return;
+      }
+
+      const permissionData = {
+        role_name: currentRole,
+        can_view: document.getElementById('add-stage-view').checked,
+        can_create: document.getElementById('add-stage-create').checked,
+        can_edit: document.getElementById('add-stage-edit').checked,
+        can_delete: document.getElementById('add-stage-delete').checked,
+        can_manage_permissions: document.getElementById('add-stage-manage').checked
+      };
+
+      try {
+        await apiFetch(`/api/v1/permissions/stages/${stageId}`, {
+          method: 'POST',
+          body: permissionData
+        });
+        toast('Permission added successfully', 'success');
+        loadStagePermissions(currentRole);
+      } catch (error) {
+        console.error('Error adding permission:', error);
+        toast(error.message || 'Failed to add permission', 'error');
+      }
+    }
+
+    function cancelAddStage() {
+      document.getElementById('stages-content').innerHTML = window.previousStagesContent;
+    }
+
+    function showAddFormType() {
+      if (!currentRole) {
+        toast('Please select a role first', 'error');
+        return;
+      }
+
+      let options = '<option value="">-- Select a Form Type --</option>';
+      formTypes.forEach(ft => {
+        options += `<option value="${ft.form_type_id}">${ft.form_name}</option>`;
+      });
+
+      const container = document.getElementById('formtypes-content');
+      window.previousFormTypesContent = container.innerHTML;
+
+      container.innerHTML = `
+        <div style="padding:20px">
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:8px;font-weight:600">Select Form Type:</label>
+            <select id="add-ft-select" class="form-control">${options}</select>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:8px;font-weight:600">Permissions:</label>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+              <label><input type="checkbox" id="add-ft-view" checked> View</label>
+              <label><input type="checkbox" id="add-ft-create"> Create</label>
+              <label><input type="checkbox" id="add-ft-edit"> Edit</label>
+              <label><input type="checkbox" id="add-ft-delete"> Delete</label>
+              <label><input type="checkbox" id="add-ft-submit"> Submit</label>
+              <label><input type="checkbox" id="add-ft-manage"> Manage</label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="addFormTypePermission()">Add Permission</button>
+            <button class="btn btn-secondary" onclick="cancelAddFormType()">Cancel</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function addFormTypePermission() {
+      const formTypeId = document.getElementById('add-ft-select').value;
+      if (!formTypeId) {
+        toast('Please select a form type', 'error');
+        return;
+      }
+
+      const permissionData = {
+        role_name: currentRole,
+        can_view: document.getElementById('add-ft-view').checked,
+        can_create: document.getElementById('add-ft-create').checked,
+        can_edit: document.getElementById('add-ft-edit').checked,
+        can_delete: document.getElementById('add-ft-delete').checked,
+        can_submit: document.getElementById('add-ft-submit').checked,
+        can_manage_permissions: document.getElementById('add-ft-manage').checked
+      };
+
+      try {
+        await apiFetch(`/api/v1/permissions/form-types/${formTypeId}`, {
+          method: 'POST',
+          body: permissionData
+        });
+        toast('Permission added successfully', 'success');
+        loadFormTypePermissions(currentRole);
+      } catch (error) {
+        console.error('Error adding permission:', error);
+        toast(error.message || 'Failed to add permission', 'error');
+      }
+    }
+
+    function cancelAddFormType() {
+      document.getElementById('formtypes-content').innerHTML = window.previousFormTypesContent;
+    }
+</script>
+
+<style>
+    .tab-btn {
+        padding: 10px 16px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--text-muted);
+        border-bottom: 2px solid transparent;
+    }
+
+    .tab-btn:hover {
+        color: var(--primary);
+    }
+
+    .tab-btn.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+    }
+</style>
+{% endblock %}

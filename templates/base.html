@@ -1,146 +1,523 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}ERP Stage Builder{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/app.css">
-  {% block extra_head %}{% endblock %}
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}ERP Stage Builder{% endblock %}</title>
+        <link rel="stylesheet" href="/static/css/app.css" />
+        {% block extra_head %}{% endblock %}
+        <style>
+            /* Search Dropdown Styles */
+            .search-dropdown {
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: white;
+                border: 1px solid var(--border-light);
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                max-height: 400px;
+                overflow-y: auto;
+                z-index: 1000;
+                margin-top: 4px;
+            }
 
-<!-- Navbar -->
-<nav class="navbar">
-  <a href="/" class="navbar-brand">
-    <div class="logo">E</div>
-    ERP Stage Builder
-  </a>
-  <div class="navbar-search">
-    <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-    <input type="text" placeholder="Search stages, forms…" id="global-search">
-  </div>
-  <div class="navbar-actions">
-    <a href="/" class="navbar-link {% block nav_home %}{% endblock %}">Dashboard</a>
-    <a href="/docs" target="_blank" class="navbar-link">API Docs</a>
-  </div>
-</nav>
+            .search-section {
+                border-bottom: 1px solid var(--border-light);
+            }
 
-<div class="app-layout">
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">Navigation</div>
-      <a href="/" class="sidebar-item {% block nav_dashboard %}{% endblock %}">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        Dashboard
-      </a>
-    </div>
+            .search-section:last-child {
+                border-bottom: none;
+            }
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Stage Tree</div>
-      <div id="sidebar-tree">
-        <div style="padding:8px 10px;color:var(--text-muted);font-size:12px">Loading…</div>
-      </div>
-    </div>
-  </aside>
+            .search-section-title {
+                padding: 10px 12px;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                background: var(--bg-light);
+            }
 
-  <!-- Main -->
-  <main class="main-content">
-    {% block content %}{% endblock %}
-  </main>
-</div>
+            .search-item {
+                display: flex;
+                align-items: center;
+                padding: 10px 12px;
+                color: inherit;
+                text-decoration: none;
+                transition: background 0.15s;
+            }
 
-<!-- Toast container -->
-<div id="toast-container"></div>
+            .search-item:hover {
+                background: var(--bg-hover);
+            }
 
-<!-- Global JS -->
-<script>
-const API = '/api/v1';
+            .search-item-icon {
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: var(--bg-light);
+                border-radius: 6px;
+                margin-right: 10px;
+                font-size: 16px;
+            }
 
-function toast(msg, type='') {
-  const el = document.createElement('div');
-  el.className = 'toast ' + type;
-  el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3500);
-}
+            .search-item-content {
+                flex: 1;
+                min-width: 0;
+            }
 
-async function apiFetch(url, opts={}) {
-  const r = await fetch(url, {
-    headers: {'Content-Type':'application/json'}, ...opts,
-    body: opts.body ? JSON.stringify(opts.body) : undefined
-  });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({detail: r.statusText}));
-    throw new Error(err.detail || r.statusText);
-  }
-  return r.json();
-}
+            .search-item-title {
+                font-weight: 600;
+                color: var(--text);
+                margin-bottom: 2px;
+            }
 
-// Sidebar tree loader
-async function loadSidebarTree() {
-  try {
-    const tree = await apiFetch(`${API}/stages/tree`);
-    const container = document.getElementById('sidebar-tree');
-    container.innerHTML = '';
-    const currentPath = window.location.pathname;
+            .search-item-title mark {
+                background: #fff3cd;
+                color: inherit;
+                padding: 0 2px;
+                border-radius: 2px;
+            }
 
-    function renderNode(node, depth=0) {
-      const hasChildren = node.children && node.children.length > 0;
-      const isActive = currentPath === `/stages/${node.stage_id}`;
-      const wrapper = document.createElement('div');
-      wrapper.className = 'stage-tree-node';
+            .search-item-meta {
+                font-size: 12px;
+                color: var(--text-muted);
+            }
 
-      const row = document.createElement('a');
-      row.href = `/stages/${node.stage_id}`;
-      row.className = 'stage-node-row' + (isActive ? ' active' : '');
-      row.style.paddingLeft = `${10 + depth * 14}px`;
-      row.innerHTML = `
-        ${hasChildren
-          ? `<svg class="stage-node-chevron ${isActive ? 'open' : ''}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 18 6-6-6-6"/></svg>`
-          : `<span style="width:10px;display:inline-block"></span>`
+            .search-no-results {
+                padding: 20px;
+                text-align: center;
+                color: var(--text-muted);
+            }
+
+            .search-more {
+                padding: 8px 12px;
+                font-size: 12px;
+                color: var(--text-muted);
+                text-align: center;
+                background: var(--bg-light);
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Navbar -->
+        <nav class="navbar">
+            <a href="/" class="navbar-brand">
+                <div class="logo">E</div>
+                ERP Stage Builder
+            </a>
+            <div class="navbar-search">
+                <svg
+                    class="search-icon"
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                </svg>
+                <input
+                    type="text"
+                    placeholder="Search stages, forms…"
+                    id="global-search"
+                    autocomplete="off"
+                />
+                <div
+                    id="search-results"
+                    class="search-dropdown"
+                    style="display: none"
+                ></div>
+            </div>
+            <div class="navbar-actions">
+                <a
+                    href="/"
+                    class="navbar-link {% block nav_home %}{% endblock %}"
+                    >Dashboard</a
+                >
+                <a href="/docs" target="_blank" class="navbar-link">API Docs</a>
+            </div>
+        </nav>
+
+        <div class="app-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Navigation</div>
+                    <a
+                        href="/"
+                        class="sidebar-item {% block nav_dashboard %}{% endblock %}"
+                    >
+                        <svg
+                            class="icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <rect x="3" y="3" width="7" height="7" />
+                            <rect x="14" y="3" width="7" height="7" />
+                            <rect x="3" y="14" width="7" height="7" />
+                            <rect x="14" y="14" width="7" height="7" />
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a
+                        href="/roles"
+                        class="sidebar-item {% block nav_roles %}{% endblock %}"
+                    >
+                        <svg
+                            class="icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                            />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        Roles
+                    </a>
+                    <a
+                        href="/permissions"
+                        class="sidebar-item {% block nav_permissions %}{% endblock %}"
+                    >
+                        <svg
+                            class="icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <rect
+                                x="3"
+                                y="11"
+                                width="18"
+                                height="11"
+                                rx="2"
+                                ry="2"
+                            />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        Permissions
+                    </a>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-label">Stage Tree</div>
+                    <div id="sidebar-tree">
+                        <div
+                            style="
+                                padding: 8px 10px;
+                                color: var(--text-muted);
+                                font-size: 12px;
+                            "
+                        >
+                            Loading…
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main -->
+            <main class="main-content">{% block content %}{% endblock %}</main>
+        </div>
+
+        <!-- Toast container -->
+        <div id="toast-container"></div>
+
+        <!-- Global JS -->
+        <script>
+            const API = "/api/v1";
+
+            function toast(msg, type = "") {
+                const el = document.createElement("div");
+                el.className = "toast " + type;
+                el.textContent = msg;
+                document.getElementById("toast-container").appendChild(el);
+                setTimeout(() => el.remove(), 3500);
+            }
+
+            async function apiFetch(url, opts = {}) {
+                const r = await fetch(url, {
+                    headers: { "Content-Type": "application/json" },
+                    ...opts,
+                    body: opts.body ? JSON.stringify(opts.body) : undefined,
+                });
+                if (!r.ok) {
+                    const err = await r
+                        .json()
+                        .catch(() => ({ detail: r.statusText }));
+                    throw new Error(err.detail || r.statusText);
+                }
+                return r.json();
+            }
+
+            // Sidebar tree loader
+            async function loadSidebarTree() {
+                try {
+                    const tree = await apiFetch(`${API}/stages/tree`);
+                    const container = document.getElementById("sidebar-tree");
+                    container.innerHTML = "";
+                    const currentPath = window.location.pathname;
+
+                    // Returns { el, active } where active=true if this node or any descendant is active
+                    function renderNode(node, depth = 0) {
+                        const hasChildren =
+                            node.children && node.children.length > 0;
+                        const isActive =
+                            currentPath === `/stages/${node.stage_id}`;
+                        const wrapper = document.createElement("div");
+                        wrapper.className = "stage-tree-node";
+
+                        const row = document.createElement("a");
+                        row.href = `/stages/${node.stage_id}`;
+                        row.className =
+                            "stage-node-row" + (isActive ? " active" : "");
+                        row.style.paddingLeft = `${10 + depth * 14}px`;
+
+                        let childrenEl = null;
+                        let hasActiveDescendant = false;
+
+                        if (hasChildren) {
+                            childrenEl = document.createElement("div");
+                            childrenEl.className = "stage-node-children";
+                            node.children.forEach((c) => {
+                                const result = renderNode(c, depth + 1);
+                                childrenEl.appendChild(result.el);
+                                if (result.active) hasActiveDescendant = true;
+                            });
+                        }
+
+                        const shouldOpen = isActive || hasActiveDescendant;
+
+                        row.innerHTML = `
+        ${
+            hasChildren
+                ? `<svg class="stage-node-chevron ${shouldOpen ? "open" : ""}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 18 6-6-6-6"/></svg>`
+                : `<span style="width:10px;display:inline-block"></span>`
         }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--text-muted)"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${node.stage_name}</span>
-        ${node.formtype_count > 0 ? `<span class="badge" style="font-size:10px;background:var(--border-light);color:var(--text-muted)">${node.formtype_count}</span>` : ''}
+        ${node.formtype_count > 0 ? `<span class="badge" style="font-size:10px;background:var(--border-light);color:var(--text-muted)">${node.formtype_count}</span>` : ""}
       `;
 
-      wrapper.appendChild(row);
+                        wrapper.appendChild(row);
 
-      if (hasChildren) {
-        const children = document.createElement('div');
-        children.className = 'stage-node-children' + (isActive ? ' open' : '');
-        node.children.forEach(c => children.appendChild(renderNode(c, depth + 1)));
-        wrapper.appendChild(children);
+                        if (hasChildren) {
+                            if (shouldOpen) childrenEl.classList.add("open");
+                            wrapper.appendChild(childrenEl);
 
-        row.querySelector('.stage-node-chevron').addEventListener('click', (e) => {
-          e.preventDefault(); e.stopPropagation();
-          const ch = row.querySelector('.stage-node-chevron');
-          ch.classList.toggle('open');
-          children.classList.toggle('open');
-        });
-      }
+                            row.querySelector(
+                                ".stage-node-chevron",
+                            ).addEventListener("click", (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const ch = row.querySelector(
+                                    ".stage-node-chevron",
+                                );
+                                ch.classList.toggle("open");
+                                childrenEl.classList.toggle("open");
+                            });
+                        }
 
-      return wrapper;
-    }
+                        return {
+                            el: wrapper,
+                            active: isActive || hasActiveDescendant,
+                        };
+                    }
 
-    tree.forEach(node => container.appendChild(renderNode(node)));
-  } catch(e) {
-    document.getElementById('sidebar-tree').innerHTML =
-      `<div style="padding:8px 10px;color:var(--text-muted);font-size:12px">Failed to load</div>`;
-  }
-}
+                    tree.forEach((node) =>
+                        container.appendChild(renderNode(node).el),
+                    );
+                } catch (e) {
+                    document.getElementById("sidebar-tree").innerHTML =
+                        `<div style="padding:8px 10px;color:var(--text-muted);font-size:12px">Failed to load</div>`;
+                }
+            }
 
-loadSidebarTree();
+            loadSidebarTree();
 
-// Global search
-document.getElementById('global-search').addEventListener('input', async function() {
-  const q = this.value.trim();
-  if (q.length < 2) return;
-  // Could add a dropdown here; for now redirect to first match
-});
-</script>
+            // Global search
+            let searchTimeout;
+            const searchInput = document.getElementById("global-search");
+            const searchResults = document.getElementById("search-results");
 
-{% block extra_js %}{% endblock %}
-</body>
+            searchInput.addEventListener("input", function () {
+                clearTimeout(searchTimeout);
+                const q = this.value.trim();
+
+                if (q.length < 1) {
+                    searchResults.style.display = "none";
+                    return;
+                }
+
+                searchTimeout = setTimeout(() => performSearch(q), 300);
+            });
+
+            // Handle Enter key to navigate to first result
+            searchInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    const firstResult =
+                        searchResults.querySelector(".search-item");
+                    if (firstResult) {
+                        e.preventDefault();
+                        firstResult.click();
+                    }
+                }
+            });
+
+            searchInput.addEventListener("focus", function () {
+                if (this.value.trim().length >= 1) {
+                    searchResults.style.display = "block";
+                }
+            });
+
+            // Close search results when clicking outside
+            document.addEventListener("click", function (e) {
+                if (
+                    !searchInput.contains(e.target) &&
+                    !searchResults.contains(e.target)
+                ) {
+                    searchResults.style.display = "none";
+                }
+            });
+
+            async function performSearch(query) {
+                // Show loading state
+                searchResults.innerHTML =
+                    '<div class="search-no-results">Searching...</div>';
+                searchResults.style.display = "block";
+
+                try {
+                    const lowerQuery = query.toLowerCase();
+
+                    // Fetch stages and form types (max limit is 100)
+                    const [stagesResponse, formTypesResponse] =
+                        await Promise.all([
+                            apiFetch(`${API}/stages?limit=100`),
+                            apiFetch(`${API}/form-types?limit=100`),
+                        ]);
+
+                    // API returns arrays directly
+                    const stages = Array.isArray(stagesResponse)
+                        ? stagesResponse
+                        : [];
+                    const formTypes = Array.isArray(formTypesResponse)
+                        ? formTypesResponse
+                        : [];
+
+                    console.log(
+                        `Search "${query}": Found ${stages.length} stages, ${formTypes.length} form types`,
+                    );
+
+                    // Filter stages
+                    const stageResults = stages.filter(
+                        (s) =>
+                            s.stage_name.toLowerCase().includes(lowerQuery) ||
+                            s.stage_id.toLowerCase().includes(lowerQuery),
+                    );
+
+                    // Filter form types
+                    const formResults = formTypes.filter(
+                        (f) =>
+                            f.form_name.toLowerCase().includes(lowerQuery) ||
+                            f.form_type_id.toLowerCase().includes(lowerQuery),
+                    );
+
+                    console.log(
+                        `Filtered: ${stageResults.length} stages, ${formResults.length} form types match "${query}"`,
+                    );
+
+                    // Render results
+                    renderSearchResults(stageResults, formResults, query);
+                } catch (error) {
+                    console.error("Search error:", error);
+                    searchResults.innerHTML = `<div class="search-no-results">Error: ${error.message}</div>`;
+                    searchResults.style.display = "block";
+                }
+            }
+
+            function renderSearchResults(stages, forms, query) {
+                if (stages.length === 0 && forms.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="search-no-results">
+                            No results found for "${escapeHtml(query)}"
+                        </div>
+                    `;
+                    searchResults.style.display = "block";
+                    return;
+                }
+
+                let html = "";
+
+                if (stages.length > 0) {
+                    html += `<div class="search-section">
+                        <div class="search-section-title">Stages (${stages.length})</div>`;
+                    stages.slice(0, 5).forEach((stage) => {
+                        html += `<a href="/stages/${stage.stage_id}" class="search-item">
+                            <div class="search-item-icon">📁</div>
+                            <div class="search-item-content">
+                                <div class="search-item-title">${highlightMatch(stage.stage_name, query)}</div>
+                                <div class="search-item-meta">${stage.formtype_count} form${stage.formtype_count !== 1 ? "s" : ""}</div>
+                            </div>
+                        </a>`;
+                    });
+                    if (stages.length > 5) {
+                        html += `<div class="search-more">+${stages.length - 5} more stages</div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                if (forms.length > 0) {
+                    html += `<div class="search-section">
+                        <div class="search-section-title">Form Types (${forms.length})</div>`;
+                    forms.slice(0, 5).forEach((form) => {
+                        html += `<a href="/forms/${form.form_type_id}" class="search-item">
+                            <div class="search-item-icon">📄</div>
+                            <div class="search-item-content">
+                                <div class="search-item-title">${highlightMatch(form.form_name, query)}</div>
+                                <div class="search-item-meta">${form.form_path || "No path"}</div>
+                            </div>
+                        </a>`;
+                    });
+                    if (forms.length > 5) {
+                        html += `<div class="search-more">+${forms.length - 5} more forms</div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                searchResults.innerHTML = html;
+                searchResults.style.display = "block";
+            }
+
+            function highlightMatch(text, query) {
+                const regex = new RegExp(`(${escapeRegex(query)})`, "gi");
+                return escapeHtml(text).replace(regex, "<mark>$1</mark>");
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement("div");
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function escapeRegex(string) {
+                return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            }
+        </script>
+
+        {% block extra_js %}{% endblock %}
+    </body>
 </html>

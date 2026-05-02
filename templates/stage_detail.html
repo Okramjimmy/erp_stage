@@ -84,6 +84,7 @@
           <a href="/forms/{{ ft.form_type_id }}/new" class="btn btn-sm btn-primary">+ New Record</a>
           <a href="/forms/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">List</a>
           <a href="/form-builder/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">✏️ Build</a>
+          <a href="/workflow-builder/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">⚙ Workflow</a>
           <button class="btn btn-sm btn-danger" onclick="deleteForm('{{ ft.form_type_id }}','{{ ft.form_name }}')">Delete</button>
         </div>
       </div>

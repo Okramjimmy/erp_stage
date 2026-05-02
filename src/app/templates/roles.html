@@ -1,0 +1,919 @@
+{% extends "base.html" %} {% block title %}Role Management - ERP Stage Builder{%
+endblock %} {% block head %}
+<style>
+    .roles-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .roles-header {
+        margin-bottom: 2rem;
+    }
+
+    .roles-header h2 {
+        font-size: 2rem;
+        color: #2c3e50;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .subtitle {
+        color: #7f8c8d;
+        font-size: 1rem;
+        margin: 0;
+    }
+
+    /* Create Role Section */
+    .create-role-section {
+        margin-bottom: 3rem;
+    }
+
+    .create-role-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
+        color: white;
+    }
+
+    .card-header h3 {
+        font-size: 1.75rem;
+        margin: 0 0 0.5rem 0;
+        font-weight: 600;
+    }
+
+    .card-header p {
+        margin: 0 0 1.5rem 0;
+        opacity: 0.9;
+        font-size: 0.95rem;
+    }
+
+    .create-role-form {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-end;
+        flex-wrap: wrap;
+    }
+
+    .form-row {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .create-role-form .form-group {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .create-role-form label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: white;
+        font-size: 0.95rem;
+    }
+
+    .create-role-form .form-control {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        font-size: 1rem;
+        background: rgba(255, 255, 255, 0.95);
+        color: #2c3e50;
+        transition: all 0.3s;
+    }
+
+    .create-role-form .form-control:focus {
+        outline: none;
+        border-color: white;
+        background: white;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
+    }
+
+    .create-role-form .form-control::placeholder {
+        color: #95a5a6;
+    }
+
+    .form-hint {
+        display: block;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        opacity: 0.85;
+    }
+
+    .btn-create {
+        padding: 0.75rem 2rem;
+        background: white;
+        color: #667eea;
+        border: none;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s;
+        white-space: nowrap;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn-create:hover {
+        background: #f8f9fa;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-create:active {
+        transform: translateY(0);
+    }
+
+    .btn-icon-text {
+        font-size: 1.2rem;
+        margin-right: 0.25rem;
+    }
+
+    /* Roles List Section */
+    .roles-list-section {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        border-bottom: 2px solid #f1f3f5;
+        background: #f8f9fa;
+    }
+
+    .section-header h3 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: #2c3e50;
+    }
+
+    .role-count {
+        background: #3498db;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .roles-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .roles-table th {
+        background: #34495e;
+        color: white;
+        padding: 1rem 1.5rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .roles-table td {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .roles-table tr:hover {
+        background: #f8f9fa;
+    }
+
+    .roles-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .role-name {
+        font-weight: 700;
+        color: #2c3e50;
+        font-size: 1.1rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .role-description {
+        color: #7f8c8d;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+
+    .stat-badge {
+        display: inline-block;
+        padding: 0.35rem 0.85rem;
+        border-radius: 12px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+    }
+
+    .stat-badge.stages {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+
+    .stat-badge.formtypes {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+
+    .stat-badge.users {
+        background: #e8f5e9;
+        color: #388e3c;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-icon {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s;
+        font-size: 0.875rem;
+    }
+
+    .btn-edit {
+        background: #3498db;
+        color: white;
+    }
+
+    .btn-edit:hover {
+        background: #2980b9;
+    }
+
+    .btn-permissions {
+        background: #27ae60;
+        color: white;
+    }
+
+    .btn-permissions:hover {
+        background: #229954;
+    }
+
+    .btn-delete {
+        background: #e74c3c;
+        color: white;
+    }
+
+    .btn-delete:hover {
+        background: #c0392b;
+    }
+
+    .no-roles {
+        text-align: center;
+        padding: 3rem;
+        color: #7f8c8d;
+    }
+
+    /* Modal Styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        animation: fadeIn 0.3s;
+    }
+
+    .modal.active {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-content {
+        background-color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        animation: slideDown 0.3s;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        color: #2c3e50;
+        font-size: 1.5rem;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #7f8c8d;
+        padding: 0;
+    }
+
+    .modal-close:hover {
+        color: #2c3e50;
+    }
+
+    .form-group-modal {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group-modal label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #555;
+    }
+
+    .form-control-modal {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 1rem;
+        transition: border-color 0.3s;
+    }
+
+    .form-control-modal:focus {
+        outline: none;
+        border-color: #3498db;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 2rem;
+    }
+
+    .btn-secondary {
+        padding: 0.75rem 1.5rem;
+        background: #95a5a6;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .btn-secondary:hover {
+        background: #7f8c8d;
+    }
+
+    .btn-danger {
+        padding: 0.75rem 1.5rem;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .btn-danger:hover {
+        background: #c0392b;
+    }
+
+    /* Toast Notifications */
+    .toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        padding: 1rem 1.5rem;
+        border-radius: 4px;
+        color: white;
+        font-weight: 600;
+        animation: slideIn 0.3s ease-in-out;
+        z-index: 1001;
+    }
+
+    .toast.success {
+        background: #27ae60;
+    }
+
+    .toast.error {
+        background: #e74c3c;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideDown {
+        from {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+        .create-role-form .form-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .create-role-form .form-group {
+            width: 100%;
+        }
+
+        .btn-create {
+            width: 100%;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .roles-table {
+            font-size: 0.875rem;
+        }
+
+        .roles-table th,
+        .roles-table td {
+            padding: 0.75rem;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+
+        .btn-icon {
+            width: 100%;
+            text-align: center;
+        }
+
+        .section-header {
+            flex-direction: column;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="roles-container">
+    <div class="roles-header">
+        <h2>Role Management</h2>
+        <p class="subtitle">Create and manage roles for access control</p>
+    </div>
+
+    <!-- Create Role Section - ALWAYS VISIBLE -->
+    <div class="create-role-section">
+        <div class="create-role-card">
+            <div class="card-header">
+                <h3>Create New Role</h3>
+                <p>
+                    Define a new role and assign permissions to control access
+                </p>
+            </div>
+            <div class="card-body">
+                <form id="createRoleForm" class="create-role-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="newRoleName">Role Name *</label>
+                            <input
+                                type="text"
+                                id="newRoleName"
+                                class="form-control"
+                                placeholder="e.g., manager, data_entry, hr_admin"
+                                required
+                                pattern="^[a-z0-9_]+$"
+                                title="Only lowercase letters, numbers, and underscores allowed"
+                            />
+                            <small class="form-hint"
+                                >Use lowercase letters, numbers, and underscores
+                                only</small
+                            >
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn-create">
+                                <span class="btn-icon-text">+</span> Create Role
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Existing Roles Section -->
+    <div class="roles-list-section">
+        <div class="section-header">
+            <h3>Existing Roles</h3>
+            <span class="role-count" id="roleCount">0 roles</span>
+        </div>
+
+        <div id="roles-content">
+            <p class="no-roles">Loading roles...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Role Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Role Name</h3>
+            <button class="modal-close" onclick="closeEditModal()">
+                &times;
+            </button>
+        </div>
+        <form id="editRoleForm">
+            <div class="form-group-modal">
+                <label for="editRoleName">Role Name</label>
+                <input
+                    type="text"
+                    id="editRoleName"
+                    class="form-control-modal"
+                    required
+                    pattern="^[a-z0-9_]+$"
+                    title="Only lowercase letters, numbers, and underscores allowed"
+                />
+            </div>
+            <div class="form-actions">
+                <button
+                    type="button"
+                    class="btn-secondary"
+                    onclick="closeEditModal()"
+                >
+                    Cancel
+                </button>
+                <button type="submit" class="btn-edit">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Delete Role</h3>
+            <button class="modal-close" onclick="closeDeleteModal()">
+                &times;
+            </button>
+        </div>
+        <p id="deleteMessage">Are you sure you want to delete this role?</p>
+        <div class="form-actions">
+            <button class="btn-secondary" onclick="closeDeleteModal()">
+                Cancel
+            </button>
+            <button class="btn-danger" id="confirmDeleteBtn">
+                Delete Role
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentEditRole = null;
+    let rolesData = [];
+
+    // Load roles on page load
+    document.addEventListener("DOMContentLoaded", loadRoles);
+
+    // Create Role Form Handler
+    document
+        .getElementById("createRoleForm")
+        .addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            const roleName = document
+                .getElementById("newRoleName")
+                .value.trim();
+
+            if (!roleName) {
+                showToast("Please enter a role name", "error");
+                return;
+            }
+
+            // Validate role name format
+            if (!/^[a-z0-9_]+$/.test(roleName)) {
+                showToast(
+                    "Role name must contain only lowercase letters, numbers, and underscores",
+                    "error",
+                );
+                return;
+            }
+
+            // Check if role already exists
+            if (rolesData.some((r) => r.role_name === roleName)) {
+                showToast(`Role "${roleName}" already exists`, "error");
+                return;
+            }
+
+            try {
+                // Call the API to create the role
+                const response = await fetch("/api/v1/permissions/roles", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        role_name: roleName,
+                        description: null,
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(
+                        errorData.detail || "Failed to create role",
+                    );
+                }
+
+                const createdRole = await response.json();
+                console.log("Role created:", createdRole);
+
+                showToast(
+                    `Role "${roleName}" created successfully!`,
+                    "success",
+                );
+
+                // Clear the form
+                document.getElementById("newRoleName").value = "";
+
+                // Ask if user wants to configure permissions now
+                setTimeout(() => {
+                    if (
+                        confirm(
+                            `Do you want to configure permissions for "${roleName}" now?`,
+                        )
+                    ) {
+                        window.location.href = `/permissions?role=${encodeURIComponent(roleName)}`;
+                    } else {
+                        loadRoles();
+                    }
+                }, 500);
+            } catch (error) {
+                console.error("Error creating role:", error);
+                showToast(error.message || "Failed to create role", "error");
+            }
+        });
+
+    async function loadRoles() {
+        try {
+            const response = await fetch("/api/v1/permissions/roles");
+            if (!response.ok) {
+                throw new Error("Failed to load roles");
+            }
+            rolesData = await response.json();
+
+            // Update role count
+            document.getElementById("roleCount").textContent =
+                `${rolesData.length} role${rolesData.length !== 1 ? "s" : ""}`;
+
+            renderRoles(rolesData);
+        } catch (error) {
+            console.error("Error loading roles:", error);
+            showToast("Failed to load roles", "error");
+            document.getElementById("roles-content").innerHTML =
+                '<p class="no-roles">Error loading roles. Please try again.</p>';
+        }
+    }
+
+    function renderRoles(roles) {
+        const container = document.getElementById("roles-content");
+
+        if (!roles || roles.length === 0) {
+            container.innerHTML = `
+            <div class="no-roles">
+                <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No roles created yet</p>
+                <p style="margin-bottom: 0; color: #95a5a6;">Create your first role using the form above</p>
+            </div>
+        `;
+            return;
+        }
+
+        let html = `
+        <table class="roles-table">
+            <thead>
+                <tr>
+                    <th style="width: 30%">Role Name</th>
+                    <th style="width: 35%">Permissions</th>
+                    <th style="width: 15%">Users</th>
+                    <th style="width: 20%">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+        roles.forEach((role) => {
+            html += `
+            <tr data-role="${role.role_name}">
+                <td>
+                    <div class="role-name">${role.role_name}</div>
+                </td>
+                <td>
+                    <span class="stat-badge stages">${role.stage_permissions_count} Stages</span>
+                    <span class="stat-badge formtypes">${role.form_type_permissions_count} Forms</span>
+                </td>
+                <td>
+                    <span class="stat-badge users">${role.users_count} user${role.users_count !== 1 ? "s" : ""}</span>
+                </td>
+                <td class="action-buttons">
+                    <button class="btn-icon btn-edit" onclick="openEditModal('${role.role_name}')">Edit</button>
+                    <button class="btn-icon btn-permissions" onclick="goToPermissions('${role.role_name}')">Permissions</button>
+                    <button class="btn-icon btn-delete" onclick="openDeleteModal('${role.role_name}')">Delete</button>
+                </td>
+            </tr>
+        `;
+        });
+
+        html += `
+            </tbody>
+        </table>
+    `;
+
+        container.innerHTML = html;
+    }
+
+    function openEditModal(roleName) {
+        currentEditRole = roleName;
+        document.getElementById("editRoleName").value = roleName;
+        document.getElementById("editModal").classList.add("active");
+    }
+
+    function closeEditModal() {
+        document.getElementById("editModal").classList.remove("active");
+        currentEditRole = null;
+    }
+
+    function openDeleteModal(roleName) {
+        currentEditRole = roleName;
+        document.getElementById("deleteMessage").innerHTML = `
+        Are you sure you want to delete the role <strong>"${roleName}"</strong>?<br><br>
+        <small style="color: #e74c3c;">⚠️ This will permanently remove all permissions and user assignments for this role.</small>
+    `;
+        document.getElementById("deleteModal").classList.add("active");
+    }
+
+    function closeDeleteModal() {
+        document.getElementById("deleteModal").classList.remove("active");
+        currentEditRole = null;
+    }
+
+    // Edit Role Form Handler
+    document
+        .getElementById("editRoleForm")
+        .addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            const newRoleName = document
+                .getElementById("editRoleName")
+                .value.trim();
+
+            if (!newRoleName || !currentEditRole) {
+                showToast("Please enter a role name", "error");
+                return;
+            }
+
+            // Validate role name format
+            if (!/^[a-z0-9_]+$/.test(newRoleName)) {
+                showToast(
+                    "Role name must contain only lowercase letters, numbers, and underscores",
+                    "error",
+                );
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `/api/v1/permissions/roles/${encodeURIComponent(currentEditRole)}?new_role_name=${encodeURIComponent(newRoleName)}`,
+                    {
+                        method: "PUT",
+                    },
+                );
+
+                if (!response.ok) {
+                    throw new Error("Failed to rename role");
+                }
+
+                showToast(
+                    `Role renamed from "${currentEditRole}" to "${newRoleName}" successfully`,
+                    "success",
+                );
+                closeEditModal();
+                loadRoles();
+            } catch (error) {
+                console.error("Error renaming role:", error);
+                showToast("Failed to rename role", "error");
+            }
+        });
+
+    // Delete role handler
+    document
+        .getElementById("confirmDeleteBtn")
+        .addEventListener("click", async function () {
+            if (!currentEditRole) return;
+
+            try {
+                const response = await fetch(
+                    `/api/v1/permissions/roles/${encodeURIComponent(currentEditRole)}`,
+                    {
+                        method: "DELETE",
+                    },
+                );
+
+                if (!response.ok) {
+                    throw new Error("Failed to delete role");
+                }
+
+                const result = await response.json();
+                showToast(
+                    `Role "${currentEditRole}" deleted. Removed ${result.stage_permissions_deleted} stage permissions, ${result.form_type_permissions_deleted} form permissions, and ${result.user_assignments_deleted} user assignments.`,
+                    "success",
+                );
+
+                closeDeleteModal();
+                loadRoles();
+            } catch (error) {
+                console.error("Error deleting role:", error);
+                showToast("Failed to delete role", "error");
+            }
+        });
+
+    // Navigate to permissions page
+    function goToPermissions(roleName) {
+        window.location.href = `/permissions?role=${encodeURIComponent(roleName)}`;
+    }
+
+    // Show toast notification
+    function showToast(message, type) {
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 5000);
+    }
+
+    // Close modals on escape key
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+            closeEditModal();
+            closeDeleteModal();
+        }
+    });
+
+    // Close modals on outside click
+    document
+        .getElementById("editModal")
+        .addEventListener("click", function (e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+
+    document
+        .getElementById("deleteModal")
+        .addEventListener("click", function (e) {
+            if (e.target === this) {
+                closeDeleteModal();
+            }
+        });
+</script>
+{% endblock %}

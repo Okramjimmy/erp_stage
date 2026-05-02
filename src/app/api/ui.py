@@ -23,14 +23,17 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     stages = await stage_service.get_all_stages(limit=200)
     form_types = await ft_service.get_all_form_types(limit=200)
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "tree": tree,
-        "stages": stages,
-        "form_types": form_types,
-        "total_stages": len(stages),
-        "total_forms": len(form_types),
-    })
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "tree": tree,
+            "stages": stages,
+            "form_types": form_types,
+            "total_stages": len(stages),
+            "total_forms": len(form_types),
+        },
+    )
 
 
 @router.get("/stages/{stage_id}", response_class=HTMLResponse)
@@ -56,14 +59,17 @@ async def stage_detail(
         if ancestor:
             breadcrumb.append(ancestor)
 
-    return templates.TemplateResponse("stage_detail.html", {
-        "request": request,
-        "stage": stage,
-        "form_types": form_types,
-        "children": children,
-        "breadcrumb": breadcrumb,
-        "all_stages": all_stages_for_move,
-    })
+    return templates.TemplateResponse(
+        "stage_detail.html",
+        {
+            "request": request,
+            "stage": stage,
+            "form_types": form_types,
+            "children": children,
+            "breadcrumb": breadcrumb,
+            "all_stages": all_stages_for_move,
+        },
+    )
 
 
 @router.get("/form-builder/new/{stage_id}", response_class=HTMLResponse)
@@ -75,11 +81,14 @@ async def new_form_builder(
     if not stage:
         return HTMLResponse("Stage not found", status_code=404)
 
-    return templates.TemplateResponse("form_builder.html", {
-        "request": request,
-        "form_type": None,
-        "stage": stage,
-    })
+    return templates.TemplateResponse(
+        "form_builder.html",
+        {
+            "request": request,
+            "form_type": None,
+            "stage": stage,
+        },
+    )
 
 
 @router.get("/form-builder/{form_type_id}", response_class=HTMLResponse)
@@ -94,11 +103,14 @@ async def form_builder(
     stage_service = StageService(db)
     stage = await stage_service.get_stage(form_type.stage_id)
 
-    return templates.TemplateResponse("form_builder.html", {
-        "request": request,
-        "form_type": form_type,
-        "stage": stage,
-    })
+    return templates.TemplateResponse(
+        "form_builder.html",
+        {
+            "request": request,
+            "form_type": form_type,
+            "stage": stage,
+        },
+    )
 
 
 @router.get("/forms/{form_type_id}/new", response_class=HTMLResponse)
@@ -111,17 +123,23 @@ async def new_form_view(
         return HTMLResponse("Form type not found", status_code=404)
     stage_service = StageService(db)
     stage = await stage_service.get_stage(form_type.stage_id)
-    return templates.TemplateResponse("form_view.html", {
-        "request": request,
-        "form_type": form_type,
-        "stage": stage,
-        "record": None,
-    })
+    return templates.TemplateResponse(
+        "form_view.html",
+        {
+            "request": request,
+            "form_type": form_type,
+            "stage": stage,
+            "record": None,
+        },
+    )
 
 
 @router.get("/forms/{form_type_id}/{record_id}", response_class=HTMLResponse)
 async def edit_form_view(
-    request: Request, form_type_id: str, record_id: str, db: AsyncSession = Depends(get_db)
+    request: Request,
+    form_type_id: str,
+    record_id: str,
+    db: AsyncSession = Depends(get_db),
 ):
     ft_service = FormTypeService(db)
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
@@ -133,12 +151,15 @@ async def edit_form_view(
         return HTMLResponse("Record not found", status_code=404)
     stage_service = StageService(db)
     stage = await stage_service.get_stage(form_type.stage_id)
-    return templates.TemplateResponse("form_view.html", {
-        "request": request,
-        "form_type": form_type,
-        "stage": stage,
-        "record": record,
-    })
+    return templates.TemplateResponse(
+        "form_view.html",
+        {
+            "request": request,
+            "form_type": form_type,
+            "stage": stage,
+            "record": record,
+        },
+    )
 
 
 @router.get("/forms/{form_type_id}", response_class=HTMLResponse)
@@ -153,10 +174,56 @@ async def list_form_view(
     items, total = await svc.list_by_form_type(form_type_id, limit=100)
     stage_service = StageService(db)
     stage = await stage_service.get_stage(form_type.stage_id)
-    return templates.TemplateResponse("form_list.html", {
-        "request": request,
-        "form_type": form_type,
-        "stage": stage,
-        "records": items,
-        "total": total,
-    })
+    return templates.TemplateResponse(
+        "form_list.html",
+        {
+            "request": request,
+            "form_type": form_type,
+            "stage": stage,
+            "records": items,
+            "total": total,
+        },
+    )
+
+
+@router.get("/permissions", response_class=HTMLResponse)
+async def permissions_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Permissions management page."""
+    stage_service = StageService(db)
+    ft_service = FormTypeService(db)
+
+    stages = await stage_service.get_all_stages(limit=500)
+    form_types = await ft_service.get_all_form_types(limit=500)
+
+    # Convert Pydantic models to dicts for JSON serialization in template
+    # Use mode='json' to convert datetime to ISO format strings
+    stages_data = [stage.model_dump(mode="json") for stage in stages]
+    form_types_data = [ft.model_dump(mode="json") for ft in form_types]
+
+    return templates.TemplateResponse(
+        "permissions.html",
+        {
+            "request": request,
+            "stages": stages_data,
+            "form_types": form_types_data,
+        },
+    )
+
+
+@router.get("/roles", response_class=HTMLResponse)
+async def roles_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Roles management page."""
+    stage_service = StageService(db)
+    ft_service = FormTypeService(db)
+
+    stages = await stage_service.get_all_stages(limit=500)
+    form_types = await ft_service.get_all_form_types(limit=500)
+
+    return templates.TemplateResponse(
+        "roles.html",
+        {
+            "request": request,
+            "stages": stages,
+            "form_types": form_types,
+        },
+    )

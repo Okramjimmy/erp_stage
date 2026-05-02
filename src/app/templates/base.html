@@ -1,42 +1,44 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}ERP Stage Builder{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='/css/main.css') }}">
-    {% block head %}{% endblock %}
-</head>
-<body>
-    <div class="app-container">
-        <!-- Top Navigation -->
-        <nav class="top-bar">
-            <div class="logo">
-                <h1>ERP Stage Builder</h1>
-            </div>
-            <div class="nav-links">
-                <a href="/" class="nav-link active">Dashboard</a>
-                <a href="/stages" class="nav-link">Stages</a>
-                <a href="/formtypes" class="nav-link">Form Types</a>
-                <a href="/permissions" class="nav-link">Permissions</a>
-            </div>
-            <div class="user-menu">
-                <span class="user-name">Admin User</span>
-            </div>
-        </nav>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}ERP Stage Builder{% endblock %}</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', path='/css/main.css') }}"
+        />
+        {% block head %}{% endblock %}
+    </head>
+    <body>
+        <div class="app-container">
+            <!-- Top Navigation -->
+            <nav class="top-bar">
+                <div class="logo">
+                    <h1>ERP Stage Builder</h1>
+                </div>
+                <div class="nav-links">
+                    <a href="/" class="nav-link active">Dashboard</a>
+                    <a href="/stages" class="nav-link">Stages</a>
+                    <a href="/formtypes" class="nav-link">Form Types</a>
+                    <a href="/roles" class="nav-link">Roles</a>
+                    <a href="/permissions" class="nav-link">Permissions</a>
+                </div>
+                <div class="user-menu">
+                    <span class="user-name">Admin User</span>
+                </div>
+            </nav>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            {% block content %}{% endblock %}
-        </main>
+            <!-- Main Content -->
+            <main class="main-content">{% block content %}{% endblock %}</main>
 
-        <!-- Footer -->
-        <footer class="footer">
-            <p>&copy; 2024 ERP Stage Builder. All rights reserved.</p>
-        </footer>
-    </div>
+            <!-- Footer -->
+            <footer class="footer">
+                <p>&copy; 2024 ERP Stage Builder. All rights reserved.</p>
+            </footer>
+        </div>
 
-    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
-    {% block scripts %}{% endblock %}
-</body>
+        <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+        {% block scripts %}{% endblock %}
+    </body>
 </html>

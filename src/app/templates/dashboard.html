@@ -1,12 +1,372 @@
-{% extends "base.html" %}
+{% extends "base.html" %} {% block title %}Dashboard - ERP Stage Builder{%
+endblock %} {% block head %}
+<style>
+    .dashboard-section {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
 
-{% block title %}Dashboard - ERP Stage Builder{% endblock %}
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
 
-{% block content %}
+    .section-header h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        color: #2c3e50;
+    }
+
+    /* Quick Actions Grid */
+    .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .quick-action-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 1.5rem;
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+    }
+
+    .quick-action-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .quick-action-card.green {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    .quick-action-card.blue {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .quick-action-card.orange {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .quick-action-card h4 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.1rem;
+    }
+
+    .quick-action-card p {
+        margin: 0;
+        opacity: 0.9;
+        font-size: 0.9rem;
+    }
+
+    /* Create Role Inline Form */
+    .create-role-inline {
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .create-role-inline.active {
+        border-style: solid;
+        border-color: #667eea;
+        background: white;
+    }
+
+    .inline-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 1rem;
+        align-items: end;
+    }
+
+    .form-group-inline {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group-inline label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #555;
+    }
+
+    .form-group-inline input,
+    .form-group-inline select {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 0.95rem;
+    }
+
+    .btn-add-role {
+        padding: 0.5rem 1.5rem;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .btn-add-role:hover {
+        background: #5568d3;
+    }
+
+    /* Permission Assignment Section */
+    .permission-assignment {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+
+    .assignment-column h4 {
+        margin: 0 0 1rem 0;
+        font-size: 1rem;
+        color: #2c3e50;
+    }
+
+    .resource-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        background: white;
+    }
+
+    .resource-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .resource-item:last-child {
+        border-bottom: none;
+    }
+
+    .resource-item:hover {
+        background: #f8f9fa;
+    }
+
+    .resource-info {
+        flex: 1;
+    }
+
+    .resource-name {
+        font-weight: 600;
+        color: #2c3e50;
+        font-size: 0.95rem;
+    }
+
+    .resource-meta {
+        font-size: 0.85rem;
+        color: #7f8c8d;
+    }
+
+    .permission-buttons {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .perm-btn {
+        padding: 0.25rem 0.5rem;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 3px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .perm-btn:hover {
+        background: #f0f0f0;
+    }
+
+    .perm-btn.active {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+
+    .perm-btn.active:hover {
+        background: #5568d3;
+    }
+
+    /* Modal Enhancements */
+    .modal-content.wide {
+        max-width: 800px;
+    }
+
+    .role-selection-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .role-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .role-chip {
+        padding: 0.5rem 1rem;
+        background: #e3f2fd;
+        color: #1976d2;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .role-chip:hover {
+        background: #1976d2;
+        color: white;
+    }
+
+    .role-chip.selected {
+        background: #1976d2;
+        color: white;
+    }
+
+    @media (max-width: 992px) {
+        .permission-assignment {
+            grid-template-columns: 1fr;
+        }
+
+        .inline-form {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %} {% block content %}
 <div class="dashboard">
     <div class="page-header">
-        <h2>Dashboard</h2>
-        <p class="subtitle">Overview of your Stage and Form Type hierarchy</p>
+        <div
+            style="
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            "
+        >
+            <div>
+                <h2>Dashboard</h2>
+                <p class="subtitle">
+                    Create roles and assign permissions to stages and form types
+                </p>
+            </div>
+            <a
+                href="/roles"
+                class="btn btn-primary"
+                style="margin-top: 0.5rem; text-decoration: none"
+            >
+                👤 Create New Role
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <div class="quick-action-card blue" onclick="toggleCreateRole()">
+            <h4>👤 Quick Create Role</h4>
+            <p>Create a new role and assign permissions</p>
+        </div>
+        <a href="/roles" class="quick-action-card green">
+            <h4>📁 Manage Roles</h4>
+            <p>View, edit, and delete existing roles</p>
+        </a>
+        <a href="/permissions" class="quick-action-card orange">
+            <h4>🔐 Permission Matrix</h4>
+            <p>Configure detailed permissions</p>
+        </a>
+    </div>
+
+    <!-- Quick Create Role Section -->
+    <div
+        id="create-role-section"
+        class="create-role-inline"
+        style="display: none"
+    >
+        <h3 style="margin: 0 0 1rem 0; color: #2c3e50">Quick Create Role</h3>
+        <form
+            id="quickCreateRoleForm"
+            class="inline-form"
+            onsubmit="quickCreateRole(event)"
+        >
+            <div class="form-group-inline">
+                <label for="roleName">Role Name</label>
+                <input
+                    type="text"
+                    id="roleName"
+                    required
+                    pattern="^[a-z0-9_]+$"
+                    placeholder="e.g., manager, editor"
+                />
+            </div>
+            <div class="form-group-inline">
+                <label for="roleDescription">Description (Optional)</label>
+                <input
+                    type="text"
+                    id="roleDescription"
+                    placeholder="Brief description"
+                />
+            </div>
+            <button type="submit" class="btn-add-role">+ Create Role</button>
+        </form>
+
+        <!-- Permission Assignment (appears after role creation) -->
+        <div
+            id="permission-assignment-section"
+            style="display: none; margin-top: 2rem"
+        >
+            <h4 style="margin-bottom: 1rem; color: #2c3e50">
+                Assign Permissions for:
+                <span id="created-role-name" style="color: #667eea"></span>
+            </h4>
+
+            <div class="permission-assignment">
+                <!-- Stage Permissions -->
+                <div class="assignment-column">
+                    <h4>📁 Stage Permissions</h4>
+                    <div id="stage-list-permissions" class="resource-list">
+                        <div class="loading">Loading stages...</div>
+                    </div>
+                </div>
+
+                <!-- Form Type Permissions -->
+                <div class="assignment-column">
+                    <h4>📝 Form Type Permissions</h4>
+                    <div id="formtype-list-permissions" class="resource-list">
+                        <div class="loading">Loading form types...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 1.5rem; text-align: right">
+                <button
+                    class="btn btn-secondary"
+                    onclick="cancelPermissionAssignment()"
+                >
+                    Skip for Now
+                </button>
+                <button class="btn btn-primary" onclick="savePermissions()">
+                    Save Permissions
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Statistics Cards -->
@@ -15,28 +375,28 @@
             <div class="stat-icon">📁</div>
             <div class="stat-content">
                 <h3>Total Stages</h3>
-                <p class="stat-value" id="total-stages">Loading...</p>
+                <p class="stat-value" id="total-stages">{{ total_stages }}</p>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-icon">📝</div>
             <div class="stat-content">
                 <h3>Total Form Types</h3>
-                <p class="stat-value" id="total-formtypes">Loading...</p>
-            </div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">📊</div>
-            <div class="stat-content">
-                <h3>Max Depth</h3>
-                <p class="stat-value" id="max-depth">Loading...</p>
+                <p class="stat-value" id="total-formtypes">{{ total_forms }}</p>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-icon">👥</div>
             <div class="stat-content">
-                <h3>Total Users</h3>
-                <p class="stat-value">12</p>
+                <h3>Total Roles</h3>
+                <p class="stat-value" id="total-roles">-</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🔐</div>
+            <div class="stat-content">
+                <h3>Permissions</h3>
+                <p class="stat-value" id="total-permissions">-</p>
             </div>
         </div>
     </div>
@@ -45,41 +405,13 @@
     <div class="dashboard-section">
         <div class="section-header">
             <h3>Stage Hierarchy</h3>
-            <button class="btn btn-primary" onclick="openCreateStageModal()">Create Stage</button>
+            <button class="btn btn-primary" onclick="openCreateStageModal()">
+                Create Stage
+            </button>
         </div>
         <div class="tree-container">
             <div id="stage-tree" class="stage-tree">
                 <div class="loading">Loading stage tree...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Activity -->
-    <div class="dashboard-section">
-        <div class="section-header">
-            <h3>Recent Activity</h3>
-        </div>
-        <div class="activity-list">
-            <div class="activity-item">
-                <div class="activity-icon">➕</div>
-                <div class="activity-content">
-                    <p><strong>Admin</strong> created new stage <em>Screening</em></p>
-                    <span class="activity-time">2 hours ago</span>
-                </div>
-            </div>
-            <div class="activity-item">
-                <div class="activity-icon">🔄</div>
-                <div class="activity-content">
-                    <p><strong>Recruiter</strong> moved stage <em>Interviews</em> to <em>Human Resources</em></p>
-                    <span class="activity-time">5 hours ago</span>
-                </div>
-            </div>
-            <div class="activity-item">
-                <div class="activity-icon">📝</div>
-                <div class="activity-content">
-                    <p><strong>Admin</strong> created form type <em>Application Form</em></p>
-                    <span class="activity-time">1 day ago</span>
-                </div>
             </div>
         </div>
     </div>
@@ -90,12 +422,17 @@
     <div class="modal-content">
         <div class="modal-header">
             <h3>Create New Stage</h3>
-            <button class="close-btn" onclick="closeModal('create-stage-modal')">&times;</button>
+            <button
+                class="close-btn"
+                onclick="closeModal('create-stage-modal')"
+            >
+                &times;
+            </button>
         </div>
         <form id="create-stage-form" onsubmit="createStage(event)">
             <div class="form-group">
                 <label for="stage-name">Stage Name</label>
-                <input type="text" id="stage-name" name="stage_name" required>
+                <input type="text" id="stage-name" name="stage_name" required />
             </div>
             <div class="form-group">
                 <label for="parent-stage">Parent Stage (Optional)</label>
@@ -111,203 +448,674 @@
                     <option value="restricted">Restricted</option>
                 </select>
             </div>
+
+            <!-- Role Assignment in Stage Creation -->
+            <div class="form-group">
+                <label>Assign Roles to this Stage (Optional)</label>
+                <div id="stage-roles-selection" class="role-chips">
+                    <small style="color: #7f8c8d">Loading roles...</small>
+                </div>
+            </div>
+
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal('create-stage-modal')">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create Stage</button>
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    onclick="closeModal('create-stage-modal')"
+                >
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    Create Stage
+                </button>
             </div>
         </form>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
+<!-- Create Form Type Modal -->
+<div id="create-formtype-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Create New Form Type</h3>
+            <button
+                class="close-btn"
+                onclick="closeModal('create-formtype-modal')"
+            >
+                &times;
+            </button>
+        </div>
+        <form id="create-formtype-form" onsubmit="createFormType(event)">
+            <div class="form-group">
+                <label for="formtype-name">Form Type Name</label>
+                <input
+                    type="text"
+                    id="formtype-name"
+                    name="form_name"
+                    required
+                />
+            </div>
+            <div class="form-group">
+                <label for="formtype-stage">Stage</label>
+                <select id="formtype-stage" name="stage_id" required>
+                    <option value="">Select a stage</option>
+                </select>
+            </div>
+
+            <!-- Role Assignment in Form Type Creation -->
+            <div class="form-group">
+                <label>Assign Roles to this Form Type (Optional)</label>
+                <div id="formtype-roles-selection" class="role-chips">
+                    <small style="color: #7f8c8d">Loading roles...</small>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    onclick="closeModal('create-formtype-modal')"
+                >
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    Create Form Type
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} {% block scripts %}
 <script>
-// Load dashboard statistics
-async function loadStats() {
-    try {
-        // In a real implementation, these would be API calls
-        document.getElementById('total-stages').textContent = '6';
-        document.getElementById('total-formtypes').textContent = '5';
-        document.getElementById('max-depth').textContent = '3';
-    } catch (error) {
-        console.error('Error loading stats:', error);
+    let currentCreatedRole = null;
+    let permissionAssignments = { stages: {}, formtypes: {} };
+    let availableRoles = [];
+    let stages = [];
+    let formTypes = [];
+
+    // Toggle create role section
+    function toggleCreateRole() {
+        const section = document.getElementById("create-role-section");
+        if (section.style.display === "none") {
+            section.style.display = "block";
+            section.classList.add("active");
+        } else {
+            section.style.display = "none";
+            section.classList.remove("active");
+        }
     }
-}
 
-// Load stage tree
-async function loadStageTree() {
-    try {
-        const response = await fetch('/api/v1/stages/tree');
-        const stages = await response.json();
-        renderStageTree(stages);
-    } catch (error) {
-        console.error('Error loading stage tree:', error);
-        document.getElementById('stage-tree').innerHTML = '<div class="error">Error loading stage tree</div>';
+    // Quick create role
+    async function quickCreateRole(event) {
+        event.preventDefault();
+
+        const roleName = document.getElementById("roleName").value.trim();
+        const description = document
+            .getElementById("roleDescription")
+            .value.trim();
+
+        if (!roleName) {
+            alert("Please enter a role name");
+            return;
+        }
+
+        if (!/^[a-z0-9_]+$/.test(roleName)) {
+            alert(
+                "Role name must contain only lowercase letters, numbers, and underscores",
+            );
+            return;
+        }
+
+        try {
+            // Call API to create the role
+            const response = await fetch("/api/v1/permissions/roles", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    role_name: roleName,
+                    description: description || null,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || "Failed to create role");
+            }
+
+            const createdRole = await response.json();
+            console.log("Role created successfully:", createdRole);
+
+            // Show permission assignment section
+            currentCreatedRole = roleName;
+            document.getElementById("created-role-name").textContent = roleName;
+            document.getElementById(
+                "permission-assignment-section",
+            ).style.display = "block";
+
+            // Load stages and form types for permission assignment
+            await loadResourcesForPermissions();
+
+            // Refresh roles list
+            await loadRolesForSelection();
+            await loadStats();
+
+            // Clear the form
+            document.getElementById("roleName").value = "";
+            document.getElementById("roleDescription").value = "";
+
+            // Show success message
+            alert(`Role "${roleName}" created successfully!`);
+        } catch (error) {
+            console.error("Error creating role:", error);
+            alert(`Error creating role: ${error.message}`);
+        }
     }
-}
 
-// Render stage tree
-function renderStageTree(stages) {
-    const container = document.getElementById('stage-tree');
-    const treeHtml = stages.map(stage => renderStageNode(stage)).join('');
-    container.innerHTML = treeHtml;
-}
+    // Load resources for permission assignment
+    async function loadResourcesForPermissions() {
+        try {
+            // Load stages
+            const stagesResponse = await fetch("/api/v1/stages?limit=500");
+            stages = await stagesResponse.json();
+            renderStagePermissions(stages);
 
-function renderStageNode(stage, level = 0) {
-    const indent = level * 20;
-    const hasChildren = stage.children && stage.children.length > 0;
-    const hasFormTypes = stage.form_types && stage.form_types.length > 0;
+            // Load form types
+            const formtypesResponse = await fetch(
+                "/api/v1/form-types?limit=500",
+            );
+            formTypes = await formtypesResponse.json();
+            renderFormTypePermissions(formTypes);
+        } catch (error) {
+            console.error("Error loading resources:", error);
+        }
+    }
 
-    let html = `
+    // Render stage permissions
+    function renderStagePermissions(stages) {
+        const container = document.getElementById("stage-list-permissions");
+
+        if (!stages || stages.length === 0) {
+            container.innerHTML =
+                '<div style="text-align: center; padding: 2rem; color: #7f8c8d;">No stages available</div>';
+            return;
+        }
+
+        let html = "";
+        stages.forEach((stage) => {
+            html += `
+            <div class="resource-item" data-stage-id="${stage.stage_id}">
+                <div class="resource-info">
+                    <div class="resource-name">${stage.stage_name}</div>
+                    <div class="resource-meta">${stage.stage_path}</div>
+                </div>
+                <div class="permission-buttons">
+                    <button class="perm-btn" onclick="togglePermission('stages', '${stage.stage_id}', 'view', this)" title="View">V</button>
+                    <button class="perm-btn" onclick="togglePermission('stages', '${stage.stage_id}', 'create', this)" title="Create">C</button>
+                    <button class="perm-btn" onclick="togglePermission('stages', '${stage.stage_id}', 'edit', this)" title="Edit">E</button>
+                    <button class="perm-btn" onclick="togglePermission('stages', '${stage.stage_id}', 'delete', this)" title="Delete">D</button>
+                    <button class="perm-btn" onclick="togglePermission('stages', '${stage.stage_id}', 'manage', this)" title="Manage">M</button>
+                </div>
+            </div>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // Render form type permissions
+    function renderFormTypePermissions(formtypes) {
+        const container = document.getElementById("formtype-list-permissions");
+
+        if (!formtypes || formtypes.length === 0) {
+            container.innerHTML =
+                '<div style="text-align: center; padding: 2rem; color: #7f8c8d;">No form types available</div>';
+            return;
+        }
+
+        let html = "";
+        formtypes.forEach((ft) => {
+            html += `
+            <div class="resource-item" data-formtype-id="${ft.form_type_id}">
+                <div class="resource-info">
+                    <div class="resource-name">${ft.form_name}</div>
+                    <div class="resource-meta">${ft.form_type_id}</div>
+                </div>
+                <div class="permission-buttons">
+                    <button class="perm-btn" onclick="togglePermission('formtypes', '${ft.form_type_id}', 'view', this)" title="View">V</button>
+                    <button class="perm-btn" onclick="togglePermission('formtypes', '${ft.form_type_id}', 'create', this)" title="Create">C</button>
+                    <button class="perm-btn" onclick="togglePermission('formtypes', '${ft.form_type_id}', 'edit', this)" title="Edit">E</button>
+                    <button class="perm-btn" onclick="togglePermission('formtypes', '${ft.form_type_id}', 'delete', this)" title="Delete">D</button>
+                    <button class="perm-btn" onclick="togglePermission('formtypes', '${ft.form_type_id}', 'submit', this)" title="Submit">S</button>
+                    <button class="perm-btn" onclick="togglePermission('formtypes', '${ft.form_type_id}', 'manage', this)" title="Manage">M</button>
+                </div>
+            </div>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // Toggle permission
+    function togglePermission(
+        resourceType,
+        resourceId,
+        permissionType,
+        button,
+    ) {
+        button.classList.toggle("active");
+
+        const key = `${resourceType}_${resourceId}`;
+        if (!permissionAssignments[resourceType][key]) {
+            permissionAssignments[resourceType][key] = {
+                id: resourceId,
+                permissions: {},
+            };
+        }
+
+        permissionAssignments[resourceType][key].permissions[permissionType] =
+            button.classList.contains("active");
+    }
+
+    // Save permissions
+    async function savePermissions() {
+        if (!currentCreatedRole) {
+            alert("No role selected");
+            return;
+        }
+
+        try {
+            // Save stage permissions
+            for (const key in permissionAssignments.stages) {
+                const assignment = permissionAssignments.stages[key];
+                const permData = {
+                    role_name: currentCreatedRole,
+                    can_view: assignment.permissions.view || false,
+                    can_create: assignment.permissions.create || false,
+                    can_edit: assignment.permissions.edit || false,
+                    can_delete: assignment.permissions.delete || false,
+                    can_manage_permissions:
+                        assignment.permissions.manage || false,
+                };
+
+                await fetch(`/api/v1/permissions/stages/${assignment.id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(permData),
+                });
+            }
+
+            // Save form type permissions
+            for (const key in permissionAssignments.formtypes) {
+                const assignment = permissionAssignments.formtypes[key];
+                const permData = {
+                    role_name: currentCreatedRole,
+                    can_view: assignment.permissions.view || false,
+                    can_create: assignment.permissions.create || false,
+                    can_edit: assignment.permissions.edit || false,
+                    can_delete: assignment.permissions.delete || false,
+                    can_submit: assignment.permissions.submit || false,
+                    can_manage_permissions:
+                        assignment.permissions.manage || false,
+                };
+
+                await fetch(`/api/v1/permissions/form-types/${assignment.id}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(permData),
+                });
+            }
+
+            alert("Permissions saved successfully!");
+
+            // Reset
+            cancelPermissionAssignment();
+            loadStats();
+        } catch (error) {
+            console.error("Error saving permissions:", error);
+            alert("Error saving permissions");
+        }
+    }
+
+    // Cancel permission assignment
+    function cancelPermissionAssignment() {
+        document.getElementById("permission-assignment-section").style.display =
+            "none";
+        currentCreatedRole = null;
+        permissionAssignments = { stages: {}, formtypes: {} };
+    }
+
+    // Load roles for selection
+    async function loadRolesForSelection(containerId) {
+        try {
+            const response = await fetch("/api/v1/permissions/roles");
+            availableRoles = await response.json();
+
+            const container = document.getElementById(containerId);
+            if (!availableRoles || availableRoles.length === 0) {
+                container.innerHTML =
+                    '<small style="color: #7f8c8d;">No roles available. Create a role first.</small>';
+                return;
+            }
+
+            let html = "";
+            availableRoles.forEach((role) => {
+                html += `<div class="role-chip" onclick="toggleRoleChip(this, '${role.role_name}')">${role.role_name}</div>`;
+            });
+            container.innerHTML = html;
+        } catch (error) {
+            console.error("Error loading roles:", error);
+        }
+    }
+
+    // Toggle role chip selection
+    function toggleRoleChip(chip, roleName) {
+        chip.classList.toggle("selected");
+    }
+
+    // Load statistics
+    async function loadStats() {
+        try {
+            // Load roles count
+            const rolesResponse = await fetch("/api/v1/permissions/roles");
+            const roles = await rolesResponse.json();
+            document.getElementById("total-roles").textContent = roles.length;
+
+            // Calculate total permissions
+            let totalPerms = 0;
+            roles.forEach((role) => {
+                totalPerms += role.total_permissions;
+            });
+            document.getElementById("total-permissions").textContent =
+                totalPerms;
+        } catch (error) {
+            console.error("Error loading stats:", error);
+        }
+    }
+
+    // Load stage tree
+    async function loadStageTree() {
+        try {
+            const response = await fetch("/api/v1/stages/tree");
+            const stages = await response.json();
+            renderStageTree(stages);
+        } catch (error) {
+            console.error("Error loading stage tree:", error);
+            document.getElementById("stage-tree").innerHTML =
+                '<div class="error">Error loading stage tree</div>';
+        }
+    }
+
+    // Render stage tree
+    function renderStageTree(stages) {
+        const container = document.getElementById("stage-tree");
+        const treeHtml = stages.map((stage) => renderStageNode(stage)).join("");
+        container.innerHTML = treeHtml;
+    }
+
+    function renderStageNode(stage, level = 0) {
+        const indent = level * 20;
+        const hasChildren = stage.children && stage.children.length > 0;
+        const hasFormTypes = stage.form_types && stage.form_types.length > 0;
+
+        let html = `
         <div class="tree-node" style="margin-left: ${indent}px" data-stage-id="${stage.stage_id}">
             <div class="node-content">
-                <span class="node-toggle ${hasChildren ? 'has-children' : ''}" onclick="toggleNode(this)">
-                    ${hasChildren ? '▶' : '•'}
+                <span class="node-toggle ${hasChildren ? "has-children" : ""}" onclick="toggleNode(this)">
+                    ${hasChildren ? "▶" : "•"}
                 </span>
                 <span class="node-name">${stage.stage_name}</span>
                 <span class="node-info">(${stage.children_count} children, ${stage.formtype_count} forms)</span>
                 <span class="node-actions">
+                    <button class="btn-icon" onclick="openCreateFormTypeModalForStage('${stage.stage_id}')" title="Add Form">📝</button>
                     <button class="btn-icon" onclick="moveStage('${stage.stage_id}')" title="Move">🔄</button>
                     <button class="btn-icon" onclick="deleteStage('${stage.stage_id}')" title="Delete">🗑️</button>
                 </span>
             </div>
-            ${hasFormTypes ? `<div class="node-form-types">
-                ${stage.form_types.map(ft => `<span class="form-type-tag">📝 ${ft.form_name}</span>`).join('')}
-            </div>` : ''}
+            ${
+                hasFormTypes
+                    ? `<div class="node-form-types">
+                ${stage.form_types.map((ft) => `<span class="form-type-tag">📝 ${ft.form_name}</span>`).join("")}
+            </div>`
+                    : ""
+            }
     `;
 
-    if (hasChildren) {
-        html += `<div class="node-children collapsed">`;
-        const childrenHtml = stage.children.map(child => renderStageNode(child, level + 1)).join('');
-        html += childrenHtml;
+        if (hasChildren) {
+            html += `<div class="node-children collapsed">`;
+            const childrenHtml = stage.children
+                .map((child) => renderStageNode(child, level + 1))
+                .join("");
+            html += childrenHtml;
+            html += `</div>`;
+        }
+
         html += `</div>`;
+
+        return html;
     }
 
-    html += `</div>`;
+    function toggleNode(element) {
+        const node = element.closest(".tree-node");
+        const children = node.querySelector(".node-children");
 
-    return html;
-}
-
-function toggleNode(element) {
-    const node = element.closest('.tree-node');
-    const children = node.querySelector('.node-children');
-
-    if (children) {
-        children.classList.toggle('collapsed');
-        element.textContent = children.classList.contains('collapsed') ? '▶' : '▼';
-    }
-}
-
-function openCreateStageModal() {
-    document.getElementById('create-stage-modal').classList.add('active');
-    loadParentStages();
-}
-
-function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('active');
-}
-
-async function loadParentStages() {
-    try {
-        const response = await fetch('/api/v1/stages');
-        const stages = await response.json();
-        const select = document.getElementById('parent-stage');
-        select.innerHTML = '<option value="">Root Level</option>';
-
-        stages.forEach(stage => {
-            const option = document.createElement('option');
-            option.value = stage.stage_id;
-            option.textContent = `${stage.stage_path} (${stage.stage_name})`;
-            select.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Error loading parent stages:', error);
-    }
-}
-
-async function createStage(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const data = Object.fromEntries(formData);
-
-    try {
-        const response = await fetch('/api/v1/stages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
-        });
-
-        if (response.ok) {
-            closeModal('create-stage-modal');
-            event.target.reset();
-            loadStageTree();
-            loadStats();
-        } else {
-            const error = await response.json();
-            alert(`Error: ${error.detail}`);
+        if (children) {
+            children.classList.toggle("collapsed");
+            element.textContent = children.classList.contains("collapsed")
+                ? "▶"
+                : "▼";
         }
-    } catch (error) {
-        console.error('Error creating stage:', error);
-        alert('Error creating stage');
     }
-}
 
-async function moveStage(stageId) {
-    const newParentId = prompt('Enter new parent stage ID:');
-    if (!newParentId) return;
+    function openCreateStageModal() {
+        document.getElementById("create-stage-modal").classList.add("active");
+        loadParentStages();
+        loadRolesForSelection("stage-roles-selection");
+    }
 
-    try {
-        const response = await fetch(`/api/v1/stages/${stageId}/move`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                target_parent_id: newParentId,
-            }),
-        });
+    function openCreateFormTypeModalForStage(stageId) {
+        document
+            .getElementById("create-formtype-modal")
+            .classList.add("active");
+        document.getElementById("formtype-stage").value = stageId;
+        loadRolesForSelection("formtype-roles-selection");
+    }
 
-        if (response.ok) {
-            loadStageTree();
-        } else {
-            const error = await response.json();
-            alert(`Error: ${error.detail}`);
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove("active");
+    }
+
+    async function loadParentStages() {
+        try {
+            const response = await fetch("/api/v1/stages");
+            const stages = await response.json();
+            const select = document.getElementById("parent-stage");
+            select.innerHTML = '<option value="">Root Level</option>';
+
+            stages.forEach((stage) => {
+                const option = document.createElement("option");
+                option.value = stage.stage_id;
+                option.textContent = `${stage.stage_path} (${stage.stage_name})`;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            console.error("Error loading parent stages:", error);
         }
-    } catch (error) {
-        console.error('Error moving stage:', error);
-        alert('Error moving stage');
     }
-}
 
-async function deleteStage(stageId) {
-    if (!confirm('Are you sure you want to delete this stage?')) return;
+    // Create stage with role assignment
+    async function createStage(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        const data = Object.fromEntries(formData);
 
-    const recursive = confirm('Delete recursively (including all descendants)?');
+        try {
+            const response = await fetch("/api/v1/stages", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(data),
+            });
 
-    try {
-        const response = await fetch(`/api/v1/stages/${stageId}?recursive=${recursive}`, {
-            method: 'DELETE',
-        });
+            if (response.ok) {
+                const newStage = await response.json();
 
-        if (response.ok) {
-            loadStageTree();
-            loadStats();
-        } else {
-            const error = await response.json();
-            alert(`Error: ${error.detail}`);
+                // Assign roles to the stage
+                const selectedRoles = document.querySelectorAll(
+                    "#stage-roles-selection .role-chip.selected",
+                );
+                for (const roleChip of selectedRoles) {
+                    const roleName = roleChip.textContent;
+                    await fetch(
+                        `/api/v1/permissions/stages/${newStage.stage_id}`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                role_name: roleName,
+                                can_view: true,
+                                can_create: true,
+                                can_edit: false,
+                                can_delete: false,
+                                can_manage_permissions: false,
+                            }),
+                        },
+                    );
+                }
+
+                closeModal("create-stage-modal");
+                event.target.reset();
+                loadStageTree();
+                loadStats();
+                alert("Stage created successfully with role assignments!");
+            } else {
+                const error = await response.json();
+                alert(`Error: ${error.detail}`);
+            }
+        } catch (error) {
+            console.error("Error creating stage:", error);
+            alert("Error creating stage");
         }
-    } catch (error) {
-        console.error('Error deleting stage:', error);
-        alert('Error deleting stage');
     }
-}
 
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    loadStats();
-    loadStageTree();
-});
+    // Create form type with role assignment
+    async function createFormType(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        const data = Object.fromEntries(formData);
+
+        try {
+            const response = await fetch("/api/v1/form-types", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(data),
+            });
+
+            if (response.ok) {
+                const newFormType = await response.json();
+
+                // Assign roles to the form type
+                const selectedRoles = document.querySelectorAll(
+                    "#formtype-roles-selection .role-chip.selected",
+                );
+                for (const roleChip of selectedRoles) {
+                    const roleName = roleChip.textContent;
+                    await fetch(
+                        `/api/v1/permissions/form-types/${newFormType.form_type_id}`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                role_name: roleName,
+                                can_view: true,
+                                can_create: true,
+                                can_edit: false,
+                                can_delete: false,
+                                can_submit: true,
+                                can_manage_permissions: false,
+                            }),
+                        },
+                    );
+                }
+
+                closeModal("create-formtype-modal");
+                event.target.reset();
+                loadStageTree();
+                loadStats();
+                alert("Form type created successfully with role assignments!");
+            } else {
+                const error = await response.json();
+                alert(`Error: ${error.detail}`);
+            }
+        } catch (error) {
+            console.error("Error creating form type:", error);
+            alert("Error creating form type");
+        }
+    }
+
+    async function moveStage(stageId) {
+        const newParentId = prompt("Enter new parent stage ID:");
+        if (!newParentId) return;
+
+        try {
+            const response = await fetch(`/api/v1/stages/${stageId}/move`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    target_parent_id: newParentId,
+                }),
+            });
+
+            if (response.ok) {
+                loadStageTree();
+            } else {
+                const error = await response.json();
+                alert(`Error: ${error.detail}`);
+            }
+        } catch (error) {
+            console.error("Error moving stage:", error);
+            alert("Error moving stage");
+        }
+    }
+
+    async function deleteStage(stageId) {
+        if (!confirm("Are you sure you want to delete this stage?")) return;
+
+        const recursive = confirm(
+            "Delete recursively (including all descendants)?",
+        );
+
+        try {
+            const response = await fetch(
+                `/api/v1/stages/${stageId}?recursive=${recursive}`,
+                {
+                    method: "DELETE",
+                },
+            );
+
+            if (response.ok) {
+                loadStageTree();
+                loadStats();
+            } else {
+                const error = await response.json();
+                alert(`Error: ${error.detail}`);
+            }
+        } catch (error) {
+            console.error("Error deleting stage:", error);
+            alert("Error deleting stage");
+        }
+    }
+
+    // Initialize
+    document.addEventListener("DOMContentLoaded", () => {
+        loadStats();
+        loadStageTree();
+    });
 </script>
 {% endblock %}

@@ -85,6 +85,34 @@ class FormTypePermissionResponse(BaseModel):
         from_attributes = True
 
 
+class RoleCreate(BaseModel):
+    """Schema for creating a new Role."""
+
+    role_name: str = Field(..., min_length=1, max_length=100, pattern="^[a-z0-9_]+$")
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class RoleResponse(BaseModel):
+    """Schema for Role response."""
+
+    role_name: str
+    description: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RolePermissionsResponse(BaseModel):
+    """Schema for role with its permissions."""
+
+    role_name: str
+    description: Optional[str] = None
+    stage_permissions: List[StagePermissionResponse]
+    form_type_permissions: List[FormTypePermissionResponse]
+    users_count: int
+
+
 class UserRoleCreate(BaseModel):
     """Schema for creating User role."""
 
