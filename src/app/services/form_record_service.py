@@ -41,13 +41,25 @@ class FormRecordService:
         return f"{self._abbrev(form_name)}-{count + 1:05d}"
 
     def _parse(self, record: FormRecord) -> FormRecordResponse:
-        r = FormRecordResponse.model_validate(record)
+        parsed_data = None
         if record.data:
             try:
-                r.data = json.loads(record.data)
+                parsed_data = json.loads(record.data)
             except Exception:
-                r.data = {}
-        return r
+                parsed_data = {}
+        return FormRecordResponse.model_validate({
+            "record_id": record.record_id,
+            "form_type_id": record.form_type_id,
+            "docname": record.docname,
+            "status": record.status,
+            "data": parsed_data,
+            "amended_from": record.amended_from,
+            "submitted_by": record.submitted_by,
+            "submitted_at": record.submitted_at,
+            "created_by": record.created_by,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+        })
 
     async def create(self, payload: FormRecordCreate) -> FormRecordResponse:
         ft = await self.db.get(FormType, payload.form_type_id)
