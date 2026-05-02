@@ -114,6 +114,12 @@
     <span id="fields-badge" class="badge badge-blue" style="font-size:11px">0 fields</span>
     <div class="ml-auto" style="display:flex;gap:8px;align-items:center">
       <span id="dirty-dot" style="font-size:11px;color:var(--warning);display:none">● Unsaved</span>
+      {% if form_type %}
+      <a href="/forms/{{ form_type.form_type_id }}" class="btn btn-secondary btn-sm">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        View Records
+      </a>
+      {% endif %}
       <button class="btn btn-secondary btn-sm" onclick="previewForm()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         Preview
@@ -174,6 +180,40 @@
           <div style="font-size:12px">Click a field to edit its properties</div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Form Settings Modal (shown on first save) -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <span class="modal-title">Form Type Settings</span>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Configure how this form type behaves before saving.</p>
+      <div class="form-group">
+        <label class="form-check" style="font-size:14px;gap:10px">
+          <input type="checkbox" id="set-submittable" onchange="formSettings.is_submittable=this.checked" style="width:16px;height:16px">
+          <div>
+            <div style="font-weight:600">Is Submittable</div>
+            <div style="font-size:12px;color:var(--text-muted)">Adds Submit / Cancel / Amend workflow like Frappe. Submitted records become read-only.</div>
+          </div>
+        </label>
+      </div>
+      <div class="form-group" style="margin-top:14px">
+        <label class="form-check" style="font-size:14px;gap:10px">
+          <input type="checkbox" id="set-childtable" onchange="formSettings.is_child_table=this.checked" style="width:16px;height:16px">
+          <div>
+            <div style="font-weight:600">Is Child Table</div>
+            <div style="font-size:12px;color:var(--text-muted)">This form type will be used as a child table inside other forms (like Frappe child doctypes).</div>
+          </div>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('settings-modal').classList.remove('open')">Cancel</button>
+      <button class="btn btn-primary" onclick="_doSave()">Save Form Type</button>
     </div>
   </div>
 </div>
@@ -808,11 +848,25 @@ function markDirty(){
   dirty=true; document.getElementById('dirty-dot').style.display='';
 }
 
-async function saveForm(){
+// settings persisted in schema.settings
+let formSettings = Object.assign({is_submittable:false}, window.FORM_DATA.settings||{});
+
+function saveForm(){
+  const name=document.getElementById('form-name').value.trim();
+  if(!name){toast('Form name is required','error');return;}
+  // First save of a new form → show settings dialog
+  if(!window.FORM_META.id){
+    document.getElementById('settings-modal').classList.add('open');
+  } else {
+    _doSave();
+  }
+}
+
+async function _doSave(){
+  document.getElementById('settings-modal').classList.remove('open');
   const name=document.getElementById('form-name').value.trim();
   const version=document.getElementById('form-ver').value.trim()||'1.0.0';
-  if(!name){toast('Form name is required','error');return;}
-  const schema={fields:exportFields(),settings:{}};
+  const schema={fields:exportFields(),settings:formSettings};
   const btn=document.getElementById('save-btn');
   const orig=btn.innerHTML; btn.innerHTML='⏳ Saving…'; btn.disabled=true;
   try{

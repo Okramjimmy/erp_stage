@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% block title %}{{ form_type.form_name }}{% if record %} — {{ record.docname }}{% endif %}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .fv-bar{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+  .fv-docname{font-size:20px;font-weight:700;color:var(--text);flex:1}
+  .fv-status{display:inline-flex;align-items:center;gap:5px;padding:3px 12px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid}
+  .fv-status.Draft{background:#fff8e1;color:#d97706;border-color:#fbbf24}
+  .fv-status.Submitted{background:#dcfce7;color:#15803d;border-color:#86efac}
+  .fv-status.Cancelled{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
+  .fv-status.Amended{background:#f3e8ff;color:#7c3aed;border-color:#c4b5fd}
+
+  .fv-body{display:flex;gap:20px;align-items:flex-start}
+  .fv-main{flex:1;min-width:0}
+  .fv-sidebar{width:220px;flex-shrink:0}
+
+  .form-section{border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden}
+  .form-section-hdr{background:var(--bg);padding:10px 16px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+  .form-section-hdr svg{transition:transform .15s}
+  .form-section-hdr.collapsed svg{transform:rotate(-90deg)}
+  .form-section-body{padding:16px}
+  .form-section-body.collapsed{display:none}
+
+  .form-cols{display:grid;gap:0 20px}
+  .form-cols-1{grid-template-columns:1fr}
+  .form-cols-2{grid-template-columns:1fr 1fr}
+  .form-cols-3{grid-template-columns:1fr 1fr 1fr}
+
+  .tab-break-label{font-size:14px;font-weight:700;color:var(--primary);border-bottom:2px solid var(--primary);padding-bottom:6px;margin:20px 0 14px;display:flex;align-items:center;gap:6px}
+
+  .child-table-wrap{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-top:4px}
+  .child-table-wrap table{width:100%;border-collapse:collapse}
+  .child-table-wrap th{background:var(--bg);padding:7px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);border-bottom:1px solid var(--border);text-align:left}
+  .child-table-wrap td{padding:5px 8px;border-bottom:1px solid var(--border-light);font-size:13px}
+  .child-table-wrap tr:last-child td{border-bottom:none}
+  .child-table-wrap .add-row-btn{display:flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;color:var(--text-muted);cursor:pointer;transition:var(--transition);background:none;border:none;width:100%;border-top:1px solid var(--border-light)}
+  .child-table-wrap .add-row-btn:hover{color:var(--primary);background:var(--primary-light)}
+  .child-table-wrap td input,.child-table-wrap td select{border:none;outline:none;background:transparent;width:100%;font-size:13px;padding:2px 4px;border-radius:3px}
+  .child-table-wrap td input:focus,.child-table-wrap td select:focus{background:var(--primary-light)}
+
+  .sidebar-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px}
+  .sidebar-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px}
+  .sidebar-meta-row{display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border-light)}
+  .sidebar-meta-row:last-child{border-bottom:none}
+  .sidebar-meta-label{color:var(--text-muted)}
+  .sidebar-meta-value{font-weight:600;color:var(--text)}
+
+  .fv-readonly .form-control{background:var(--bg);pointer-events:none}
+  .dirty-dot{font-size:11px;color:var(--warning)}
+</style>
+{% endblock %}
+
+{% block content %}
+{% set schema = form_type.schema_data or {"fields":[],"settings":{}} %}
+{% set settings = schema.get("settings", {}) %}
+{% set is_submittable = settings.get("is_submittable", false) %}
+{% set status = record.status if record else "Draft" %}
+{% set is_readonly = (status in ["Submitted", "Cancelled", "Amended"]) %}
+
+<!-- Top bar -->
+<div class="fv-bar">
+  <div>
+    <div class="page-subtitle" style="margin-bottom:2px">
+      <a href="/stages/{{ stage.stage_id }}" style="color:var(--text-muted);text-decoration:none">{{ stage.stage_name }}</a>
+      <span style="color:var(--text-light)"> / </span>
+      <a href="/forms/{{ form_type.form_type_id }}" style="color:var(--text-muted);text-decoration:none">{{ form_type.form_name }}</a>
+    </div>
+    <div class="fv-docname" id="fv-docname">
+      {% if record %}{{ record.docname }}{% else %}New {{ form_type.form_name }}{% endif %}
+    </div>
+  </div>
+
+  <span class="fv-status {{ status }}" id="fv-status-badge">
+    <svg width="6" height="6" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg>
+    {{ status }}
+  </span>
+
+  <span class="dirty-dot" id="dirty-dot" style="display:none">● Unsaved</span>
+
+  <div class="ml-auto" style="display:flex;gap:6px;align-items:center">
+    {% if not is_readonly %}
+      <button class="btn btn-secondary btn-sm" onclick="discardChanges()">Discard</button>
+      <button class="btn btn-primary btn-sm" id="save-btn" onclick="saveRecord()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Save
+      </button>
+      {% if is_submittable and record %}
+        <button class="btn btn-sm" style="background:#16a34a;color:#fff;border:none" onclick="submitRecord()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Submit
+        </button>
+      {% endif %}
+    {% endif %}
+    {% if is_readonly and status == "Submitted" %}
+      <button class="btn btn-secondary btn-sm" onclick="cancelRecord()">Cancel</button>
+      {% if is_submittable %}
+        <button class="btn btn-primary btn-sm" onclick="amendRecord()">Amend</button>
+      {% endif %}
+    {% endif %}
+    {% if record %}
+      <button class="btn btn-secondary btn-sm" onclick="window.location.href='/forms/{{ form_type.form_type_id }}/new'">+ New</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="fv-body">
+  <div class="fv-main {% if is_readonly %}fv-readonly{% endif %}" id="form-body">
+    <!-- Rendered sections injected by JS from schema -->
+  </div>
+
+  <div class="fv-sidebar">
+    {% if record %}
+    <div class="sidebar-card">
+      <div class="sidebar-card-title">Details</div>
+      <div class="sidebar-meta-row"><span class="sidebar-meta-label">DocName</span><span class="sidebar-meta-value">{{ record.docname }}</span></div>
+      <div class="sidebar-meta-row"><span class="sidebar-meta-label">Status</span><span class="sidebar-meta-value">{{ record.status }}</span></div>
+      {% if record.amended_from %}<div class="sidebar-meta-row"><span class="sidebar-meta-label">Amended From</span><span class="sidebar-meta-value" style="font-size:11px">{{ record.amended_from }}</span></div>{% endif %}
+      {% if record.submitted_by %}<div class="sidebar-meta-row"><span class="sidebar-meta-label">Submitted By</span><span class="sidebar-meta-value">{{ record.submitted_by }}</span></div>{% endif %}
+      {% if record.submitted_at %}<div class="sidebar-meta-row"><span class="sidebar-meta-label">Submitted At</span><span class="sidebar-meta-value" style="font-size:11px">{{ record.submitted_at.strftime('%d %b %Y %H:%M') if record.submitted_at else '' }}</span></div>{% endif %}
+      <div class="sidebar-meta-row"><span class="sidebar-meta-label">Created</span><span class="sidebar-meta-value" style="font-size:11px">{{ record.created_at.strftime('%d %b %Y') if record.created_at else '' }}</span></div>
+    </div>
+    {% endif %}
+    <div class="sidebar-card">
+      <div class="sidebar-card-title">Form Type</div>
+      <div class="sidebar-meta-row"><span class="sidebar-meta-label">Name</span><span class="sidebar-meta-value">{{ form_type.form_name }}</span></div>
+      <div class="sidebar-meta-row"><span class="sidebar-meta-label">Version</span><span class="sidebar-meta-value">v{{ form_type.version }}</span></div>
+      <div class="sidebar-meta-row"><span class="sidebar-meta-label">Submittable</span><span class="sidebar-meta-value">{{ "Yes" if is_submittable else "No" }}</span></div>
+      <div style="margin-top:10px">
+        <a href="/form-builder/{{ form_type.form_type_id }}" class="btn btn-secondary btn-sm" style="width:100%;text-align:center">Edit Schema</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+const API = '/api/v1';
+const FORM_TYPE_ID = '{{ form_type.form_type_id }}';
+const RECORD_ID = {{ ('"' ~ record.record_id ~ '"') | safe if record else 'null' }};
+const IS_READONLY = {{ 'true' if is_readonly else 'false' }};
+const SCHEMA = {{ (form_type.schema_data | tojson) if form_type.schema_data else '{"fields":[],"settings":{}}' | safe }};
+const SAVED_DATA = {{ (record.data | tojson) if record and record.data else '{}' | safe }};
+
+let formData = Object.assign({}, SAVED_DATA);
+let dirty = false;
+
+function toast(msg, type=''){
+  const el=document.createElement('div'); el.className='toast '+type; el.textContent=msg;
+  document.getElementById('toast-container').appendChild(el); setTimeout(()=>el.remove(),3200);
+}
+async function apiFetch(url,opts={}){
+  const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts,
+    body:opts.body?JSON.stringify(opts.body):undefined});
+  if(!r.ok){const e=await r.json().catch(()=>({detail:r.statusText}));throw new Error(e.detail||r.statusText);}
+  return r.json();
+}
+function esc(s){if(!s&&s!==0)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function markDirty(){dirty=true;document.getElementById('dirty-dot').style.display='';}
+
+// ── render form from schema ──────────────────────────────────────────────────
+const LAYOUT = new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
+
+function buildInput(f, val){
+  if(IS_READONLY) {
+    const v = val!==undefined&&val!==null&&val!=='' ? val : '—';
+    return `<div class="form-control" style="background:var(--bg);min-height:34px;padding-top:7px">${esc(String(v))}</div>`;
+  }
+  const ph = esc(f.placeholder||'');
+  const ro = f.read_only ? 'readonly' : '';
+  const req = f.required ? 'required' : '';
+  const cur = val!==undefined && val!==null ? val : (f.default||'');
+
+  switch(f.fieldtype){
+    case 'Check':
+      return `<label class="form-check" style="margin-top:6px"><input type="checkbox" ${cur?'checked':''} onchange="setVal('${f.fieldname}',this.checked)" ${ro}><span>${esc(f.label)}</span></label>`;
+    case 'Select': case 'Autocomplete':
+      const opts = (f.options||'').split('\n').filter(Boolean).map(o=>`<option${o===String(cur)?' selected':''}>${esc(o)}</option>`).join('');
+      return `<select class="form-control" onchange="setVal('${f.fieldname}',this.value)" ${ro} ${req}><option value="">— Select —</option>${opts}</select>`;
+    case 'Date':
+      return `<input type="date" class="form-control" value="${esc(cur)}" onchange="setVal('${f.fieldname}',this.value)" ${ro} ${req}>`;
+    case 'Datetime':
+      return `<input type="datetime-local" class="form-control" value="${esc(cur)}" onchange="setVal('${f.fieldname}',this.value)" ${ro}>`;
+    case 'Time':
+      return `<input type="time" class="form-control" value="${esc(cur)}" onchange="setVal('${f.fieldname}',this.value)" ${ro}>`;
+    case 'Int':
+      return `<input type="number" step="1" class="form-control" value="${esc(cur)}" placeholder="${ph}" onchange="setVal('${f.fieldname}',+this.value)" ${ro} ${req}>`;
+    case 'Float': case 'Currency': case 'Percent':
+      return `<input type="number" step="any" class="form-control" value="${esc(cur)}" placeholder="${ph}" onchange="setVal('${f.fieldname}',+this.value)" ${ro}>`;
+    case 'Small Text':
+      return `<textarea class="form-control" rows="2" placeholder="${ph}" oninput="setVal('${f.fieldname}',this.value)" ${ro}>${esc(cur)}</textarea>`;
+    case 'Long Text': case 'Text Editor':
+      return `<textarea class="form-control" rows="4" placeholder="${ph}" oninput="setVal('${f.fieldname}',this.value)" ${ro}>${esc(cur)}</textarea>`;
+    case 'Code': case 'JSON':
+      return `<textarea class="form-control text-mono" rows="4" style="font-size:12px" oninput="setVal('${f.fieldname}',this.value)" ${ro}>${esc(cur)}</textarea>`;
+    case 'Password':
+      return `<input type="password" class="form-control" placeholder="${ph}" oninput="setVal('${f.fieldname}',this.value)" ${ro}>`;
+    case 'Color':
+      return `<input type="color" class="form-control" style="height:36px;padding:2px" value="${cur||'#000000'}" onchange="setVal('${f.fieldname}',this.value)" ${ro}>`;
+    case 'Rating':
+      const stars = [1,2,3,4,5].map(n=>`<span style="font-size:22px;cursor:pointer;color:${n<=(+cur||0)?'#f59e0b':'#d1d5db'}" onclick="setVal('${f.fieldname}',${n});renderForm()">★</span>`).join('');
+      return `<div style="display:flex;gap:2px">${stars}</div>`;
+    case 'Attach': case 'Attach Image':
+      return `<input type="file" class="form-control" style="padding:4px" onchange="handleFile('${f.fieldname}',this)">`;
+    case 'Link': case 'Dynamic Link': case 'Table': case 'Table MultiSelect':
+      return ''; // handled separately
+    default:
+      return `<input type="text" class="form-control" value="${esc(cur)}" placeholder="${ph}" oninput="setVal('${f.fieldname}',this.value)" ${ro} ${req}>`;
+  }
+}
+
+function buildChildTable(f) {
+  const rows = Array.isArray(formData[f.fieldname]) ? formData[f.fieldname] : [];
+  const cols = (f._childCols || []);
+  if(!cols.length){
+    return `<div class="child-table-wrap">
+      <div style="padding:14px;text-align:center;color:var(--text-muted);font-size:12px">⊞ ${esc(f.options||f.fieldname)} — <a href="#" onclick="return false">configure linked form type</a></div>
+    </div>`;
+  }
+  const headers = cols.map(c=>`<th>${esc(c.label||c.fieldname)}</th>`).join('') + '<th style="width:32px"></th>';
+  const bodyRows = rows.map((row,ri)=>{
+    const cells = cols.map(c=>`<td><input class="form-control" style="border:none;background:transparent" value="${esc(row[c.fieldname]||'')}" oninput="setChildVal('${f.fieldname}',${ri},'${c.fieldname}',this.value)" ${IS_READONLY?'readonly':''}></td>`).join('');
+    const del = IS_READONLY ? '<td></td>' : `<td><button class="btn btn-ghost btn-xs" style="color:var(--danger);padding:2px 5px" onclick="removeChildRow('${f.fieldname}',${ri})">✕</button></td>`;
+    return `<tr>${cells}${del}</tr>`;
+  }).join('');
+  const addBtn = IS_READONLY ? '' : `<button class="add-row-btn" onclick="addChildRow('${f.fieldname}')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add Row</button>`;
+  return `<div class="child-table-wrap"><table><thead><tr>${headers}</tr></thead><tbody id="ct-${f.fieldname}">${bodyRows}</tbody></table>${addBtn}</div>`;
+}
+
+function buildField(f) {
+  if(f.hidden) return '';
+  if(f.fieldtype === 'Heading') return `<h3 style="font-size:15px;font-weight:700;margin:12px 0 8px">${esc(f.label)}</h3>`;
+  if(f.fieldtype === 'HTML') return `<div style="margin-bottom:10px">${f.options||''}</div>`;
+  if(f.fieldtype === 'Check') {
+    const req = f.required ? '<span style="color:var(--danger)">*</span>' : '';
+    return `<div class="form-group">${buildInput(f, formData[f.fieldname])}</div>`;
+  }
+  if(['Table','Table MultiSelect'].includes(f.fieldtype)) {
+    return `<div class="form-group">
+      <label class="form-label ${f.required?'required':''}" style="font-weight:700">${esc(f.label)}</label>
+      ${buildChildTable(f)}
+    </div>`;
+  }
+  const hint = f.description ? `<div class="form-hint">${esc(f.description)}</div>` : '';
+  const req = f.required ? '<span style="color:var(--danger)"> *</span>' : '';
+  return `<div class="form-group">
+    <label class="form-label" style="font-weight:${f.bold?700:600}">${esc(f.label)}${req}</label>
+    ${buildInput(f, formData[f.fieldname])}
+    ${hint}
+  </div>`;
+}
+
+let _childColsCache = {};
+
+function renderForm() {
+  const fields = SCHEMA.fields || [];
+  const body = document.getElementById('form-body');
+  let html = '';
+  let i = 0;
+
+  while(i < fields.length) {
+    const f = fields[i];
+    if(f.fieldtype === 'Tab Break') {
+      html += `<div class="tab-break-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M3 11h18M3 17h18"/></svg>${esc(f.label||'Tab')}</div>`;
+      i++; continue;
+    }
+    if(f.fieldtype !== 'Section Break') { i++; continue; }
+
+    // Collect fields until next section
+    const secLabel = f.label || '';
+    i++;
+    let secFields = [];
+    let cols = [[]];
+    while(i < fields.length && fields[i].fieldtype !== 'Section Break' && fields[i].fieldtype !== 'Tab Break') {
+      if(fields[i].fieldtype === 'Column Break') { cols.push([]); }
+      else { cols[cols.length-1].push(fields[i]); }
+      i++;
+    }
+    const colCount = Math.min(cols.length, 3);
+    const colClass = `form-cols-${colCount}`;
+    let colsHtml = cols.map(colFields =>
+      `<div>${colFields.map(cf=>buildField(cf)).join('')}</div>`
+    ).join('');
+
+    html += `<div class="form-section">
+      <div class="form-section-hdr" onclick="toggleSection(this)">
+        <span>${esc(secLabel)||'&nbsp;'}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+      <div class="form-section-body">
+        <div class="form-cols ${colClass}">${colsHtml}</div>
+      </div>
+    </div>`;
+  }
+
+  if(!html) html = `<div class="card" style="text-align:center;padding:40px;color:var(--text-muted)">
+    <div style="font-size:36px;opacity:.3;margin-bottom:8px">📋</div>
+    <div style="font-weight:600;margin-bottom:4px">No fields defined</div>
+    <div style="font-size:12px">Go to the form builder to add fields.</div>
+    <a href="/form-builder/${FORM_TYPE_ID}" class="btn btn-primary btn-sm" style="margin-top:12px">Open Builder</a>
+  </div>`;
+
+  body.innerHTML = html;
+}
+
+function toggleSection(hdr) {
+  hdr.classList.toggle('collapsed');
+  hdr.nextElementSibling.classList.toggle('collapsed');
+}
+
+function setVal(fieldname, val) {
+  formData[fieldname] = val;
+  markDirty();
+}
+
+function setChildVal(tableName, rowIdx, fieldname, val) {
+  if(!Array.isArray(formData[tableName])) formData[tableName] = [];
+  if(!formData[tableName][rowIdx]) formData[tableName][rowIdx] = {};
+  formData[tableName][rowIdx][fieldname] = val;
+  markDirty();
+}
+
+function addChildRow(tableName) {
+  if(!Array.isArray(formData[tableName])) formData[tableName] = [];
+  formData[tableName].push({});
+  markDirty();
+  renderForm();
+}
+
+function removeChildRow(tableName, idx) {
+  if(!Array.isArray(formData[tableName])) return;
+  formData[tableName].splice(idx, 1);
+  markDirty();
+  renderForm();
+}
+
+function handleFile(fieldname, input) {
+  const file = input.files[0];
+  if(!file) return;
+  setVal(fieldname, file.name);
+}
+
+async function saveRecord() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.innerHTML = '⏳ Saving…';
+  try {
+    let rec;
+    if(RECORD_ID) {
+      rec = await apiFetch(`${API}/form-records/${RECORD_ID}`, {method:'PUT', body:{data:formData}});
+    } else {
+      rec = await apiFetch(`${API}/form-records`, {method:'POST', body:{form_type_id:FORM_TYPE_ID, data:formData}});
+      window.history.replaceState({}, '', `/forms/${FORM_TYPE_ID}/${rec.record_id}`);
+      window.location.replace(`/forms/${FORM_TYPE_ID}/${rec.record_id}`);
+      return;
+    }
+    dirty = false;
+    document.getElementById('dirty-dot').style.display = 'none';
+    document.getElementById('fv-docname').textContent = rec.docname;
+    toast('Saved', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save'; }
+}
+
+async function submitRecord() {
+  if(!RECORD_ID){ toast('Save the record first','error'); return; }
+  if(!confirm('Submit this record? You cannot edit it after submission.')) return;
+  try {
+    await apiFetch(`${API}/form-records/${RECORD_ID}/submit`, {method:'POST'});
+    toast('Submitted', 'success');
+    setTimeout(()=>location.reload(), 600);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function cancelRecord() {
+  if(!confirm('Cancel this record?')) return;
+  try {
+    await apiFetch(`${API}/form-records/${RECORD_ID}/cancel`, {method:'POST'});
+    toast('Cancelled','success');
+    setTimeout(()=>location.reload(), 600);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function amendRecord() {
+  if(!confirm('Create an amendment of this record?')) return;
+  try {
+    const rec = await apiFetch(`${API}/form-records/${RECORD_ID}/amend`, {method:'POST'});
+    toast('Amendment created','success');
+    setTimeout(()=>window.location.href=`/forms/${FORM_TYPE_ID}/${rec.record_id}`, 600);
+  } catch(e) { toast(e.message,'error'); }
+}
+
+function discardChanges() {
+  if(dirty && !confirm('Discard unsaved changes?')) return;
+  location.reload();
+}
+
+document.addEventListener('keydown', e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();if(!IS_READONLY)saveRecord();}
+});
+window.addEventListener('beforeunload', e=>{
+  if(dirty){e.preventDefault();e.returnValue='';}
+});
+
+renderForm();
+</script>
+{% endblock %}

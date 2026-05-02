@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.database import get_db
+from src.app.services.form_record_service import FormRecordService
 from src.app.services.form_type_service import FormTypeService
 from src.app.services.stage_service import StageService
 
@@ -97,4 +98,65 @@ async def form_builder(
         "request": request,
         "form_type": form_type,
         "stage": stage,
+    })
+
+
+@router.get("/forms/{form_type_id}/new", response_class=HTMLResponse)
+async def new_form_view(
+    request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
+):
+    ft_service = FormTypeService(db)
+    form_type = await ft_service.get_form_type_with_schema(form_type_id)
+    if not form_type:
+        return HTMLResponse("Form type not found", status_code=404)
+    stage_service = StageService(db)
+    stage = await stage_service.get_stage(form_type.stage_id)
+    return templates.TemplateResponse("form_view.html", {
+        "request": request,
+        "form_type": form_type,
+        "stage": stage,
+        "record": None,
+    })
+
+
+@router.get("/forms/{form_type_id}/{record_id}", response_class=HTMLResponse)
+async def edit_form_view(
+    request: Request, form_type_id: str, record_id: str, db: AsyncSession = Depends(get_db)
+):
+    ft_service = FormTypeService(db)
+    form_type = await ft_service.get_form_type_with_schema(form_type_id)
+    if not form_type:
+        return HTMLResponse("Form type not found", status_code=404)
+    svc = FormRecordService(db)
+    record = await svc.get(record_id)
+    if not record:
+        return HTMLResponse("Record not found", status_code=404)
+    stage_service = StageService(db)
+    stage = await stage_service.get_stage(form_type.stage_id)
+    return templates.TemplateResponse("form_view.html", {
+        "request": request,
+        "form_type": form_type,
+        "stage": stage,
+        "record": record,
+    })
+
+
+@router.get("/forms/{form_type_id}", response_class=HTMLResponse)
+async def list_form_view(
+    request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
+):
+    ft_service = FormTypeService(db)
+    form_type = await ft_service.get_form_type_with_schema(form_type_id)
+    if not form_type:
+        return HTMLResponse("Form type not found", status_code=404)
+    svc = FormRecordService(db)
+    items, total = await svc.list_by_form_type(form_type_id, limit=100)
+    stage_service = StageService(db)
+    stage = await stage_service.get_stage(form_type.stage_id)
+    return templates.TemplateResponse("form_list.html", {
+        "request": request,
+        "form_type": form_type,
+        "stage": stage,
+        "records": items,
+        "total": total,
     })

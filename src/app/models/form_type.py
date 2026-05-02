@@ -38,6 +38,9 @@ class FormType(Base):
     permissions = relationship(
         "FormTypePermission", back_populates="form_type", cascade="all, delete-orphan"
     )
+    records = relationship(
+        "FormRecord", back_populates="form_type", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<FormType(id={self.form_type_id}, name={self.form_name}, stage={self.stage_id})>"

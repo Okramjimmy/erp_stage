@@ -81,8 +81,9 @@
         </div>
         <div style="font-size:11px;color:var(--text-muted);font-family:monospace;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ft.form_path }}</div>
         <div class="form-card-actions" onclick="event.stopPropagation()">
-          <a href="/form-builder/{{ ft.form_type_id }}" class="btn btn-sm btn-primary">✏️ Edit Fields</a>
-          <button class="btn btn-sm btn-secondary" onclick="cloneForm('{{ ft.form_type_id }}','{{ ft.form_name }}')">Copy</button>
+          <a href="/forms/{{ ft.form_type_id }}/new" class="btn btn-sm btn-primary">+ New Record</a>
+          <a href="/forms/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">List</a>
+          <a href="/form-builder/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">✏️ Build</a>
           <button class="btn btn-sm btn-danger" onclick="deleteForm('{{ ft.form_type_id }}','{{ ft.form_name }}')">Delete</button>
         </div>
       </div>

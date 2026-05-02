@@ -15,7 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src.app.api import ui as ui_router
-from src.app.api.v1 import form_types, metadata, permissions, stages
+from src.app.api.v1 import form_records, form_types, metadata, permissions, stages
+import src.app.models  # noqa: F401 — ensures all models are registered with Base
 from src.app.cache import cache
 from src.app.database import close_db, init_db
 from src.config import settings
@@ -78,6 +79,7 @@ app.include_router(ui_router.router)
 # Include API routers
 app.include_router(stages.router, prefix="/api/v1")
 app.include_router(form_types.router, prefix="/api/v1")
+app.include_router(form_records.router, prefix="/api/v1")
 app.include_router(permissions.router, prefix="/api/v1")
 app.include_router(metadata.router, prefix="/api/v1")
 

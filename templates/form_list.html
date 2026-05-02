@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ form_type.form_name }} — List{% endblock %}
+
+{% block content %}
+{% set schema = form_type.schema_data or {"fields":[],"settings":{}} %}
+{% set is_submittable = schema.get("settings", {}).get("is_submittable", false) %}
+
+<div class="page-header">
+  <div>
+    <div class="page-subtitle">
+      <a href="/stages/{{ stage.stage_id }}" style="color:var(--text-muted);text-decoration:none">{{ stage.stage_name }}</a>
+      <span style="color:var(--text-light)"> / </span>
+      {{ form_type.form_name }}
+    </div>
+    <div class="page-title">{{ form_type.form_name }}</div>
+  </div>
+  <div class="page-actions">
+    <a href="/form-builder/{{ form_type.form_type_id }}" class="btn btn-secondary btn-sm">Edit Schema</a>
+    <a href="/forms/{{ form_type.form_type_id }}/new" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      New {{ form_type.form_name }}
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Records <span class="badge badge-gray">{{ total }}</span></div>
+    <input type="text" class="form-control form-control-sm" style="width:220px" placeholder="Filter…" oninput="filterRows(this.value)">
+  </div>
+  {% if records %}
+  <div class="table-wrap">
+    <table id="records-table">
+      <thead>
+        <tr>
+          <th>DocName</th>
+          <th>Status</th>
+          <th>Created</th>
+          {% if is_submittable %}<th>Submitted By</th>{% endif %}
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records %}
+        <tr data-name="{{ rec.docname | lower }}">
+          <td>
+            <a href="/forms/{{ form_type.form_type_id }}/{{ rec.record_id }}" style="font-weight:600">{{ rec.docname }}</a>
+          </td>
+          <td>
+            {% if rec.status == 'Submitted' %}<span class="badge badge-green">{{ rec.status }}</span>
+            {% elif rec.status == 'Cancelled' %}<span class="badge" style="background:#fee2e2;color:#dc2626">{{ rec.status }}</span>
+            {% elif rec.status == 'Amended' %}<span class="badge" style="background:#f3e8ff;color:#7c3aed">{{ rec.status }}</span>
+            {% else %}<span class="badge badge-orange">{{ rec.status }}</span>{% endif %}
+          </td>
+          <td style="color:var(--text-muted);font-size:12px">{{ rec.created_at.strftime('%d %b %Y') if rec.created_at else '' }}</td>
+          {% if is_submittable %}<td style="font-size:12px">{{ rec.submitted_by or '—' }}</td>{% endif %}
+          <td>
+            <a href="/forms/{{ form_type.form_type_id }}/{{ rec.record_id }}" class="btn btn-xs btn-secondary">Open</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:48px">
+    <div class="empty-icon">📋</div>
+    <h3>No records yet</h3>
+    <p>Create the first {{ form_type.form_name }} record.</p>
+    <a href="/forms/{{ form_type.form_type_id }}/new" class="btn btn-primary btn-sm">New {{ form_type.form_name }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filterRows(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('#records-table tbody tr').forEach(tr=>{
+    tr.style.display=tr.dataset.name.includes(q)?'':'none';
+  });
+}
+</script>
+{% endblock %}
