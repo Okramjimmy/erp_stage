@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -14,17 +14,23 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gcc \
         libpq-dev \
+        curl \
+        build-essential \
+        python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ ./src/
 COPY database/ ./database/
+COPY static/ ./static/
+COPY templates/ ./templates/
 
 # Set working directory to src
 WORKDIR /app/src

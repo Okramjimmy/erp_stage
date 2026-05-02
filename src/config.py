@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
 
+    # MinIO Storage
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_secure: bool = False
+    minio_bucket_name: str = "erp-stage-storage"
+    minio_default_region: str = "us-east-1"
+
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
 

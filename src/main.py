@@ -13,12 +13,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from src.app.api import ui as ui_router
-from src.app.api.v1 import form_records, form_types, metadata, permissions, stages
+from src.app.api.v1 import form_records, form_types, metadata, permissions, stages, storage
 import src.app.models  # noqa: F401 — ensures all models are registered with Base
 from src.app.cache import cache
 from src.app.database import close_db, init_db
+from src.app.storage import init_storage
 from src.config import settings
 
 # Configure logging
@@ -43,6 +45,10 @@ async def lifespan(app: FastAPI):
     # Connect to Redis
     await cache.connect()
     logger.info("Cache connected")
+
+    # Initialize MinIO storage
+    storage_initialized = init_storage()
+    logger.info(f"Storage initialized: {'success' if storage_initialized else 'failed'}")
 
     yield
 
@@ -71,7 +77,10 @@ app.add_middleware(
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="/app/static"), name="static")
+
+# Jinja2 Templates
+templates = Jinja2Templates(directory="/app/templates")
 
 # Include UI routes (before API to avoid catch-all conflicts)
 app.include_router(ui_router.router)
@@ -82,6 +91,7 @@ app.include_router(form_types.router, prefix="/api/v1")
 app.include_router(form_records.router, prefix="/api/v1")
 app.include_router(permissions.router, prefix="/api/v1")
 app.include_router(metadata.router, prefix="/api/v1")
+app.include_router(storage.router, prefix="/api/v1")
 
 
 @app.get("/", tags=["Root"])
@@ -103,6 +113,7 @@ async def health_check():
         "version": settings.app_version,
         "database": "connected",
         "cache": "connected" if cache.redis_client else "disconnected",
+        "storage": "connected" if init_storage() else "disconnected",
     }
 
 
