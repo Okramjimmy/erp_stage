@@ -10,81 +10,90 @@
     html,body{height:100%;overflow:hidden;margin:0}
     .fb{display:flex;flex-direction:column;height:100vh}
 
-    /* top bar */
     .fb-bar{height:52px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;box-shadow:var(--shadow)}
     .fb-name{font-size:15px;font-weight:600;border:none;outline:none;background:transparent;color:var(--text);padding:4px 8px;border-radius:var(--radius);min-width:180px}
     .fb-name:hover{background:var(--bg)}
     .fb-name:focus{background:var(--bg);box-shadow:0 0 0 2px var(--primary)}
     .fb-ver{width:72px;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);outline:none;background:var(--bg)}
 
-    /* body */
     .fb-body{display:flex;flex:1;overflow:hidden}
-
-    /* field table area */
     .fb-main{flex:1;overflow-y:auto;padding:20px}
     .fb-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
     .fb-card-head{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);gap:10px}
     .fb-card-head h2{font-size:15px;font-weight:700;flex:1}
 
-    /* field rows table */
-    .fields-table{width:100%;border-collapse:collapse}
-    .fields-table thead th{background:var(--bg);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
-    .fields-table tbody tr{cursor:pointer;transition:background .1s}
-    .fields-table tbody tr:hover{background:#f5f8ff}
-    .fields-table tbody tr.selected{background:#edf4fd}
-    .fields-table tbody tr.selected td:first-child{border-left:3px solid var(--primary)}
-    .fields-table tbody td{padding:6px 10px;border-bottom:1px solid var(--border-light);vertical-align:middle}
-    .fields-table tbody tr:last-child td{border-bottom:none}
+    /* Section-based canvas */
+    .form-canvas{padding:4px 0}
 
-    /* row for section/column breaks */
-    .fields-table tbody tr.is-layout{background:var(--bg)}
-    .fields-table tbody tr.is-layout td{color:var(--text-muted);font-style:italic}
+    .section-wrap{border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:10px;overflow:hidden;transition:box-shadow .15s}
+    .section-wrap:hover{box-shadow:0 2px 8px rgba(0,0,0,.07)}
+    .section-wrap.selected-section{border-color:var(--primary);box-shadow:0 0 0 2px rgba(36,144,239,.15)}
 
-    /* drag handle */
-    .drag-handle{color:var(--text-light);cursor:grab;padding:4px;font-size:14px;display:flex;align-items:center}
-    .drag-handle:active{cursor:grabbing}
+    .section-hdr{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+    .section-hdr .sec-drag{color:var(--text-light);cursor:grab;font-size:14px;padding:2px;flex-shrink:0}
+    .section-hdr .sec-drag:active{cursor:grabbing}
+    .section-hdr .sec-icon{font-size:14px;color:var(--text-muted);flex-shrink:0}
+    .section-hdr .sec-label-inp{border:none;outline:none;background:transparent;font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:80px}
+    .section-hdr .sec-label-inp::placeholder{color:var(--text-light);font-weight:400}
+    .section-hdr .sec-label-inp:focus{background:var(--primary-light);border-radius:4px;padding:0 4px}
+    .section-hdr .sec-actions{display:flex;gap:2px;flex-shrink:0}
+    .section-hdr .sec-collapsible{color:var(--text-muted);font-size:13px;transition:transform .15s;cursor:pointer}
+    .section-hdr .sec-collapsible.collapsed{transform:rotate(-90deg)}
+    .section-content{transition:.15s}
+    .section-content.collapsed{display:none}
 
-    /* type pill selector */
-    .type-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:99px;background:var(--bg);border:1px solid var(--border);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:var(--transition);user-select:none}
-    .type-pill:hover{background:var(--primary-light);border-color:var(--primary);color:var(--primary)}
-    .type-pill .icon{font-size:13px;width:16px;text-align:center}
+    .cols-wrap{display:flex;gap:0;min-height:48px}
+    .col-wrap{flex:1;border-right:1px dashed var(--border);padding:6px 8px;min-height:48px;position:relative}
+    .col-wrap:last-child{border-right:none}
+    .col-wrap.drag-over{background:var(--primary-light)}
 
-    /* inline inputs in table */
-    .cell-input{border:none;outline:none;background:transparent;width:100%;font-size:13px;color:var(--text);padding:2px 4px;border-radius:4px}
-    .cell-input:focus{background:var(--primary-light);box-shadow:0 0 0 2px rgba(36,144,239,.2)}
-    .cell-check{width:16px;height:16px;cursor:pointer;accent-color:var(--primary)}
+    .field-row-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--border-light);background:#fff;margin-bottom:4px;cursor:pointer;transition:var(--transition);user-select:none}
+    .field-row-item:hover{border-color:var(--primary);background:#f0f7ff}
+    .field-row-item.selected{border-color:var(--primary);background:#edf4fd;box-shadow:0 0 0 2px rgba(36,144,239,.15)}
+    .field-row-item .fi-drag{color:var(--text-light);cursor:grab;font-size:12px;flex-shrink:0}
+    .field-row-item .fi-drag:active{cursor:grabbing}
+    .field-row-item .fi-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+    .field-row-item .fi-body{flex:1;min-width:0}
+    .field-row-item .fi-label{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .field-row-item .fi-name{font-size:10px;color:var(--text-muted);font-family:monospace}
+    .field-row-item .fi-type{font-size:10px;color:var(--text-muted);background:var(--bg);padding:1px 5px;border-radius:99px;border:1px solid var(--border);flex-shrink:0}
+    .field-row-item .fi-req{color:var(--danger);font-size:12px;flex-shrink:0}
+    .field-row-item .fi-del{opacity:0;color:var(--text-muted);font-size:12px;cursor:pointer;flex-shrink:0;padding:2px 4px;border-radius:3px;transition:var(--transition)}
+    .field-row-item:hover .fi-del{opacity:1}
+    .field-row-item .fi-del:hover{background:#fee2e2;color:var(--danger)}
 
-    /* add field button */
-    .add-field-row td{padding:0;border:none}
-    .add-field-btn{display:flex;align-items:center;gap:8px;width:100%;padding:12px 16px;background:none;border:none;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer;border-top:1px dashed var(--border);transition:var(--transition)}
-    .add-field-btn:hover{background:var(--primary-light)}
+    .col-add-btn{display:flex;align-items:center;gap:6px;width:100%;padding:5px 8px;border:1px dashed var(--border);border-radius:var(--radius);background:none;color:var(--text-muted);font-size:12px;cursor:pointer;transition:var(--transition);margin-top:2px}
+    .col-add-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
 
-    /* type picker popover */
-    .type-picker{position:fixed;background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);z-index:500;width:640px;padding:14px;display:none}
+    .add-col-btn{display:flex;align-items:center;gap:4px;padding:5px 10px;border:1px dashed var(--border);border-radius:var(--radius);background:none;color:var(--text-muted);font-size:11px;cursor:pointer;margin:6px 8px;transition:var(--transition)}
+    .add-col-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+
+    .tab-divider{display:flex;align-items:center;gap:8px;padding:6px 12px;background:linear-gradient(to right,var(--primary-light),transparent);border-bottom:2px solid var(--primary);margin-bottom:10px;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+    .tab-divider .tab-label-inp{border:none;outline:none;background:transparent;font-size:13px;font-weight:600;color:var(--primary);flex:1}
+    .tab-divider .tab-label-inp:focus{background:rgba(36,144,239,.12);border-radius:4px;padding:0 4px}
+
+    .add-section-footer{display:flex;gap:8px;padding:4px 0 8px}
+
+    .type-picker{position:fixed;background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);z-index:800;width:620px;padding:14px;display:none}
     .type-picker.open{display:block}
-    .type-picker-search{margin-bottom:10px}
-    .type-picker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:380px;overflow-y:auto}
-    .type-picker-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius);border:1px solid var(--border-light);cursor:pointer;transition:var(--transition);font-size:12px}
-    .type-picker-item:hover{background:var(--primary-light);border-color:var(--primary);color:var(--primary)}
-    .type-picker-item .tp-icon{width:28px;height:28px;background:var(--bg);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+    .type-picker-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-height:360px;overflow-y:auto}
+    .type-picker-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border-light);cursor:pointer;transition:var(--transition);font-size:12px}
+    .type-picker-item:hover,.type-picker-item.active{background:var(--primary-light);border-color:var(--primary);color:var(--primary)}
+    .type-picker-item .tp-icon{width:26px;height:26px;background:var(--bg);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
     .type-picker-item:hover .tp-icon{background:#d0e8fa}
-    .type-picker-item .tp-info .tp-name{font-weight:600;font-size:12px}
-    .type-picker-item .tp-info .tp-desc{font-size:10px;color:var(--text-muted)}
+    .type-picker-item .tp-name{font-weight:600}
+    .type-picker-item .tp-desc{font-size:10px;color:var(--text-muted)}
     .type-picker-cat{grid-column:1/-1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);padding:6px 2px 2px;margin-top:4px}
 
-    /* right properties panel */
     .fb-props{width:300px;flex-shrink:0;background:#fff;border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
     .props-head{padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg);font-size:12px;font-weight:700;color:var(--text);position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between}
     .props-body{padding:14px 16px;flex:1}
     .prop-section{margin-bottom:16px}
-    .prop-section-hd{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);padding:4px 0 6px;border-bottom:1px solid var(--border-light);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
-    .prop-section-body{}
-    .prop-section.collapsed .prop-section-body{display:none}
-    .prop-section-hd .toggle{color:var(--text-light)}
+    .prop-section-hd{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);padding:4px 0 6px;border-bottom:1px solid var(--border-light);margin-bottom:10px;display:flex;justify-content:space-between;cursor:pointer}
     .props-empty{padding:40px 16px;text-align:center;color:var(--text-muted)}
 
-    .sortable-ghost{opacity:.3;background:var(--primary-light) !important}
-    .sortable-drag{box-shadow:0 6px 20px rgba(0,0,0,.12) !important;background:#fff !important}
+    .sortable-ghost{opacity:.3;background:var(--primary-light) !important;border-color:var(--primary) !important}
+    .sortable-drag{box-shadow:0 6px 20px rgba(0,0,0,.14) !important;background:#fff !important}
   </style>
 </head>
 <body>
@@ -104,7 +113,7 @@
     </div>
     <span id="fields-badge" class="badge badge-blue" style="font-size:11px">0 fields</span>
     <div class="ml-auto" style="display:flex;gap:8px;align-items:center">
-      <span id="dirty-indicator" style="font-size:11px;color:var(--warning);display:none">● Unsaved</span>
+      <span id="dirty-dot" style="font-size:11px;color:var(--warning);display:none">● Unsaved</span>
       <button class="btn btn-secondary btn-sm" onclick="previewForm()">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         Preview
@@ -116,10 +125,9 @@
     </div>
   </div>
 
-  <!-- Body -->
   <div class="fb-body">
 
-    <!-- Field table -->
+    <!-- Canvas -->
     <div class="fb-main">
       <div class="fb-card">
         <div class="fb-card-head">
@@ -128,56 +136,33 @@
             <h2 id="canvas-title">{% if form_type %}{{ form_type.form_name }}{% else %}Untitled Form{% endif %}</h2>
             <div style="font-size:11px;color:var(--text-muted)">{{ stage.stage_path }}</div>
           </div>
-          <button class="btn btn-primary btn-sm ml-auto" id="add-field-top-btn" onclick="showTypePicker(this, null)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Add Field
-          </button>
         </div>
 
-        <!-- Fields -->
-        <table class="fields-table">
-          <thead>
-            <tr>
-              <th style="width:32px"></th><!-- drag -->
-              <th style="width:150px">Type</th>
-              <th>Label</th>
-              <th>Fieldname</th>
-              <th style="width:120px">Options / Link</th>
-              <th style="width:36px" title="Required">Req</th>
-              <th style="width:36px" title="In List View">List</th>
-              <th style="width:36px" title="Bold">Bold</th>
-              <th style="width:36px" title="Hidden">Hide</th>
-              <th style="width:50px"></th>
-            </tr>
-          </thead>
-          <tbody id="fields-body">
-            <!-- rows rendered by JS -->
-          </tbody>
-        </table>
+        <div style="padding:16px">
+          <div id="form-canvas" class="form-canvas"></div>
 
-        <!-- Empty state (hidden when fields exist) -->
-        <div id="empty-state" style="text-align:center;padding:40px 20px;color:var(--text-muted)">
-          <div style="font-size:40px;margin-bottom:10px;opacity:.3">📋</div>
-          <div style="font-weight:600;font-size:14px;margin-bottom:6px">No fields yet</div>
-          <div style="font-size:13px;margin-bottom:16px">Click "Add Field" to build your form</div>
-          <button class="btn btn-primary" onclick="showTypePicker(document.getElementById('add-field-top-btn'), null)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Add Field
-          </button>
-        </div>
+          <div id="empty-state" style="text-align:center;padding:40px 20px;color:var(--text-muted);display:none">
+            <div style="font-size:40px;margin-bottom:10px;opacity:.3">📋</div>
+            <div style="font-weight:600;font-size:14px;margin-bottom:6px">No fields yet</div>
+            <div style="font-size:13px;margin-bottom:16px">Add a section to start building your form</div>
+          </div>
 
-        <!-- Add row button at bottom (shown when fields exist) -->
-        <div id="add-row-footer" style="display:none">
-          <button class="add-field-btn" onclick="showTypePicker(this, null)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Add Field
-          </button>
+          <div class="add-section-footer">
+            <button class="btn btn-secondary btn-sm" onclick="addSection()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Add Section
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="addTabBreak()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M3 11h18M3 17h18"/></svg>
+              Add Tab Break
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Right: Properties -->
-    <div class="fb-props" id="props-panel">
+    <div class="fb-props">
       <div class="props-head">
         <span id="props-title">Properties</span>
         <span id="props-type-badge" class="badge badge-blue" style="display:none;font-size:10px"></span>
@@ -186,74 +171,57 @@
         <div class="props-empty">
           <div style="font-size:36px;margin-bottom:8px;opacity:.3">←</div>
           <div style="font-weight:600;margin-bottom:4px">No field selected</div>
-          <div style="font-size:12px">Click a row to edit field properties</div>
+          <div style="font-size:12px">Click a field to edit its properties</div>
         </div>
       </div>
     </div>
   </div>
-
 </div>
 
-<!-- Type Picker Popover -->
+<!-- Type Picker -->
 <div id="type-picker" class="type-picker">
-  <div class="type-picker-search">
-    <input type="text" class="form-control form-control-sm" id="tp-search" placeholder="Search field types…" oninput="filterTypePicker(this.value)" autocomplete="off">
-  </div>
-  <div class="type-picker-grid" id="tp-grid"></div>
+  <input type="text" class="form-control form-control-sm" id="tp-search" placeholder="Search field types…" oninput="filterTP(this.value)" autocomplete="off" style="margin-bottom:10px">
+  <div id="tp-grid" class="type-picker-grid"></div>
 </div>
 
 <!-- Preview Modal -->
 <div class="modal-overlay" id="preview-modal">
-  <div class="modal" style="max-width:720px">
+  <div class="modal" style="max-width:760px">
     <div class="modal-header">
       <span class="modal-title" id="preview-title">Preview</span>
       <button class="btn btn-ghost btn-icon" onclick="closePreview()">✕</button>
     </div>
-    <div class="modal-body" id="preview-body" style="max-height:72vh;overflow-y:auto"></div>
+    <div class="modal-body" id="preview-body" style="max-height:74vh;overflow-y:auto"></div>
   </div>
 </div>
 
 <div id="toast-container"></div>
 
-<!-- Server data -->
 <script>
 const API = '/api/v1';
 window.FORM_DATA = {{ (form_type.schema_data | tojson) if form_type and form_type.schema_data else '{"fields":[],"settings":{}}' | safe }};
 window.FORM_META = {
   id:       {{ ('"' ~ form_type.form_type_id ~ '"') | safe if form_type else 'null' }},
   name:     {{ ('"' ~ form_type.form_name ~ '"') | safe if form_type else '"Untitled Form"' }},
-  version:  {{ ('"' ~ form_type.version ~ '"') | safe if form_type else '"1.0.0"' }},
   stage_id: '{{ stage.stage_id }}'
 };
 </script>
 
 <script>
-// ── helpers ───────────────────────────────────────────────────────────────────
-function toast(msg, type='') {
-  const el = document.createElement('div');
-  el.className = 'toast ' + type;
-  el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3200);
+function toast(msg, type=''){
+  const el=document.createElement('div'); el.className='toast '+type; el.textContent=msg;
+  document.getElementById('toast-container').appendChild(el); setTimeout(()=>el.remove(),3200);
 }
-async function apiFetch(url, opts={}) {
-  const r = await fetch(url, {
-    headers:{'Content-Type':'application/json'}, ...opts,
-    body: opts.body ? JSON.stringify(opts.body) : undefined
-  });
-  if (!r.ok) {
-    const err = await r.json().catch(()=>({detail:r.statusText}));
-    throw new Error(err.detail || r.statusText);
-  }
+async function apiFetch(url,opts={}){
+  const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts,
+    body:opts.body?JSON.stringify(opts.body):undefined});
+  if(!r.ok){const e=await r.json().catch(()=>({detail:r.statusText}));throw new Error(e.detail||r.statusText);}
   return r.json();
 }
-function esc(s){
-  if(s===null||s===undefined) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+function esc(s){if(!s&&s!==0)return'';return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function snake(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');}
 
-// ── field type registry ───────────────────────────────────────────────────────
-const FTYPES = [
+const FTYPES=[
   {cat:'Basic',    type:'Data',              icon:'📝', desc:'Short text input'},
   {cat:'Basic',    type:'Int',               icon:'🔢', desc:'Integer number'},
   {cat:'Basic',    type:'Float',             icon:'🔣', desc:'Decimal number'},
@@ -274,636 +242,638 @@ const FTYPES = [
   {cat:'Choice',   type:'Autocomplete',      icon:'🔍', desc:'Searchable dropdown'},
   {cat:'Choice',   type:'Rating',            icon:'⭐', desc:'Star rating 1–5'},
   {cat:'Choice',   type:'Color',             icon:'🎨', desc:'Color picker'},
-  {cat:'Link',     type:'Link',              icon:'🔗', desc:'Link to a record'},
-  {cat:'Link',     type:'Dynamic Link',      icon:'⚡', desc:'Dynamic target link'},
-  {cat:'Link',     type:'Table',             icon:'⊞',  desc:'Child table'},
+  {cat:'Link',     type:'Link',              icon:'🔗', desc:'Link to another Form Type'},
+  {cat:'Link',     type:'Dynamic Link',      icon:'⚡', desc:'Dynamic Form Type link'},
+  {cat:'Link',     type:'Table',             icon:'⊞',  desc:'Child table (inline list)'},
   {cat:'Link',     type:'Table MultiSelect', icon:'☰',  desc:'Multi-select table'},
   {cat:'Media',    type:'Attach',            icon:'📎', desc:'File attachment'},
   {cat:'Media',    type:'Attach Image',      icon:'🖼',  desc:'Image attachment'},
   {cat:'Media',    type:'Signature',         icon:'✒',  desc:'Digital signature pad'},
   {cat:'Media',    type:'Geolocation',       icon:'📍', desc:'GPS / map coordinates'},
-  {cat:'Layout',   type:'Section Break',     icon:'━',  desc:'Section divider with heading'},
-  {cat:'Layout',   type:'Column Break',      icon:'┃',  desc:'Split row into columns'},
-  {cat:'Layout',   type:'Tab Break',         icon:'⇥',  desc:'New tab / page break'},
-  {cat:'Layout',   type:'Heading',           icon:'H',  desc:'Bold heading text'},
-  {cat:'Layout',   type:'HTML',              icon:'<>', desc:'Raw HTML block'},
 ];
-const TMAP = {};
-FTYPES.forEach(t => TMAP[t.type] = t);
+const TMAP={};
+FTYPES.forEach(t=>TMAP[t.type]=t);
+const LAYOUT_SET=new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
+const NUMERIC_SET=new Set(['Int','Float','Currency','Percent','Rating']);
+const TEXT_SET=new Set(['Data','Small Text','Long Text','Text Editor','Code','Password']);
+const OPTIONS_SET=new Set(['Select','Autocomplete']);
+const LINK_SET=new Set(['Link','Dynamic Link','Table','Table MultiSelect']);
 
-const LAYOUT_SET   = new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
-const NUMERIC_SET  = new Set(['Int','Float','Currency','Percent','Rating']);
-const TEXT_SET     = new Set(['Data','Small Text','Long Text','Text Editor','Code','Password']);
-const OPTIONS_SET  = new Set(['Select','Autocomplete','HTML']);
-const LINK_SET     = new Set(['Link','Dynamic Link','Table','Table MultiSelect']);
-const SHOW_OPT_SET = new Set([...OPTIONS_SET, ...LINK_SET]); // show options/link col
-
-// ── state ─────────────────────────────────────────────────────────────────────
-let fields     = (window.FORM_DATA.fields||[]).map((f,i)=>({...f,_id:i+1}));
-let settings   = window.FORM_DATA.settings||{};
-let selectedId = null;
-let nextId     = fields.length+1;
-let dirty      = false;
-let _pickerInsertAfter = null; // _id of the field to insert after (null = append)
-
-// ── type picker ───────────────────────────────────────────────────────────────
-function buildTypePicker() {
-  renderTypeGrid('');
+let availableFormTypes = [];
+async function loadAvailableFormTypes(){
+  try { availableFormTypes = await apiFetch(`${API}/form-types?limit=200`); }
+  catch(e){ availableFormTypes=[]; }
 }
-function renderTypeGrid(q) {
-  const grid = document.getElementById('tp-grid');
-  grid.innerHTML = '';
-  let lastCat = null;
-  FTYPES.forEach(t => {
-    if (q && !t.type.toLowerCase().includes(q) && !t.desc.toLowerCase().includes(q)) return;
-    if (t.cat !== lastCat) {
-      const lbl = document.createElement('div');
-      lbl.className = 'type-picker-cat';
-      lbl.textContent = t.cat;
-      grid.appendChild(lbl);
-      lastCat = t.cat;
-    }
-    const el = document.createElement('div');
-    el.className = 'type-picker-item';
-    el.innerHTML = `<div class="tp-icon">${t.icon}</div><div class="tp-info"><div class="tp-name">${t.type}</div><div class="tp-desc">${t.desc}</div></div>`;
-    el.addEventListener('click', () => { closeTypePicker(); addField(t.type, _pickerInsertAfter); });
-    grid.appendChild(el);
-  });
-}
-function filterTypePicker(q) { renderTypeGrid(q.toLowerCase()); }
 
-function showTypePicker(anchorEl, insertAfterId) {
-  _pickerInsertAfter = insertAfterId;
-  const picker = document.getElementById('type-picker');
-  const rect = anchorEl.getBoundingClientRect();
-  picker.classList.add('open');
-  // Position below anchor, keep within viewport
-  let top = rect.bottom + 4;
-  let left = rect.left;
-  if (left + 640 > window.innerWidth) left = window.innerWidth - 650;
-  if (top + 430 > window.innerHeight) top = rect.top - 434;
-  picker.style.top = top + 'px';
-  picker.style.left = left + 'px';
-  document.getElementById('tp-search').value = '';
-  renderTypeGrid('');
-  setTimeout(() => document.getElementById('tp-search').focus(), 50);
-}
-function closeTypePicker() {
-  document.getElementById('type-picker').classList.remove('open');
-}
-document.addEventListener('click', e => {
-  const p = document.getElementById('type-picker');
-  if (p.classList.contains('open') && !p.contains(e.target) && !e.target.closest('[onclick*="showTypePicker"]')) {
-    closeTypePicker();
-  }
-});
-document.addEventListener('keydown', e => { if (e.key==='Escape') closeTypePicker(); });
+// canvas = [{type:'tab'|'section', ...}]
+let canvas = [];
+let selectedFieldId = null;
+let nextId = 1;
+let dirty  = false;
 
-// ── add / mutate fields ───────────────────────────────────────────────────────
-function snake(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''); }
-
-function addField(type, insertAfterId=null) {
-  const id = nextId++;
-  const field = {
-    _id:id, label:type, fieldname: snake(type)+'_'+id,
-    fieldtype:type, options:'', default:'', placeholder:'',
-    description:'', required:false, unique:false, read_only:false,
-    hidden:false, bold:false, in_list_view:false, in_filter:false,
-    search_index:false, print_hide:false, no_copy:false, allow_on_submit:false,
+function mkId(){ return nextId++; }
+function mkField(type){
+  const id=mkId();
+  return {
+    _id:id, label:type, fieldname:snake(type)+'_'+id, fieldtype:type,
+    options:'', default:'', placeholder:'', description:'',
+    required:false, unique:false, read_only:false, hidden:false, bold:false,
+    in_list_view:false, in_filter:false, search_index:false, print_hide:false,
+    no_copy:false, allow_on_submit:false,
     depends_on:'', mandatory_depends_on:'', read_only_depends_on:'',
     precision:'', min_value:'', max_value:'', max_length:'', idx:0
   };
-  if (insertAfterId !== null) {
-    const i = fields.findIndex(f=>f._id===insertAfterId);
-    fields.splice(i+1, 0, field);
-  } else {
-    fields.push(field);
-  }
-  reindex();
-  renderTable();
-  selectField(id);
-  // scroll row into view
+}
+function mkSection(label=''){
+  return {type:'section', _sid:mkId(), label, collapsible:false, columns:[{_cid:mkId(), fields:[]}]};
+}
+function mkTab(label='New Tab'){
+  return {type:'tab', _tid:mkId(), label};
+}
+
+function importFields(flat){
+  canvas=[];
+  let curSection=null, curColIdx=0;
+  flat.forEach(f=>{
+    if(f.fieldtype==='Tab Break'){
+      canvas.push(mkTab(f.label||'Tab'));
+      curSection=null; curColIdx=0; return;
+    }
+    if(f.fieldtype==='Section Break'){
+      curSection={type:'section',_sid:mkId(),label:f.label||'',collapsible:f.collapsible||false,columns:[{_cid:mkId(),fields:[]}]};
+      canvas.push(curSection); curColIdx=0; return;
+    }
+    if(f.fieldtype==='Column Break'){
+      if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
+      curSection.columns.push({_cid:mkId(),fields:[]});
+      curColIdx++; return;
+    }
+    if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
+    const field={...f,_id:mkId()};
+    curSection.columns[curColIdx].fields.push(field);
+    if(field._id>=nextId) nextId=field._id+1;
+  });
+}
+
+function exportFields(){
+  const out=[];
+  canvas.forEach(block=>{
+    if(block.type==='tab'){
+      out.push({label:block.label,fieldtype:'Tab Break',fieldname:snake(block.label||'tab')+'_tb'});
+      return;
+    }
+    out.push({label:block.label,fieldtype:'Section Break',fieldname:snake(block.label||'section')+'_sb',collapsible:block.collapsible||false});
+    block.columns.forEach((col,ci)=>{
+      if(ci>0) out.push({label:'',fieldtype:'Column Break',fieldname:'col_break_'+col._cid});
+      col.fields.forEach(f=>{ const {_id,...rest}=f; out.push(rest); });
+    });
+  });
+  return out;
+}
+
+function addSection(){
+  const sec=mkSection();
+  canvas.push(sec);
+  renderCanvas();
   setTimeout(()=>{
-    const row = document.querySelector(`tr[data-id="${id}"]`);
-    if (row) row.scrollIntoView({behavior:'smooth', block:'nearest'});
-    // focus label cell
-    const inp = row?.querySelector('.cell-input');
-    if (inp) { inp.select(); }
-  }, 30);
+    const inp=document.querySelector(`.section-wrap[data-sid="${sec._sid}"] .sec-label-inp`);
+    if(inp) inp.focus();
+  },30);
   markDirty();
 }
 
-function removeField(id, e) {
-  if (e) e.stopPropagation();
-  fields = fields.filter(f=>f._id!==id);
-  if (selectedId===id) { selectedId=null; renderProps(null); }
-  reindex(); renderTable(); markDirty();
-}
-function moveField(id, dir, e) {
-  if (e) e.stopPropagation();
-  const i = fields.findIndex(f=>f._id===id);
-  const j = i+dir;
-  if (j<0||j>=fields.length) return;
-  [fields[i],fields[j]]=[fields[j],fields[i]];
-  reindex(); renderTable(); selectField(id); markDirty();
-}
-function dupField(id, e) {
-  if (e) e.stopPropagation();
-  const i = fields.findIndex(f=>f._id===id);
-  const copy = {...fields[i], _id:nextId++, fieldname:fields[i].fieldname+'_copy', label:fields[i].label+' (Copy)'};
-  fields.splice(i+1,0,copy);
-  reindex(); renderTable(); selectField(copy._id); markDirty();
-}
-function reindex(){ fields.forEach((f,i)=>f.idx=i); }
-
-// ── render table ──────────────────────────────────────────────────────────────
-function renderTable() {
-  const tbody = document.getElementById('fields-body');
-  const empty = document.getElementById('empty-state');
-  const footer= document.getElementById('add-row-footer');
-  tbody.innerHTML = '';
-
-  if (!fields.length) {
-    empty.style.display = ''; footer.style.display = 'none';
-    updateBadge(); return;
-  }
-  empty.style.display = 'none'; footer.style.display = '';
-
-  fields.forEach(f => {
-    const isLayout  = LAYOUT_SET.has(f.fieldtype);
-    const showOpts  = SHOW_OPT_SET.has(f.fieldtype);
-    const ti        = TMAP[f.fieldtype] || {icon:'📝', type:f.fieldtype};
-    const isSelected = f._id === selectedId;
-
-    const tr = document.createElement('tr');
-    tr.dataset.id = f._id;
-    if (isSelected) tr.classList.add('selected');
-    if (isLayout) tr.classList.add('is-layout');
-
-    tr.innerHTML = `
-      <td><div class="drag-handle">⠿</div></td>
-      <td>
-        <div class="type-pill" onclick="event.stopPropagation(); showTypePickerForRow(${f._id}, this)" title="Click to change type">
-          <span class="icon">${ti.icon}</span>
-          <span>${f.fieldtype}</span>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
-        </div>
-      </td>
-      <td>
-        <input class="cell-input" value="${esc(f.label)}"
-               onclick="event.stopPropagation()"
-               onchange="updField(${f._id},'label',this.value)"
-               oninput="liveLabel(${f._id},this.value)"
-               style="${f.bold?'font-weight:700':''}">
-      </td>
-      <td>
-        ${isLayout ? '' : `
-          <input class="cell-input text-mono" value="${esc(f.fieldname)}"
-                 style="font-size:12px;color:var(--text-muted)"
-                 onclick="event.stopPropagation()"
-                 onchange="updField(${f._id},'fieldname',this.value)">`}
-      </td>
-      <td>
-        ${showOpts ? `
-          <input class="cell-input" value="${esc(f.options)}"
-                 style="font-size:12px"
-                 placeholder="${LINK_SET.has(f.fieldtype)?'target':'options…'}"
-                 onclick="event.stopPropagation()"
-                 onchange="updField(${f._id},'options',this.value)">` : ''}
-      </td>
-      <td style="text-align:center">
-        ${!isLayout ? `<input type="checkbox" class="cell-check" ${f.required?'checked':''}
-          onclick="event.stopPropagation()" onchange="updField(${f._id},'required',this.checked)">` : ''}
-      </td>
-      <td style="text-align:center">
-        ${!isLayout ? `<input type="checkbox" class="cell-check" ${f.in_list_view?'checked':''}
-          onclick="event.stopPropagation()" onchange="updField(${f._id},'in_list_view',this.checked)">` : ''}
-      </td>
-      <td style="text-align:center">
-        ${!isLayout ? `<input type="checkbox" class="cell-check" ${f.bold?'checked':''}
-          onclick="event.stopPropagation()" onchange="updField(${f._id},'bold',this.checked);updRowBold(${f._id},this.checked)">` : ''}
-      </td>
-      <td style="text-align:center">
-        ${!isLayout ? `<input type="checkbox" class="cell-check" ${f.hidden?'checked':''}
-          onclick="event.stopPropagation()" onchange="updField(${f._id},'hidden',this.checked)">` : ''}
-      </td>
-      <td>
-        <div style="display:flex;gap:2px;align-items:center">
-          <button class="field-act-btn" title="Insert field below"
-            onclick="event.stopPropagation();showTypePicker(this,${f._id})">+</button>
-          <button class="field-act-btn" title="Duplicate"
-            onclick="dupField(${f._id},event)">⊕</button>
-          <button class="field-act-btn del" title="Delete"
-            onclick="removeField(${f._id},event)">✕</button>
-        </div>
-      </td>
-    `;
-    tr.addEventListener('click', () => selectField(f._id));
-    tbody.appendChild(tr);
-  });
-
-  // Sortable
-  if (tbody._sortable) tbody._sortable.destroy();
-  tbody._sortable = Sortable.create(tbody, {
-    handle: '.drag-handle', animation: 120,
-    ghostClass:'sortable-ghost', dragClass:'sortable-drag',
-    onEnd(e) {
-      const [m] = fields.splice(e.oldIndex,1);
-      fields.splice(e.newIndex,0,m);
-      reindex(); markDirty();
-    }
-  });
-  updateBadge();
+function addTabBreak(){
+  canvas.push(mkTab('New Tab'));
+  renderCanvas(); markDirty();
 }
 
-function showTypePickerForRow(id, anchorEl) {
-  _pickerInsertAfter = id; // will replace the current field's type
-  // Override: we're changing the type, not inserting
-  const picker = document.getElementById('type-picker');
-  // Temporarily patch the picker click to change type instead
-  picker.dataset.mode = 'change';
-  picker.dataset.changeId = id;
-  const rect = anchorEl.getBoundingClientRect();
+function removeSection(sid){
+  canvas=canvas.filter(b=>b._sid!==sid);
+  if(canvas.length===0) canvas.push(mkSection());
+  renderCanvas(); markDirty();
+}
+
+function addColumn(sid){
+  const sec=canvas.find(b=>b._sid===sid);
+  if(!sec) return;
+  sec.columns.push({_cid:mkId(),fields:[]});
+  renderCanvas(); markDirty();
+}
+
+function removeColumn(sid,cid){
+  const sec=canvas.find(b=>b._sid===sid);
+  if(!sec||sec.columns.length<=1) return;
+  const idx=sec.columns.findIndex(c=>c._cid===cid);
+  const fields=sec.columns[idx].fields;
+  sec.columns.splice(idx,1);
+  if(fields.length) sec.columns[Math.max(0,idx-1)].fields.push(...fields);
+  renderCanvas(); markDirty();
+}
+
+function toggleSectionCollapse(sid){
+  const sec=canvas.find(b=>b._sid===sid);
+  if(!sec) return;
+  sec._collapsed=!sec._collapsed;
+  const wrap=document.querySelector(`.section-wrap[data-sid="${sid}"]`);
+  const content=wrap?.querySelector('.section-content');
+  const arrow=wrap?.querySelector('.sec-collapsible');
+  if(content) content.classList.toggle('collapsed',sec._collapsed);
+  if(arrow) arrow.classList.toggle('collapsed',sec._collapsed);
+}
+
+let _pickerCb=null;
+function showTypePicker(anchorEl, cb){
+  _pickerCb=cb;
+  const picker=document.getElementById('type-picker');
   picker.classList.add('open');
-  let top = rect.bottom + 4, left = rect.left;
-  if (left+640 > window.innerWidth) left = window.innerWidth-650;
-  if (top+430  > window.innerHeight) top = rect.top-434;
-  picker.style.top = top+'px'; picker.style.left = left+'px';
-  document.getElementById('tp-search').value = '';
-  // Re-render grid with change mode
-  const grid = document.getElementById('tp-grid');
-  grid.innerHTML = '';
-  let lastCat = null;
-  FTYPES.forEach(t => {
-    if (t.cat !== lastCat) {
-      const lbl = document.createElement('div');
-      lbl.className = 'type-picker-cat'; lbl.textContent = t.cat;
-      grid.appendChild(lbl); lastCat = t.cat;
+  const rect=anchorEl.getBoundingClientRect();
+  let top=rect.bottom+4, left=rect.left;
+  if(left+640>window.innerWidth) left=window.innerWidth-630;
+  if(top+420>window.innerHeight) top=rect.top-424;
+  picker.style.top=top+'px'; picker.style.left=left+'px';
+  document.getElementById('tp-search').value='';
+  renderTPGrid('');
+  setTimeout(()=>document.getElementById('tp-search').focus(),40);
+}
+function closeTypePicker(){ document.getElementById('type-picker').classList.remove('open'); _pickerCb=null; }
+document.addEventListener('click',e=>{
+  const p=document.getElementById('type-picker');
+  if(p.classList.contains('open')&&!p.contains(e.target)&&!e.target.closest('.col-add-btn')&&!e.target.closest('.add-section-footer')) closeTypePicker();
+});
+
+function renderTPGrid(q){
+  const grid=document.getElementById('tp-grid');
+  grid.innerHTML=''; let lastCat=null;
+  FTYPES.forEach(t=>{
+    if(q&&!t.type.toLowerCase().includes(q)&&!t.desc.toLowerCase().includes(q)) return;
+    if(t.cat!==lastCat){
+      const lbl=document.createElement('div'); lbl.className='type-picker-cat'; lbl.textContent=t.cat; grid.appendChild(lbl); lastCat=t.cat;
     }
-    const el = document.createElement('div');
-    el.className = 'type-picker-item';
-    const f = fields.find(f=>f._id===+picker.dataset.changeId);
-    if (f && f.fieldtype===t.type) el.style.background='var(--primary-light)';
-    el.innerHTML = `<div class="tp-icon">${t.icon}</div><div class="tp-info"><div class="tp-name">${t.type}</div><div class="tp-desc">${t.desc}</div></div>`;
-    el.addEventListener('click', () => {
-      closeTypePicker();
-      const cid = +document.getElementById('type-picker').dataset.changeId;
-      const cf = fields.find(f=>f._id===cid);
-      if (cf) { cf.fieldtype = t.type; reindex(); renderTable(); selectField(cid); markDirty(); }
-      delete document.getElementById('type-picker').dataset.mode;
-    });
+    const el=document.createElement('div'); el.className='type-picker-item';
+    el.innerHTML=`<div class="tp-icon">${t.icon}</div><div><div class="tp-name">${t.type}</div><div class="tp-desc">${t.desc}</div></div>`;
+    el.addEventListener('click',()=>{ closeTypePicker(); if(_pickerCb) _pickerCb(t.type); });
     grid.appendChild(el);
   });
-  setTimeout(()=>document.getElementById('tp-search').focus(),50);
+}
+function filterTP(q){ renderTPGrid(q.toLowerCase()); }
+
+function addFieldToCol(sid, cid, afterId=null, btnEl){
+  showTypePicker(btnEl, type=>{
+    const sec=canvas.find(b=>b._sid===sid);
+    const col=sec?.columns.find(c=>c._cid===cid);
+    if(!col) return;
+    const field=mkField(type);
+    if(afterId!==null){
+      const i=col.fields.findIndex(f=>f._id===afterId);
+      col.fields.splice(i+1,0,field);
+    } else {
+      col.fields.push(field);
+    }
+    renderCanvas(); selectField(field._id); markDirty();
+    setTimeout(()=>document.querySelector(`.field-row-item[data-fid="${field._id}"]`)?.scrollIntoView({behavior:'smooth',block:'nearest'}),30);
+  });
 }
 
-// Live updates without full re-render
-function liveLabel(id, val) {
-  const f = fields.find(f=>f._id===id); if(!f) return;
-  f.label = val;
-  // auto fieldname
-  const fn = snake(val)||f.fieldname;
-  f.fieldname = fn;
-  const row = document.querySelector(`tr[data-id="${id}"]`);
-  if (row) {
-    const fni = row.querySelectorAll('.cell-input')[1];
-    if (fni) fni.value = fn;
+function removeField(fid){
+  canvas.forEach(block=>{
+    if(block.type!=='section') return;
+    block.columns.forEach(col=>{ col.fields=col.fields.filter(f=>f._id!==fid); });
+  });
+  if(selectedFieldId===fid){ selectedFieldId=null; renderProps(null); }
+  renderCanvas(); markDirty();
+}
+
+function getField(fid){
+  for(const block of canvas){
+    if(block.type!=='section') continue;
+    for(const col of block.columns){
+      const f=col.fields.find(f=>f._id===fid);
+      if(f) return f;
+    }
   }
-  // update props panel if selected
-  if (selectedId===id) {
-    const pl = document.getElementById('prop-label-inp');
-    const pf = document.getElementById('prop-fn-inp');
-    if (pf) pf.value = fn;
-  }
-  markDirty();
-}
-function updRowBold(id, val) {
-  const row = document.querySelector(`tr[data-id="${id}"]`);
-  const inp = row?.querySelector('.cell-input');
-  if (inp) inp.style.fontWeight = val ? '700' : '';
-}
-function updField(id, key, val) {
-  const f = fields.find(f=>f._id===id); if(!f) return;
-  f[key] = val;
-  if (key==='required') updateBadge();
-  markDirty();
-}
-function updateBadge() {
-  const n = fields.filter(f=>!LAYOUT_SET.has(f.fieldtype)).length;
-  document.getElementById('fields-badge').textContent = `${n} field${n!==1?'s':''}`;
+  return null;
 }
 
-// ── select + properties panel ─────────────────────────────────────────────────
-function selectField(id) {
-  selectedId = id;
-  document.querySelectorAll('#fields-body tr').forEach(r => r.classList.toggle('selected', +r.dataset.id===id));
-  renderProps(fields.find(f=>f._id===id));
+let _sortables=[];
+function destroySortables(){ _sortables.forEach(s=>s.destroy()); _sortables=[]; }
+
+function renderCanvas(){
+  destroySortables();
+  const root=document.getElementById('form-canvas');
+  const empty=document.getElementById('empty-state');
+  root.innerHTML='';
+
+  const allSections=canvas.filter(b=>b.type==='section');
+  const allFields=allSections.flatMap(s=>s.columns.flatMap(c=>c.fields));
+  const nReal=allFields.filter(f=>!LAYOUT_SET.has(f.fieldtype)).length;
+  document.getElementById('fields-badge').textContent=`${nReal} field${nReal!==1?'s':''}`;
+
+  if(canvas.length===0){ empty.style.display=''; return; }
+  empty.style.display='none';
+
+  canvas.forEach(block=>{
+    if(block.type==='tab'){
+      const div=document.createElement('div');
+      div.className='tab-divider'; div.dataset.tid=block._tid;
+      div.innerHTML=`
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);flex-shrink:0"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M3 11h18M3 17h18"/></svg>
+        <input class="tab-label-inp" value="${esc(block.label)}" placeholder="Tab label" oninput="block_label_tab(${block._tid},this.value)" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-icon btn-xs" onclick="removeTabBreak(${block._tid})" style="color:var(--text-muted)" title="Remove tab break">✕</button>
+      `;
+      root.appendChild(div);
+      return;
+    }
+
+    const wrap=document.createElement('div');
+    wrap.className='section-wrap'; wrap.dataset.sid=block._sid;
+    wrap.innerHTML=`
+      <div class="section-hdr" onclick="sectionClicked(${block._sid},event)">
+        <span class="sec-drag" title="Drag to reorder section">⠿</span>
+        <span class="sec-icon">━</span>
+        <input class="sec-label-inp" value="${esc(block.label)}" placeholder="Section label (optional)"
+          oninput="block_label_sec(${block._sid},this.value)" onclick="event.stopPropagation()">
+        <div class="sec-actions">
+          <button class="btn btn-ghost btn-icon btn-xs" title="Add column" onclick="event.stopPropagation();addColumn(${block._sid})">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            Col
+          </button>
+          <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger)" title="Remove section" onclick="event.stopPropagation();removeSection(${block._sid})">✕</button>
+        </div>
+        <svg class="sec-collapsible ${block._collapsed?'collapsed':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" onclick="event.stopPropagation();toggleSectionCollapse(${block._sid})"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+      <div class="section-content ${block._collapsed?'collapsed':''}">
+        <div class="cols-wrap" id="sec-cols-${block._sid}"></div>
+        <button class="add-col-btn" onclick="addColumn(${block._sid})">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Add Column
+        </button>
+      </div>
+    `;
+    root.appendChild(wrap);
+
+    const colsWrap=wrap.querySelector('.cols-wrap');
+
+    block.columns.forEach((col,ci)=>{
+      const colDiv=document.createElement('div');
+      colDiv.className='col-wrap'; colDiv.dataset.cid=col._cid;
+      if(block.columns.length>1){
+        colDiv.innerHTML=`<div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
+          Col ${ci+1}
+          <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger);opacity:.5" onclick="event.stopPropagation();removeColumn(${block._sid},${col._cid})" title="Remove column">✕</button>
+        </div>`;
+      }
+
+      const fieldList=document.createElement('div');
+      fieldList.id=`col-fields-${col._cid}`;
+      col.fields.forEach(f=>fieldList.appendChild(makeFieldRow(f)));
+      colDiv.appendChild(fieldList);
+
+      const addBtn=document.createElement('button');
+      addBtn.className='col-add-btn';
+      addBtn.innerHTML=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add Field`;
+      addBtn.addEventListener('click', e=>{ e.stopPropagation(); addFieldToCol(block._sid,col._cid,null,addBtn); });
+      colDiv.appendChild(addBtn);
+
+      colsWrap.appendChild(colDiv);
+
+      const s=Sortable.create(fieldList,{
+        group:'fields', handle:'.fi-drag', animation:120,
+        ghostClass:'sortable-ghost', dragClass:'sortable-drag',
+        onEnd(evt){
+          const fid=+evt.item.dataset.fid;
+          let field;
+          canvas.forEach(blk=>{
+            if(blk.type!=='section') return;
+            blk.columns.forEach(c=>{
+              const i=c.fields.findIndex(f=>f._id===fid);
+              if(i!==-1){field=c.fields.splice(i,1)[0];}
+            });
+          });
+          const newCid=+evt.to.closest('.col-wrap').dataset.cid;
+          let newCol;
+          canvas.forEach(blk=>{
+            if(blk.type!=='section') return;
+            blk.columns.forEach(c=>{ if(c._cid===newCid) newCol=c; });
+          });
+          if(newCol&&field) newCol.fields.splice(evt.newIndex,0,field);
+          markDirty();
+        }
+      });
+      _sortables.push(s);
+    });
+  });
+
+  const s=Sortable.create(root,{
+    handle:'.sec-drag', animation:140,
+    ghostClass:'sortable-ghost', dragClass:'sortable-drag',
+    onEnd(evt){
+      const [m]=canvas.splice(evt.oldIndex,1);
+      canvas.splice(evt.newIndex,0,m);
+      markDirty();
+    }
+  });
+  _sortables.push(s);
+
+  if(selectedFieldId) document.querySelector(`.field-row-item[data-fid="${selectedFieldId}"]`)?.classList.add('selected');
 }
 
-function renderProps(f) {
-  const content = document.getElementById('props-content');
-  const title   = document.getElementById('props-title');
-  const badge   = document.getElementById('props-type-badge');
+function makeFieldRow(f){
+  const ti=TMAP[f.fieldtype]||{icon:'📝'};
+  const div=document.createElement('div');
+  div.className='field-row-item'+(f._id===selectedFieldId?' selected':'');
+  div.dataset.fid=f._id;
+  div.innerHTML=`
+    <span class="fi-drag">⠿</span>
+    <span class="fi-icon">${ti.icon}</span>
+    <div class="fi-body">
+      <div class="fi-label" style="${f.bold?'font-weight:700':''}">${esc(f.label||f.fieldtype)}</div>
+      <div class="fi-name">${esc(f.fieldname)}</div>
+    </div>
+    <span class="fi-type">${esc(f.fieldtype)}</span>
+    ${f.required?'<span class="fi-req">*</span>':''}
+    <span class="fi-del" onclick="event.stopPropagation();removeField(${f._id})" title="Remove">✕</span>
+  `;
+  div.addEventListener('click',()=>selectField(f._id));
+  return div;
+}
 
-  if (!f) {
-    title.textContent = 'Properties';
-    badge.style.display = 'none';
-    content.innerHTML = `<div class="props-empty"><div style="font-size:36px;margin-bottom:8px;opacity:.3">←</div><div style="font-weight:600;margin-bottom:4px">No field selected</div><div style="font-size:12px">Click a row to edit</div></div>`;
+function block_label_sec(sid,v){const b=canvas.find(b=>b._sid===sid);if(b)b.label=v;markDirty();}
+function block_label_tab(tid,v){const b=canvas.find(b=>b._tid===tid);if(b)b.label=v;markDirty();}
+function sectionClicked(sid,e){}
+function removeTabBreak(tid){canvas=canvas.filter(b=>b._tid!==tid);renderCanvas();markDirty();}
+
+function selectField(fid){
+  selectedFieldId=fid;
+  document.querySelectorAll('.field-row-item').forEach(el=>el.classList.toggle('selected',+el.dataset.fid===fid));
+  renderProps(getField(fid));
+}
+
+function renderProps(f){
+  const content=document.getElementById('props-content');
+  const title=document.getElementById('props-title');
+  const badge=document.getElementById('props-type-badge');
+  if(!f){
+    title.textContent='Properties'; badge.style.display='none';
+    content.innerHTML=`<div class="props-empty"><div style="font-size:36px;margin-bottom:8px;opacity:.3">←</div><div style="font-weight:600;margin-bottom:4px">No field selected</div><div style="font-size:12px">Click a field to edit</div></div>`;
     return;
   }
+  title.textContent=f.label||f.fieldtype; badge.textContent=f.fieldtype; badge.style.display='';
+  const isNumeric=NUMERIC_SET.has(f.fieldtype);
+  const isText=TEXT_SET.has(f.fieldtype);
+  const hasOpts=OPTIONS_SET.has(f.fieldtype);
+  const isLink=LINK_SET.has(f.fieldtype);
+  const isDynLink=f.fieldtype==='Dynamic Link';
 
-  const ti = TMAP[f.fieldtype]||{icon:'📝'};
-  title.textContent = f.label || f.fieldtype;
-  badge.textContent = f.fieldtype;
-  badge.style.display = '';
+  let optField='';
+  if(hasOpts){
+    optField=`<div class="form-group">
+      <label class="form-label">Options</label>
+      <textarea class="form-control" rows="5" oninput="fieldUpd(${f._id},'options',this.value)" placeholder="One option per line">${esc(f.options||'')}</textarea>
+      <div class="form-hint">One option per line</div>
+    </div>`;
+  } else if(isDynLink){
+    optField=`<div class="form-group">
+      <label class="form-label">Options Field</label>
+      <input class="form-control" value="${esc(f.options||'')}" oninput="fieldUpd(${f._id},'options',this.value)" placeholder="Field that holds the Form Type name">
+      <div class="form-hint">Field in this form whose value is the target Form Type</div>
+    </div>`;
+  } else if(isLink){
+    const ftOpts=availableFormTypes.map(ft=>`<option value="${esc(ft.form_name)}"${f.options===ft.form_name?' selected':''}>${esc(ft.form_name)}</option>`).join('');
+    optField=`<div class="form-group">
+      <label class="form-label">Link Form Type</label>
+      <select class="form-control" onchange="fieldUpd(${f._id},'options',this.value)">
+        <option value="">— Select a Form Type —</option>
+        ${ftOpts}
+      </select>
+      <div class="form-hint">Form Type this field links to</div>
+    </div>`;
+  } else if(f.fieldtype==='HTML'){
+    optField=`<div class="form-group">
+      <label class="form-label">HTML Content</label>
+      <textarea class="form-control" rows="5" oninput="fieldUpd(${f._id},'options',this.value)">${esc(f.options||'')}</textarea>
+    </div>`;
+  }
 
-  const isLayout  = LAYOUT_SET.has(f.fieldtype);
-  const isNumeric = NUMERIC_SET.has(f.fieldtype);
-  const isText    = TEXT_SET.has(f.fieldtype);
-  const hasOpts   = OPTIONS_SET.has(f.fieldtype);
-  const hasLink   = LINK_SET.has(f.fieldtype);
-
-  content.innerHTML = `
-  <div class="props-body">
-
+  content.innerHTML=`<div class="props-body">
     <div class="prop-section" id="ps-basic">
-      <div class="prop-section-hd" onclick="togglePS('ps-basic')">Basic<span class="toggle">▾</span></div>
-      <div class="prop-section-body">
-        ${isLayout ? `
-          <div class="form-group">
-            <label class="form-label">Label / Heading</label>
-            <input class="form-control" id="prop-label-inp" value="${esc(f.label)}" oninput="propUpd(${f._id},'label',this.value)">
-          </div>
-        ` : `
-          <div class="form-group">
-            <label class="form-label required">Label</label>
-            <input class="form-control" id="prop-label-inp" value="${esc(f.label)}" oninput="propLabelChg(${f._id},this.value)">
-          </div>
-          <div class="form-group">
-            <label class="form-label required">Fieldname</label>
-            <input class="form-control text-mono" id="prop-fn-inp" value="${esc(f.fieldname)}" oninput="propUpd(${f._id},'fieldname',this.value)">
-            <div class="form-hint">snake_case identifier</div>
-          </div>
-        `}
+      <div class="prop-section-hd" onclick="togglePS('ps-basic')">Basic <span>▾</span></div>
+      <div id="ps-basic-body">
+        <div class="form-group">
+          <label class="form-label required">Label</label>
+          <input class="form-control" id="prop-label" value="${esc(f.label)}" oninput="propLabelChg(${f._id},this.value)">
+        </div>
+        <div class="form-group">
+          <label class="form-label required">Fieldname</label>
+          <input class="form-control text-mono" id="prop-fn" value="${esc(f.fieldname)}" oninput="fieldUpd(${f._id},'fieldname',this.value)">
+          <div class="form-hint">snake_case identifier</div>
+        </div>
         <div class="form-group">
           <label class="form-label">Field Type</label>
           <select class="form-control" onchange="propChgType(${f._id},this.value)">
             ${FTYPES.map(t=>`<option value="${t.type}"${f.fieldtype===t.type?' selected':''}>${t.icon} ${t.type}</option>`).join('')}
           </select>
         </div>
-        ${hasOpts ? `
-          <div class="form-group">
-            <label class="form-label">Options</label>
-            <textarea class="form-control" rows="5" oninput="propUpd(${f._id},'options',this.value)" placeholder="One option per line">${esc(f.options||'')}</textarea>
-            <div class="form-hint">One option per line</div>
-          </div>` : ''}
-        ${hasLink ? `
-          <div class="form-group">
-            <label class="form-label">Link Target / Doctype</label>
-            <input class="form-control" value="${esc(f.options||'')}" oninput="propUpd(${f._id},'options',this.value)" placeholder="e.g. Customer">
-          </div>` : ''}
-        ${f.fieldtype==='HTML' ? `
-          <div class="form-group">
-            <label class="form-label">HTML Content</label>
-            <textarea class="form-control" rows="5" oninput="propUpd(${f._id},'options',this.value)">${esc(f.options||'')}</textarea>
-          </div>` : ''}
-        ${!isLayout ? `
-          <div class="form-group">
-            <label class="form-label">Default Value</label>
-            <input class="form-control" value="${esc(f.default||'')}" oninput="propUpd(${f._id},'default',this.value)">
-          </div>
-          ${isText ? `
-            <div class="form-group">
-              <label class="form-label">Placeholder</label>
-              <input class="form-control" value="${esc(f.placeholder||'')}" oninput="propUpd(${f._id},'placeholder',this.value)">
-            </div>` : ''}
-          <div class="form-group">
-            <label class="form-label">Description</label>
-            <textarea class="form-control" rows="2" oninput="propUpd(${f._id},'description',this.value)" placeholder="Help text">${esc(f.description||'')}</textarea>
-          </div>
-        ` : ''}
+        ${optField}
+        <div class="form-group">
+          <label class="form-label">Default Value</label>
+          <input class="form-control" value="${esc(f.default||'')}" oninput="fieldUpd(${f._id},'default',this.value)">
+        </div>
+        ${isText?`<div class="form-group">
+          <label class="form-label">Placeholder</label>
+          <input class="form-control" value="${esc(f.placeholder||'')}" oninput="fieldUpd(${f._id},'placeholder',this.value)">
+        </div>`:''}
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" rows="2" oninput="fieldUpd(${f._id},'description',this.value)" placeholder="Help text">${esc(f.description||'')}</textarea>
+        </div>
       </div>
     </div>
 
-    ${!isLayout ? `
     <div class="prop-section" id="ps-val">
-      <div class="prop-section-hd" onclick="togglePS('ps-val')">Validation<span class="toggle">▾</span></div>
-      <div class="prop-section-body">
-        <div class="form-group">
-          <label class="form-check"><input type="checkbox" ${f.required?'checked':''} onchange="propUpd(${f._id},'required',this.checked)"><span>Required / Mandatory</span></label>
-        </div>
-        <div class="form-group">
-          <label class="form-check"><input type="checkbox" ${f.unique?'checked':''} onchange="propUpd(${f._id},'unique',this.checked)"><span>Unique</span></label>
-        </div>
-        ${isNumeric ? `
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Min Value</label>
-              <input class="form-control" type="number" value="${esc(f.min_value||'')}" oninput="propUpd(${f._id},'min_value',this.value)">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Max Value</label>
-              <input class="form-control" type="number" value="${esc(f.max_value||'')}" oninput="propUpd(${f._id},'max_value',this.value)">
-            </div>
-          </div>
-          ${['Float','Currency','Percent'].includes(f.fieldtype)?`
-            <div class="form-group">
-              <label class="form-label">Precision</label>
-              <input class="form-control" type="number" min="0" max="9" value="${esc(f.precision||'')}" oninput="propUpd(${f._id},'precision',this.value)">
-            </div>`:``}
-        `:''}
-        ${f.fieldtype==='Data'?`
-          <div class="form-group">
-            <label class="form-label">Max Length</label>
-            <input class="form-control" type="number" value="${esc(f.max_length||'')}" oninput="propUpd(${f._id},'max_length',this.value)">
-          </div>`:''}
+      <div class="prop-section-hd" onclick="togglePS('ps-val')">Validation <span>▾</span></div>
+      <div id="ps-val-body">
+        <div class="form-group"><label class="form-check"><input type="checkbox" ${f.required?'checked':''} onchange="fieldUpd(${f._id},'required',this.checked)"><span>Required / Mandatory</span></label></div>
+        <div class="form-group"><label class="form-check"><input type="checkbox" ${f.unique?'checked':''} onchange="fieldUpd(${f._id},'unique',this.checked)"><span>Unique</span></label></div>
+        ${isNumeric?`<div class="form-row">
+          <div class="form-group"><label class="form-label">Min</label><input class="form-control" type="number" value="${esc(f.min_value||'')}" oninput="fieldUpd(${f._id},'min_value',this.value)"></div>
+          <div class="form-group"><label class="form-label">Max</label><input class="form-control" type="number" value="${esc(f.max_value||'')}" oninput="fieldUpd(${f._id},'max_value',this.value)"></div>
+        </div>`:''}
+        ${['Float','Currency','Percent'].includes(f.fieldtype)?`<div class="form-group"><label class="form-label">Precision</label><input class="form-control" type="number" min="0" max="9" value="${esc(f.precision||'')}" oninput="fieldUpd(${f._id},'precision',this.value)"></div>`:''}
+        ${f.fieldtype==='Data'?`<div class="form-group"><label class="form-label">Max Length</label><input class="form-control" type="number" value="${esc(f.max_length||'')}" oninput="fieldUpd(${f._id},'max_length',this.value)"></div>`:''}
       </div>
     </div>
 
     <div class="prop-section" id="ps-disp">
-      <div class="prop-section-hd" onclick="togglePS('ps-disp')">Display<span class="toggle">▾</span></div>
-      <div class="prop-section-body">
+      <div class="prop-section-hd" onclick="togglePS('ps-disp')">Display <span>▾</span></div>
+      <div id="ps-disp-body">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 10px">
           ${[['bold','Bold Label'],['hidden','Hidden'],['read_only','Read Only'],['in_list_view','In List View'],
              ['in_filter','In Filter'],['search_index','Search Index'],['print_hide','Print Hide'],
-             ['no_copy','No Copy'],['allow_on_submit','Allow on Submit']
-            ].map(([k,l])=>`<label class="form-check"><input type="checkbox" ${f[k]?'checked':''} onchange="propUpd(${f._id},'${k}',this.checked)"><span>${l}</span></label>`).join('')}
+             ['no_copy','No Copy'],['allow_on_submit','Allow on Submit']]
+            .map(([k,l])=>`<label class="form-check"><input type="checkbox" ${f[k]?'checked':''} onchange="fieldUpd(${f._id},'${k}',this.checked)"><span>${l}</span></label>`).join('')}
         </div>
       </div>
     </div>
 
     <div class="prop-section" id="ps-cond">
-      <div class="prop-section-hd" onclick="togglePS('ps-cond')">Conditional Logic<span class="toggle">▾</span></div>
-      <div class="prop-section-body">
+      <div class="prop-section-hd" onclick="togglePS('ps-cond')">Conditional Logic <span>▾</span></div>
+      <div id="ps-cond-body">
         <div class="form-group">
           <label class="form-label">Depends On</label>
-          <input class="form-control text-mono" value="${esc(f.depends_on||'')}" oninput="propUpd(${f._id},'depends_on',this.value)" placeholder="eval:doc.status=='Draft'">
+          <input class="form-control text-mono" value="${esc(f.depends_on||'')}" oninput="fieldUpd(${f._id},'depends_on',this.value)" placeholder="eval:doc.status=='Draft'">
           <div class="form-hint">Show only when true</div>
         </div>
         <div class="form-group">
           <label class="form-label">Mandatory Depends On</label>
-          <input class="form-control text-mono" value="${esc(f.mandatory_depends_on||'')}" oninput="propUpd(${f._id},'mandatory_depends_on',this.value)">
+          <input class="form-control text-mono" value="${esc(f.mandatory_depends_on||'')}" oninput="fieldUpd(${f._id},'mandatory_depends_on',this.value)">
         </div>
         <div class="form-group">
           <label class="form-label">Read Only Depends On</label>
-          <input class="form-control text-mono" value="${esc(f.read_only_depends_on||'')}" oninput="propUpd(${f._id},'read_only_depends_on',this.value)">
+          <input class="form-control text-mono" value="${esc(f.read_only_depends_on||'')}" oninput="fieldUpd(${f._id},'read_only_depends_on',this.value)">
         </div>
       </div>
     </div>
 
-    <div style="padding:10px 0;display:flex;gap:6px">
-      <button class="btn btn-secondary btn-sm w-100" onclick="showTypePicker(this,${f._id})">+ Insert Below</button>
-      <button class="btn btn-danger btn-sm" onclick="removeField(${f._id})">✕</button>
+    <div style="padding:8px 0;display:flex;gap:6px">
+      <button class="btn btn-danger btn-sm w-100" onclick="removeField(${f._id})">🗑 Remove Field</button>
     </div>
-    ` : `
-    <div style="padding:10px 0;display:flex;gap:6px">
-      <button class="btn btn-secondary btn-sm w-100" onclick="showTypePicker(this,${f._id})">+ Insert Below</button>
-      <button class="btn btn-danger btn-sm" onclick="removeField(${f._id})">✕</button>
-    </div>
-    `}
   </div>`;
 }
 
-function togglePS(id) {
-  const s = document.getElementById(id);
-  if (!s) return;
-  s.classList.toggle('collapsed');
-  const t = s.querySelector('.toggle');
-  if (t) t.textContent = s.classList.contains('collapsed') ? '▸' : '▾';
+function togglePS(id){
+  const body=document.getElementById(id+'-body');
+  const hd=document.getElementById(id)?.querySelector('.prop-section-hd span:last-child');
+  if(!body) return;
+  const hidden=body.style.display==='none';
+  body.style.display=hidden?'':'none';
+  if(hd) hd.textContent=hidden?'▾':'▸';
 }
 
-function propUpd(id, key, val) {
-  const f = fields.find(f=>f._id===id); if(!f) return;
-  f[key] = val;
-  // Live update table cell
-  const row = document.querySelector(`tr[data-id="${id}"]`);
-  if (key==='bold' && row) {
-    const inp = row.querySelector('.cell-input'); if(inp) inp.style.fontWeight = val?'700':'';
-    const chk = row.querySelectorAll('.cell-check')[1]; if(chk) chk.checked = val;
+function fieldUpd(fid,key,val){
+  const f=getField(fid); if(!f) return;
+  f[key]=val;
+  if(key==='label'){
+    document.getElementById('props-title').textContent=val||f.fieldtype;
+    const el=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-label`);
+    if(el){el.textContent=val; el.style.fontWeight=f.bold?'700':'';}
   }
-  if (key==='required') updateBadge();
-  // update props title
-  if (key==='label') document.getElementById('props-title').textContent = val||f.fieldtype;
-  markDirty();
-}
-
-function propLabelChg(id, label) {
-  const f = fields.find(f=>f._id===id); if(!f) return;
-  f.label = label;
-  const fn = snake(label)||f.fieldname;
-  f.fieldname = fn;
-  const fnInp = document.getElementById('prop-fn-inp');
-  if (fnInp) fnInp.value = fn;
-  // update table row
-  const row = document.querySelector(`tr[data-id="${id}"]`);
-  if (row) {
-    const inputs = row.querySelectorAll('.cell-input');
-    if (inputs[0]) inputs[0].value = label;
-    if (inputs[1]) inputs[1].value = fn;
+  if(key==='bold'){
+    const el=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-label`);
+    if(el) el.style.fontWeight=val?'700':'';
   }
-  document.getElementById('props-title').textContent = label||f.fieldtype;
+  if(key==='required'){
+    const req=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-req`);
+    if(val&&!req){const sp=document.createElement('span');sp.className='fi-req';sp.textContent='*';document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-type`).after(sp);}
+    else if(!val&&req) req.remove();
+  }
   markDirty();
 }
 
-function propChgType(id, type) {
-  const f = fields.find(f=>f._id===id); if(!f) return;
-  f.fieldtype = type;
-  renderTable(); selectField(id); markDirty();
+function propLabelChg(fid,label){
+  const f=getField(fid); if(!f) return;
+  f.label=label;
+  const fn=snake(label)||f.fieldname;
+  f.fieldname=fn;
+  const fnInp=document.getElementById('prop-fn'); if(fnInp) fnInp.value=fn;
+  document.getElementById('props-title').textContent=label||f.fieldtype;
+  const el=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-label`); if(el) el.textContent=label;
+  const nm=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-name`); if(nm) nm.textContent=fn;
+  markDirty();
 }
 
-// ── form name sync ────────────────────────────────────────────────────────────
-document.getElementById('form-name').addEventListener('input', function() {
-  document.getElementById('canvas-title').textContent = this.value;
+function propChgType(fid,type){
+  const f=getField(fid); if(!f) return;
+  f.fieldtype=type;
+  const ti=TMAP[type]||{icon:'📝'};
+  const el=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-icon`); if(el) el.textContent=ti.icon;
+  const tb=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-type`); if(tb) tb.textContent=type;
+  document.getElementById('props-type-badge').textContent=type;
+  renderProps(f);
   markDirty();
+}
+
+document.getElementById('form-name').addEventListener('input',function(){
+  document.getElementById('canvas-title').textContent=this.value; markDirty();
 });
 
-// ── dirty / save ──────────────────────────────────────────────────────────────
-function markDirty() {
-  dirty = true;
-  document.getElementById('dirty-indicator').style.display = '';
+function markDirty(){
+  dirty=true; document.getElementById('dirty-dot').style.display='';
 }
 
-async function saveForm() {
-  const name    = document.getElementById('form-name').value.trim();
-  const version = document.getElementById('form-ver').value.trim() || '1.0.0';
-  if (!name) { toast('Form name is required','error'); return; }
-
-  const schema = { fields: fields.map(({_id,...rest})=>rest), settings };
-  const btn = document.getElementById('save-btn');
-  const orig = btn.innerHTML;
-  btn.innerHTML = '⏳ Saving…'; btn.disabled = true;
-
-  try {
-    if (window.FORM_META.id) {
-      await apiFetch(`${API}/form-types/${window.FORM_META.id}`, {method:'PUT', body:{form_name:name,version,schema}});
+async function saveForm(){
+  const name=document.getElementById('form-name').value.trim();
+  const version=document.getElementById('form-ver').value.trim()||'1.0.0';
+  if(!name){toast('Form name is required','error');return;}
+  const schema={fields:exportFields(),settings:{}};
+  const btn=document.getElementById('save-btn');
+  const orig=btn.innerHTML; btn.innerHTML='⏳ Saving…'; btn.disabled=true;
+  try{
+    if(window.FORM_META.id){
+      await apiFetch(`${API}/form-types/${window.FORM_META.id}`,{method:'PUT',body:{form_name:name,version,schema}});
     } else {
-      const ft = await apiFetch(`${API}/form-types`, {method:'POST', body:{form_name:name,stage_id:window.FORM_META.stage_id,version,schema}});
-      window.FORM_META.id = ft.form_type_id;
-      window.history.replaceState({},'',' /form-builder/'+ft.form_type_id);
+      const ft=await apiFetch(`${API}/form-types`,{method:'POST',body:{form_name:name,stage_id:window.FORM_META.stage_id,version,schema}});
+      window.FORM_META.id=ft.form_type_id;
+      window.history.replaceState({},'',`/form-builder/${ft.form_type_id}`);
     }
-    dirty = false;
-    document.getElementById('dirty-indicator').style.display = 'none';
-    toast('Saved','success');
-  } catch(e) {
-    toast(e.message,'error');
-  } finally {
-    btn.innerHTML = orig; btn.disabled = false;
-  }
+    dirty=false; document.getElementById('dirty-dot').style.display='none';
+    toast('Saved successfully','success');
+  } catch(e){ toast(e.message,'error'); }
+  finally{ btn.innerHTML=orig; btn.disabled=false; }
 }
 
-// ── preview ───────────────────────────────────────────────────────────────────
-function previewForm() {
-  const name = document.getElementById('form-name').value;
-  document.getElementById('preview-title').textContent = name + ' — Preview';
-  const body = document.getElementById('preview-body');
-  if (!fields.length) { body.innerHTML='<p style="text-align:center;padding:32px;color:var(--text-muted)">No fields yet.</p>'; openPreview(); return; }
-
-  let html = '<form onsubmit="return false" style="font-size:13px">';
-  let inCols = false;
-
-  fields.forEach(f => {
-    if (f.hidden) return;
-    if (f.fieldtype==='Section Break') {
-      if (inCols){html+='</div></div>';inCols=false;}
+function previewForm(){
+  const name=document.getElementById('form-name').value;
+  document.getElementById('preview-title').textContent=name+' — Preview';
+  const body=document.getElementById('preview-body');
+  const flat=exportFields();
+  if(!flat.filter(f=>!LAYOUT_SET.has(f.fieldtype)).length){
+    body.innerHTML='<p style="text-align:center;padding:32px;color:var(--text-muted)">No fields to preview.</p>';
+    openPreview(); return;
+  }
+  let html='<form onsubmit="return false" style="font-size:13px">';
+  let inCols=false;
+  flat.forEach(f=>{
+    if(f.hidden) return;
+    if(f.fieldtype==='Section Break'){
+      if(inCols){html+='</div></div>';inCols=false;}
       html+=`<div style="border-bottom:2px solid var(--border);padding-bottom:4px;margin:18px 0 14px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${esc(f.label)||'Section'}</div>`;
       return;
     }
-    if (f.fieldtype==='Column Break'){
-      if (!inCols){html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div>';inCols=true;}
+    if(f.fieldtype==='Column Break'){
+      if(!inCols){html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div>';inCols=true;}
       else{html+='</div><div>';}return;
     }
-    if (f.fieldtype==='Tab Break'){
+    if(f.fieldtype==='Tab Break'){
       if(inCols){html+='</div></div>';inCols=false;}
-      html+=`<div style="border-bottom:2px solid var(--primary);padding-bottom:4px;margin:20px 0 14px;color:var(--primary);font-size:13px;font-weight:600">${esc(f.label)||'Tab'}</div>`;return;
+      html+=`<div style="border-bottom:2px solid var(--primary);padding-bottom:4px;margin:24px 0 16px;color:var(--primary);font-size:13px;font-weight:700">${esc(f.label)||'Tab'}</div>`;return;
     }
-    if (f.fieldtype==='Heading'){html+=`<h3 style="font-size:15px;font-weight:700;margin:16px 0 10px">${esc(f.label)}</h3>`;return;}
-    if (f.fieldtype==='HTML'){html+=`<div style="margin-bottom:12px">${f.options||''}</div>`;return;}
-
-    const req  = f.required?`<span style="color:var(--danger)"> *</span>`:'';
-    const hint = f.description?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${esc(f.description)}</div>`:'';
-    const lbl  = `<label style="display:block;font-size:12px;font-weight:${f.bold?'700':'600'};margin-bottom:5px">${esc(f.label)}${req}</label>`;
-    const ro   = f.read_only?'pointer-events:none;opacity:.65':'';
+    if(f.fieldtype==='Heading'){html+=`<h3 style="font-size:15px;font-weight:700;margin:16px 0 10px">${esc(f.label)}</h3>`;return;}
+    if(f.fieldtype==='HTML'){html+=`<div style="margin-bottom:12px">${f.options||''}</div>`;return;}
+    const req=f.required?`<span style="color:var(--danger)"> *</span>`:'';
+    const hint=f.description?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${esc(f.description)}</div>`:'';
+    const lbl=`<label style="display:block;font-size:12px;font-weight:${f.bold?'700':'600'};margin-bottom:5px">${esc(f.label)}${req}</label>`;
+    const ro=f.read_only?'pointer-events:none;opacity:.65':'';
+    const ph=esc(f.placeholder||'');
     let inp='';
     if(f.fieldtype==='Check'){html+=`<div style="margin-bottom:12px;${ro}"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${f.default==='1'?'checked':''}><span>${esc(f.label)}</span></label>${hint}</div>`;return;}
-    const ph = esc(f.placeholder||'');
     switch(f.fieldtype){
       case 'Select':case 'Autocomplete': inp=`<select class="form-control">${(f.options||'').split('\n').filter(Boolean).map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;break;
-      case 'Date':      inp=`<input type="date" class="form-control">`;break;
-      case 'Datetime':  inp=`<input type="datetime-local" class="form-control">`;break;
-      case 'Time':      inp=`<input type="time" class="form-control">`;break;
-      case 'Int':       inp=`<input type="number" step="1" class="form-control" placeholder="${ph}">`;break;
+      case 'Link':case 'Dynamic Link': inp=`<input type="text" class="form-control" placeholder="Search ${esc(f.options||'')}…">`;break;
+      case 'Table':case 'Table MultiSelect': inp=`<div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text-muted);font-size:12px;text-align:center">📋 ${esc(f.options||f.fieldname)}</div>`;break;
+      case 'Date': inp=`<input type="date" class="form-control">`;break;
+      case 'Datetime': inp=`<input type="datetime-local" class="form-control">`;break;
+      case 'Time': inp=`<input type="time" class="form-control">`;break;
+      case 'Int': inp=`<input type="number" step="1" class="form-control" placeholder="${ph}">`;break;
       case 'Float':case 'Currency':case 'Percent': inp=`<input type="number" step="any" class="form-control" placeholder="${ph}">`;break;
-      case 'Password':  inp=`<input type="password" class="form-control" placeholder="${ph}">`;break;
-      case 'Small Text': inp=`<textarea class="form-control" rows="2" placeholder="${ph}">${esc(f.default||'')}</textarea>`;break;
-      case 'Long Text':case 'Text Editor': inp=`<textarea class="form-control" rows="4" placeholder="${ph}">${esc(f.default||'')}</textarea>`;break;
-      case 'Code':case 'JSON': inp=`<textarea class="form-control text-mono" rows="4" style="font-size:12px" placeholder="${ph}"></textarea>`;break;
-      case 'Color':    inp=`<input type="color" style="width:60px;height:34px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer">`;break;
-      case 'Rating':   inp=`<div style="font-size:24px;letter-spacing:2px">⭐⭐⭐⭐⭐</div>`;break;
+      case 'Password': inp=`<input type="password" class="form-control" placeholder="${ph}">`;break;
+      case 'Small Text': inp=`<textarea class="form-control" rows="2" placeholder="${ph}"></textarea>`;break;
+      case 'Long Text':case 'Text Editor': inp=`<textarea class="form-control" rows="4" placeholder="${ph}"></textarea>`;break;
+      case 'Code':case 'JSON': inp=`<textarea class="form-control text-mono" rows="4" style="font-size:12px"></textarea>`;break;
+      case 'Color': inp=`<input type="color" style="width:60px;height:34px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer">`;break;
+      case 'Rating': inp=`<div style="font-size:24px;letter-spacing:2px">⭐⭐⭐⭐⭐</div>`;break;
       case 'Attach':case 'Attach Image': inp=`<input type="file" class="form-control" style="padding:4px">`;break;
       case 'Signature': inp=`<div style="height:72px;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">✒ Click to sign</div>`;break;
-      case 'Link':case 'Dynamic Link': inp=`<input type="text" class="form-control" placeholder="Search ${esc(f.options||'')}…">`;break;
-      case 'Table':case 'Table MultiSelect': inp=`<div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text-muted);font-size:12px;text-align:center">📋 ${esc(f.options||f.fieldname)} (child table)</div>`;break;
-      case 'Duration':  inp=`<input type="text" class="form-control" placeholder="HH:MM:SS">`;break;
+      case 'Duration': inp=`<input type="text" class="form-control" placeholder="HH:MM:SS">`;break;
       case 'Geolocation': inp=`<div style="height:44px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;padding:0 12px;color:var(--text-muted);font-size:12px">📍 Click to pick location</div>`;break;
       default: inp=`<input type="text" class="form-control" value="${esc(f.default||'')}" placeholder="${ph}">`;
     }
@@ -914,21 +884,26 @@ function previewForm() {
     <button class="btn btn-secondary" onclick="closePreview()">Cancel</button>
     <button class="btn btn-primary" type="submit">Submit</button>
   </div></form>`;
-  body.innerHTML = html;
-  openPreview();
+  body.innerHTML=html; openPreview();
 }
 function openPreview(){document.getElementById('preview-modal').classList.add('open');}
 function closePreview(){document.getElementById('preview-modal').classList.remove('open');}
 document.getElementById('preview-modal').addEventListener('click',e=>{if(e.target===document.getElementById('preview-modal'))closePreview();});
 
-// ── keyboard ──────────────────────────────────────────────────────────────────
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveForm();}});
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 
-// ── boot ──────────────────────────────────────────────────────────────────────
-buildTypePicker();
-renderTable();
-if (fields.length) selectField(fields[0]._id);
+async function boot(){
+  await loadAvailableFormTypes();
+  const flat=window.FORM_DATA.fields||[];
+  if(flat.length){
+    importFields(flat);
+  } else {
+    canvas=[mkSection()];
+  }
+  renderCanvas();
+}
+boot();
 </script>
 </body>
 </html>
