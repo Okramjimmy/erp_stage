@@ -261,8 +261,13 @@ const LINK_SET=new Set(['Link','Dynamic Link','Table','Table MultiSelect']);
 
 let availableFormTypes = [];
 async function loadAvailableFormTypes(){
-  try { availableFormTypes = await apiFetch(`${API}/form-types?limit=200`); }
-  catch(e){ availableFormTypes=[]; }
+  try { availableFormTypes = await apiFetch(`${API}/form-types?limit=500`); }
+  catch(e){ availableFormTypes=[]; console.error('Failed to load form types:', e); }
+}
+async function reloadFTDropdown(fid){
+  await loadAvailableFormTypes();
+  const f = getField(fid);
+  if(f) renderProps(f);
 }
 
 // canvas = [{type:'tab'|'section', ...}]
@@ -638,14 +643,17 @@ function renderProps(f){
       <div class="form-hint">Field in this form whose value is the target Form Type</div>
     </div>`;
   } else if(isLink){
-    const ftOpts=availableFormTypes.map(ft=>`<option value="${esc(ft.form_name)}"${f.options===ft.form_name?' selected':''}>${esc(ft.form_name)}</option>`).join('');
+    const noForms = availableFormTypes.length === 0;
+    const ftOpts = availableFormTypes.map(ft =>
+      `<option value="${esc(ft.form_name)}"${f.options===ft.form_name?' selected':''}>${esc(ft.form_name)}${ft.form_path?' — '+esc(ft.form_path):''}</option>`
+    ).join('');
     optField=`<div class="form-group">
       <label class="form-label">Link Form Type</label>
-      <select class="form-control" onchange="fieldUpd(${f._id},'options',this.value)">
-        <option value="">— Select a Form Type —</option>
+      <select class="form-control" onchange="fieldUpd(${f._id},'options',this.value)" id="link-ft-select-${f._id}">
+        <option value="">${noForms ? '⏳ Loading…' : '— Select a Form Type —'}</option>
         ${ftOpts}
       </select>
-      <div class="form-hint">Form Type this field links to</div>
+      ${noForms ? `<div class="form-hint" style="color:var(--warning)">No form types found. <a href="#" onclick="reloadFTDropdown(${f._id});return false">Reload</a></div>` : '<div class="form-hint">Form Type this field links to</div>'}
     </div>`;
   } else if(f.fieldtype==='HTML'){
     optField=`<div class="form-group">
