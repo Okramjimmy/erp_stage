@@ -63,9 +63,7 @@ class FormTypeService:
             stage_id=form_data.stage_id,
             form_path=form_path,
             version=form_data.version,
-            schema_reference=json.dumps(form_data.schema)
-            if form_data.schema is not None
-            else None,
+            schema_reference=form_data.schema,  # JSONB accepts dict directly
             created_by=created_by,
         )
 
@@ -102,17 +100,8 @@ class FormTypeService:
         if not form_type:
             return None
 
-        response = FormTypeWithSchema.model_validate(form_type)
-        # Parse schema if available
-        if form_type.schema_reference:
-            import json
-
-            try:
-                response.schema_data = json.loads(form_type.schema_reference)
-            except Exception as e:
-                logger.error(f"Failed to parse schema for {form_type_id}: {e}")
-
-        return response
+        # JSONB returns dict directly, no parsing needed
+        return FormTypeWithSchema.model_validate(form_type)
 
     async def get_form_types_by_stage(
         self, stage_id: str, skip: int = 0, limit: int = 100
@@ -169,7 +158,7 @@ class FormTypeService:
             form_type.version = form_data.version
 
         if form_data.schema is not None:
-            form_type.schema_reference = json.dumps(form_data.schema)
+            form_type.schema_reference = form_data.schema  # JSONB accepts dict directly
 
         await self.db.commit()
         await self.db.refresh(form_type)

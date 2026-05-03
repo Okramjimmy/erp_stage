@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -24,7 +24,7 @@ class FormType(Base):
 
     # Versioning
     version = Column(String(20), nullable=False, default="1.0.0")
-    schema_reference = Column(Text)
+    schema_reference = Column(JSON, nullable=True)
 
     # Timestamps
     created_by = Column(String(100))
