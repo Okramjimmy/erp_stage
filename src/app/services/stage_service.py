@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -281,125 +282,137 @@ class StageService:
         return [StageResponse.model_validate(stage) for stage in stages]
 
     async def move_stage(
-        self, stage_id: str, target_parent_id: str, user_id: Optional[str] = None
+        self, stage_id: str, target_parent_id: Optional[str] = None, user_id: Optional[str] = None
     ) -> StageMoveResponse:
-        """Move stage with all descendants to new parent."""
+    
         import time
-
         start_time = time.time()
-
-        # Get stage to move
-        stage_result = await self.db.execute(
-            select(Stage).where(Stage.stage_id == stage_id)
-        )
-        stage = stage_result.scalar_one_or_none()
-
+    
+        # --- helpers ---
+        def build_path(parent_path: str, name: str) -> str:
+            if not parent_path or parent_path == "/":
+                return f"/{name}"
+            return f"{parent_path}/{name}"
+    
+        # --- fetch nodes ---
+        stage = await self.db.get(Stage, stage_id)
         if not stage:
             raise ValueError(f"Stage {stage_id} not found")
-
-        # Get target parent
-        parent_result = await self.db.execute(
-            select(Stage).where(Stage.stage_id == target_parent_id)
+    
+        target_parent = None
+        if target_parent_id:
+            target_parent = await self.db.get(Stage, target_parent_id)
+            if not target_parent:
+                raise ValueError(f"Target parent {target_parent_id} not found")
+        
+            if stage_id == target_parent_id:
+                raise ValueError("Cannot move stage to itself")
+        
+            # --- prevent circular move ---
+            if stage_id in target_parent.lineage_path:
+                raise ValueError("Cannot move a node into its own descendant")
+                
+            target_lineage = target_parent.lineage_path
+            target_path = target_parent.stage_path
+            target_depth = target_parent.depth_level
+        else:
+            target_lineage = []
+            target_path = ""
+            target_depth = -1
+    
+        old_parent_id = stage.parent_stage_id
+    
+        # --- fetch descendants (IMPORTANT: must be actual Stage models) ---
+        descendants_result = await self.db.execute(
+            select(Stage).where(
+                text(":id = ANY(lineage_path)").bindparams(id=stage_id)
+            )
         )
-        target_parent = parent_result.scalar_one_or_none()
+        descendants = descendants_result.scalars().all()
+    
+        old_path = stage.stage_path
+        new_path = build_path(target_path, stage.stage_name)
+    
+        # --- update stage ---
+        stage.parent_stage_id = target_parent_id if target_parent_id else None
+        stage.stage_path = new_path
+        
+        # Lineage is the path OF ancestors, so we append target_parent_id (not stage.stage_id)
+        if target_parent_id:
+            stage.lineage_path = target_lineage + [target_parent_id]
+        else:
+            stage.lineage_path = []
+            
+        # recalculate depth level
+        stage.depth_level = len(stage.lineage_path)
+    
+        # --- update descendants ---
+        for d in descendants:
+            # update lineage
+            idx = d.lineage_path.index(stage_id)
+            d.lineage_path = (
+                stage.lineage_path
+                + [stage_id]
+                + d.lineage_path[idx + 1 :]
+            )
+    
+            # SAFE path update (prefix replace only)
+            if d.stage_path.startswith(old_path):
+                suffix = d.stage_path[len(old_path):]
+                d.stage_path = new_path + suffix
+    
+            # recalculate depth level
+            d.depth_level = len(d.lineage_path)
+    
+        # We must flush the pending changes to the database so the COUNT queries
+        # in the recompute function see the newly moved parent_stage_ids.
+        await self.db.flush()
 
-        if not target_parent:
-            raise ValueError(f"Target parent {target_parent_id} not found")
-
-        # Check for circular reference - prevent any stage from moving to its own descendant
-        if target_parent_id in stage.lineage_path:
-            raise ValueError(f"Cannot move stage '{stage.stage_name}' to its own descendant '{target_parent.stage_name}'")
-
-        # NEW: Prevent root stages (depth 0) from moving to their descendants
-        # For root stages, we need to check if target_parent is in the root's subtree
-        if stage.depth_level == 0:
-            # Get all descendants of this root stage
-            root_descendants_result = await self.db.execute(
-                select(Stage).where(
-                    text(":stage_id = ANY(lineage_path)").bindparams(stage_id=stage.stage_id)
+        # --- recompute children counts + flags ---
+        async def recompute(node_id: Optional[str]):
+            if not node_id:
+                return
+    
+            node = await self.db.get(Stage, node_id)
+            if not node:
+                return
+    
+            result = await self.db.execute(
+                select(func.count(Stage.stage_id)).where(
+                    Stage.parent_stage_id == node_id
                 )
             )
-            root_descendants = [d.stage_id for d in root_descendants_result.scalars().all()]
-
-            # Check if target parent is a descendant of this root stage
-            if target_parent_id in root_descendants:
-                raise ValueError(f"Cannot move root stage '{stage.stage_name}' to its descendant '{target_parent.stage_name}'. Root stages cannot be moved within their own subtree.")
-
-            # Also check if the target stage IS one of the root's descendants
-            # This shouldn't happen due to the circular reference check above, but let's be safe
-            if target_parent_id == stage.stage_id:
-                raise ValueError(f"Cannot move stage to itself")
-
-        # Store old parent info
-        old_parent_id = stage.parent_stage_id
-
-        # Get all descendants
-        descendants = await self.get_descendant_stages(stage_id)
-
-        # Calculate new lineage and paths
-        old_path = stage.stage_path
-        new_path = f"{target_parent.stage_path}/{stage.stage_name}"
-
-        # Update old parent's state (decrement children count)
-        if old_parent_id:
-            old_parent_result = await self.db.execute(
-                select(Stage).where(Stage.stage_id == old_parent_id)
-            )
-            old_parent = old_parent_result.scalar_one_or_none()
-            if old_parent:
-                old_parent.children_count -= 1
-                old_parent.is_leaf = (old_parent.children_count == 0)
-
-        # Update new parent's state (increment children count)
-        target_parent.children_count += 1
-        target_parent.is_leaf = False
-        target_parent.is_root = True  # Target parent becomes a root node
-
-        # Update stage
-        stage.parent_stage_id = target_parent_id
-        stage.stage_path = new_path
-        stage.depth_level = target_parent.depth_level + 1
-        stage.lineage_path = target_parent.lineage_path + [stage.stage_id]
-
-        # Update descendants
-        for descendant in descendants:
-            # Calculate new lineage
-            idx = descendant.lineage_path.index(stage_id)
-            new_lineage = (
-                target_parent.lineage_path
-                + [stage_id]
-                + descendant.lineage_path[idx + 1 :]
-            )
-            descendant.lineage_path = new_lineage
-
-            # Calculate new path
-            new_descendant_path = descendant.stage_path.replace(old_path, new_path)
-            descendant.stage_path = new_descendant_path
-
-            # Update depth
-            descendant.depth_level = (
-                target_parent.depth_level
-                + 1
-                + descendant.depth_level
-                - stage.depth_level
-            )
-
-        # Update form type paths
+            count = result.scalar()
+    
+            node.children_count = count
+            node.is_leaf = (count == 0)
+            node.is_root = (count > 0) or (node.parent_stage_id is None)
+    
+        await recompute(old_parent_id)
+        if target_parent_id:
+            await recompute(target_parent_id)
+    
+        # --- update moved node flags ---
+        await recompute(stage_id)
+    
+        # --- update form paths ---
+        stage_ids = [stage_id] + [d.stage_id for d in descendants]
         affected_form_types = await self._update_form_type_paths(
-            old_path, new_path, [stage_id] + [d.stage_id for d in descendants]
+            old_path, new_path, stage_ids
         )
-
+    
         await self.db.commit()
-
-        # Invalidate caches
+    
+        # --- cache ---
         await cache.invalidate_master_metadata()
         await cache.invalidate_stage_cache(stage_id)
-        await cache.invalidate_stage_cache(target_parent_id)
+        if target_parent_id:
+            await cache.invalidate_stage_cache(target_parent_id)
         if old_parent_id:
             await cache.invalidate_stage_cache(old_parent_id)
-
+    
         duration_ms = (time.time() - start_time) * 1000
-
+    
         return StageMoveResponse(
             stage_id=stage_id,
             old_path=old_path,
@@ -418,8 +431,14 @@ class StageService:
         )
         form_types = result.scalars().all()
 
+        # Use regex to only replace the prefix of form_path, not all occurrences
+        # Escape special regex characters in old_path
+        escaped_old_path = re.escape(old_path)
+        pattern = re.compile(f'^{escaped_old_path}')
+
         for form_type in form_types:
-            form_type.form_path = form_type.form_path.replace(old_path, new_path)
+            # Replace only the prefix (start of string) of form_path
+            form_type.form_path = pattern.sub(new_path, form_type.form_path)
 
         return len(form_types)
 
@@ -490,29 +509,3 @@ class StageService:
             "descendants_count": len(descendants),
             "message": f"Successfully deleted stage '{stage.stage_name}' and {len(descendants)} descendant(s)"
         }
-
-    async def get_all_stages(
-        self, skip: int = 0, limit: int = 100
-    ) -> List[StageResponse]:
-        """Get all stages with pagination."""
-        result = await self.db.execute(
-            select(Stage)
-            .order_by(Stage.depth_level, Stage.stage_name)
-            .offset(skip)
-            .limit(limit)
-        )
-        stages = result.scalars().all()
-
-        return [StageResponse.model_validate(stage) for stage in stages]
-
-    async def search_stages(self, query: str, limit: int = 50) -> List[StageResponse]:
-        """Search stages by name."""
-        result = await self.db.execute(
-            select(Stage)
-            .where(Stage.stage_name.ilike(f"%{query}%"))
-            .order_by(Stage.stage_name)
-            .limit(limit)
-        )
-        stages = result.scalars().all()
-
-        return [StageResponse.model_validate(stage) for stage in stages]
