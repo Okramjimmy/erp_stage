@@ -128,13 +128,14 @@ async def move_stage(
 @router.delete("/{stage_id}")
 async def delete_stage(
     stage_id: str,
-    recursive: bool = Query(False, description="Delete recursively"),
+    recursive: bool = Query(True, description="Delete recursively (default: true)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Delete a stage.
+    Delete a stage and all its descendants recursively.
 
-    - **recursive**: If True, delete all descendants too
+    By default, deleting a stage will delete ALL its children (cascade delete).
+    Set recursive=false to only delete the single stage (use with caution).
     """
     service = StageService(db)
     try:

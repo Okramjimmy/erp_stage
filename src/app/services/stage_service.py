@@ -424,9 +424,9 @@ class StageService:
         return len(form_types)
 
     async def delete_stage(
-        self, stage_id: str, recursive: bool = False
+        self, stage_id: str, recursive: bool = True
     ) -> Dict[str, int]:
-        """Delete stage and optionally all descendants."""
+        """Delete stage and all descendants recursively."""
         # Get stage to delete
         stage_result = await self.db.execute(
             select(Stage).where(Stage.stage_id == stage_id)
@@ -445,6 +445,7 @@ class StageService:
             stage_ids = [d.stage_id for d in descendants] + [stage_id]
         else:
             stage_ids = [stage_id]
+            descendants = []
 
         # Delete stages (cascade will handle form types and permissions)
         for sid in stage_ids:
@@ -473,6 +474,7 @@ class StageService:
                 parent.children_count = remaining_count
                 parent.is_leaf = (remaining_count == 0)
                 # Keep is_root = True as parent was already a root node
+                logger.info(f"Updated parent {parent_id}: children_count={remaining_count}, is_leaf={parent.is_leaf}")
 
         await self.db.commit()
 
@@ -481,7 +483,13 @@ class StageService:
             await cache.invalidate_stage_cache(sid)
         await cache.invalidate_master_metadata()
 
-        return {"deleted_stage_id": stage_id, "deleted_count": len(stage_ids)}
+        return {
+            "deleted_stage_id": stage_id,
+            "deleted_stage_name": stage.stage_name,
+            "deleted_count": len(stage_ids),
+            "descendants_count": len(descendants),
+            "message": f"Successfully deleted stage '{stage.stage_name}' and {len(descendants)} descendant(s)"
+        }
 
     async def get_all_stages(
         self, skip: int = 0, limit: int = 100
