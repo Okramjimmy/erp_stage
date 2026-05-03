@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -58,12 +58,26 @@ class StageService:
             depth_level = parent_stage.depth_level + 1
             stage_path = f"{parent_stage.stage_path}/{stage_data.stage_name}"
 
-        # Check for path conflicts
+        # Check for path conflicts - this also handles root stage creation
         existing = await self.db.execute(
             select(Stage).where(Stage.stage_path == stage_path)
         )
         if existing.scalar_one_or_none():
-            raise ValueError(f"Stage path {stage_path} already exists")
+            raise ValueError(f"Stage path '{stage_path}' already exists. A stage with the name '{stage_data.stage_name}' already exists at this location in the hierarchy.")
+
+        # Additional validation: Check if stage_name would conflict at the root level
+        if not parent_stage:
+            # For root stages, ensure we're not creating a duplicate root-level name
+            root_path_conflict = await self.db.execute(
+                select(Stage).where(
+                    Stage.stage_path == f"/{stage_data.stage_name}")
+            )
+            if root_path_conflict.scalar_one_or_none():
+                raise ValueError(f"A root-level stage named '{stage_data.stage_name}' already exists. Root-stage names must be unique.")
+
+        # Determine root/leaf status
+        is_root = parent_stage is None
+        is_leaf = True  # New stages start as leaf nodes
 
         # Create new stage
         new_stage = Stage(
@@ -74,10 +88,19 @@ class StageService:
             depth_level=depth_level,
             lineage_path=lineage_path,
             visibility_scope=stage_data.visibility_scope,
+            is_root=is_root,
+            is_leaf=is_leaf,
             created_by=created_by,
         )
 
         self.db.add(new_stage)
+
+        # If this is a child stage, update parent's state
+        if parent_stage:
+            parent_stage.is_root = True  # Set parent as root if it has children
+            parent_stage.is_leaf = False  # Parent is no longer a leaf
+            parent_stage.children_count += 1
+
         await self.db.commit()
         await self.db.refresh(new_stage)
 
@@ -174,7 +197,7 @@ class StageService:
             descendants_result = await self.db.execute(
                 select(Stage)
                 .where(
-                    (Stage.lineage_path.contains([root_stage_id]))
+                    (text(":root_id = ANY(lineage_path)").bindparams(root_id=root_stage_id))
                     | (Stage.stage_id == root_stage_id)
                 )
                 .order_by(Stage.depth_level, Stage.stage_name)
@@ -241,7 +264,11 @@ class StageService:
         self, ancestor_stage_id: str, max_depth: Optional[int] = None
     ) -> List[StageResponse]:
         """Get all descendant stages using lineage."""
-        query = select(Stage).where(ancestor_stage_id == Stage.lineage_path[any()])
+        # Use PostgreSQL's array containment operator
+        query = select(Stage).where(
+            text(":ancestor_id = ANY(lineage_path)"
+        ).bindparams(ancestor_id=ancestor_stage_id)
+        )
 
         if max_depth is not None:
             query = query.where(Stage.depth_level <= max_depth)
@@ -279,9 +306,32 @@ class StageService:
         if not target_parent:
             raise ValueError(f"Target parent {target_parent_id} not found")
 
-        # Check for circular reference
+        # Check for circular reference - prevent any stage from moving to its own descendant
         if target_parent_id in stage.lineage_path:
-            raise ValueError("Cannot move stage to its own descendant")
+            raise ValueError(f"Cannot move stage '{stage.stage_name}' to its own descendant '{target_parent.stage_name}'")
+
+        # NEW: Prevent root stages (depth 0) from moving to their descendants
+        # For root stages, we need to check if target_parent is in the root's subtree
+        if stage.depth_level == 0:
+            # Get all descendants of this root stage
+            root_descendants_result = await self.db.execute(
+                select(Stage).where(
+                    text(":stage_id = ANY(lineage_path)").bindparams(stage_id=stage.stage_id)
+                )
+            )
+            root_descendants = [d.stage_id for d in root_descendants_result.scalars().all()]
+
+            # Check if target parent is a descendant of this root stage
+            if target_parent_id in root_descendants:
+                raise ValueError(f"Cannot move root stage '{stage.stage_name}' to its descendant '{target_parent.stage_name}'. Root stages cannot be moved within their own subtree.")
+
+            # Also check if the target stage IS one of the root's descendants
+            # This shouldn't happen due to the circular reference check above, but let's be safe
+            if target_parent_id == stage.stage_id:
+                raise ValueError(f"Cannot move stage to itself")
+
+        # Store old parent info
+        old_parent_id = stage.parent_stage_id
 
         # Get all descendants
         descendants = await self.get_descendant_stages(stage_id)
@@ -289,6 +339,21 @@ class StageService:
         # Calculate new lineage and paths
         old_path = stage.stage_path
         new_path = f"{target_parent.stage_path}/{stage.stage_name}"
+
+        # Update old parent's state (decrement children count)
+        if old_parent_id:
+            old_parent_result = await self.db.execute(
+                select(Stage).where(Stage.stage_id == old_parent_id)
+            )
+            old_parent = old_parent_result.scalar_one_or_none()
+            if old_parent:
+                old_parent.children_count -= 1
+                old_parent.is_leaf = (old_parent.children_count == 0)
+
+        # Update new parent's state (increment children count)
+        target_parent.children_count += 1
+        target_parent.is_leaf = False
+        target_parent.is_root = True  # Target parent becomes a root node
 
         # Update stage
         stage.parent_stage_id = target_parent_id
@@ -329,6 +394,9 @@ class StageService:
         # Invalidate caches
         await cache.invalidate_master_metadata()
         await cache.invalidate_stage_cache(stage_id)
+        await cache.invalidate_stage_cache(target_parent_id)
+        if old_parent_id:
+            await cache.invalidate_stage_cache(old_parent_id)
 
         duration_ms = (time.time() - start_time) * 1000
 
@@ -359,6 +427,18 @@ class StageService:
         self, stage_id: str, recursive: bool = False
     ) -> Dict[str, int]:
         """Delete stage and optionally all descendants."""
+        # Get stage to delete
+        stage_result = await self.db.execute(
+            select(Stage).where(Stage.stage_id == stage_id)
+        )
+        stage = stage_result.scalar_one_or_none()
+
+        if not stage:
+            raise ValueError(f"Stage {stage_id} not found")
+
+        # Store parent info for later update
+        parent_id = stage.parent_stage_id
+
         if recursive:
             # Get all descendants
             descendants = await self.get_descendant_stages(stage_id)
@@ -367,13 +447,32 @@ class StageService:
             stage_ids = [stage_id]
 
         # Delete stages (cascade will handle form types and permissions)
-        for stage_id in stage_ids:
+        for sid in stage_ids:
             result = await self.db.execute(
-                select(Stage).where(Stage.stage_id == stage_id)
+                select(Stage).where(Stage.stage_id == sid)
             )
-            stage = result.scalar_one_or_none()
-            if stage:
-                await self.db.delete(stage)
+            s = result.scalar_one_or_none()
+            if s:
+                await self.db.delete(s)
+
+        # Update parent's state if stage had a parent
+        if parent_id:
+            parent_result = await self.db.execute(
+                select(Stage).where(Stage.stage_id == parent_id)
+            )
+            parent = parent_result.scalar_one_or_none()
+            if parent:
+                # Check if parent still has remaining children
+                remaining_children_result = await self.db.execute(
+                    select(func.count(Stage.stage_id)).where(
+                        Stage.parent_stage_id == parent_id
+                    )
+                )
+                remaining_count = remaining_children_result.scalar()
+
+                parent.children_count = remaining_count
+                parent.is_leaf = (remaining_count == 0)
+                # Keep is_root = True as parent was already a root node
 
         await self.db.commit()
 
