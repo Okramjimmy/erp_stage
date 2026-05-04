@@ -129,6 +129,7 @@ async def move_stage(
 async def delete_stage(
     stage_id: str,
     recursive: bool = Query(True, description="Delete recursively (default: true)"),
+    preview: bool = Query(False, description="Return preview of what would be deleted without actually deleting"),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -136,10 +137,13 @@ async def delete_stage(
 
     By default, deleting a stage will delete ALL its children (cascade delete).
     Set recursive=false to only delete the single stage (use with caution).
+
+    Set preview=true to see what would be deleted without actually deleting it.
+    This returns a detailed list of stages and form types that would be affected.
     """
     service = StageService(db)
     try:
-        result = await service.delete_stage(stage_id, recursive=recursive)
+        result = await service.delete_stage(stage_id, recursive=recursive, preview=preview)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

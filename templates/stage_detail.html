@@ -1,183 +1,289 @@
-{% extends "base.html" %}
-{% block title %}{{ stage.stage_name }} — ERP Stage Builder{% endblock %}
+{% extends "base.html" %} {% block title %}{{ stage.stage_name }} — ERP Stage
+Builder{% endblock %} {% block content %}
 
-{% block content %}
-
-<!-- Breadcrumb -->
 <div class="breadcrumb">
-  <a href="/">Home</a>
-  {% for ancestor in breadcrumb %}
+    <a href="/">Home</a>
+    {% for ancestor in breadcrumb %}
     <span class="sep">›</span>
     <a href="/stages/{{ ancestor.stage_id }}">{{ ancestor.stage_name }}</a>
-  {% endfor %}
-  <span class="sep">›</span>
-  <span class="current">{{ stage.stage_name }}</span>
+    {% endfor %}
+    <span class="sep">›</span>
+    <span class="current">{{ stage.stage_name }}</span>
 </div>
 
-<!-- Page Header -->
 <div class="page-header">
-  <div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <div class="page-title" id="stage-title-display">{{ stage.stage_name }}</div>
-      {% if stage.is_root %}<span class="badge badge-blue">root</span>{% endif %}
-      {% if stage.is_leaf %}<span class="badge badge-green">leaf</span>{% endif %}
-      {% if stage.visibility_scope == 'public' %}
-        <span class="badge badge-green">{{ stage.visibility_scope }}</span>
-      {% elif stage.visibility_scope == 'restricted' %}
-        <span class="badge badge-orange">{{ stage.visibility_scope }}</span>
-      {% else %}
-        <span class="badge badge-gray">{{ stage.visibility_scope }}</span>
-      {% endif %}
+    <div>
+        <div style="display: flex; align-items: center; gap: 10px">
+            <div class="page-title" id="stage-title-display">
+                {{ stage.stage_name }}
+            </div>
+            {% if stage.is_root %}<span class="badge badge-blue">root</span>{% endif %}
+            {% if stage.is_leaf %}<span class="badge badge-green">leaf</span>{% endif %}
+            
+            {% if stage.visibility_scope == 'public' %}
+            <span class="badge badge-green">{{ stage.visibility_scope }}</span>
+            {% elif stage.visibility_scope == 'restricted' %}
+            <span class="badge badge-orange">{{ stage.visibility_scope }}</span>
+            {% else %}
+            <span class="badge badge-gray">{{ stage.visibility_scope }}</span>
+            {% endif %}
+        </div>
+        <div class="page-subtitle">
+            <code style="font-size: 12px">{{ stage.stage_path }}</code>
+        </div>
     </div>
-    <div class="page-subtitle"><code style="font-size:12px">{{ stage.stage_path }}</code></div>
-  </div>
-  <div class="page-actions">
-    <button class="btn btn-secondary btn-sm" onclick="openEditStageModal()">✏️ Edit</button>
-    <button class="btn btn-secondary btn-sm" onclick="openMoveModal()">↕️ Move</button>
-    <button class="btn btn-primary btn-sm" onclick="openCreateFormModal()">+ New Form Type</button>
-    <button class="btn btn-danger btn-sm" onclick="deleteThisStage()">🗑 Delete</button>
-  </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openEditStageModal()">
+            ✏️ Edit
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openMoveModal()">
+            ↕️ Move
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openCreateFormModal()">
+            + New Form Type
+        </button>
+        <button
+            class="btn btn-danger btn-sm"
+            onclick="showDeletePreview('{{ stage.stage_id }}','{{ stage.stage_name }}')"
+        >
+            🗑 Delete
+        </button>
+    </div>
 </div>
 
-<!-- Metrics -->
-<div class="stat-grid" style="margin-bottom:20px">
-  <div class="stat-card">
-    <div class="stat-icon blue">🏠</div>
-    <div class="stat-label">Depth Level</div>
-    <div class="stat-value">{{ stage.depth_level }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-icon green">📂</div>
-    <div class="stat-label">Direct Children</div>
-    <div class="stat-value">{{ stage.children_count }}</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-icon orange">📋</div>
-    <div class="stat-label">Form Types</div>
-    <div class="stat-value">{{ stage.formtype_count }}</div>
-  </div>
+<div class="stat-grid" style="margin-bottom: 20px">
+    <div class="stat-card">
+        <div class="stat-icon blue">🏠</div>
+        <div class="stat-label">Depth Level</div>
+        <div class="stat-value">{{ stage.depth_level }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green">📂</div>
+        <div class="stat-label">Direct Children</div>
+        <div class="stat-value">{{ stage.children_count }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange">📋</div>
+        <div class="stat-label">Form Types</div>
+        <div class="stat-value">{{ stage.formtype_count }}</div>
+    </div>
 </div>
 
-<!-- Tabs -->
 <div class="tabs">
-  <button class="tab-btn active" onclick="switchTab('forms', this)">Form Types ({{ form_types | length }})</button>
-  <button class="tab-btn" onclick="switchTab('children', this)">Child Stages ({{ children | length }})</button>
-  <button class="tab-btn" onclick="switchTab('permissions', this)">Permissions</button>
-  <button class="tab-btn" onclick="switchTab('meta', this)">Metadata</button>
+    <button class="tab-btn active" onclick="switchTab('forms', this)">
+        Form Types ({{ form_types | length }})
+    </button>
+    <button class="tab-btn" onclick="switchTab('children', this)">
+        Child Stages ({{ children | length }})
+    </button>
+    <button class="tab-btn" onclick="switchTab('permissions', this)">
+        Permissions
+    </button>
+    <button class="tab-btn" onclick="switchTab('meta', this)">Metadata</button>
 </div>
 
-<!-- Tab: Form Types -->
 <div class="tab-pane active" id="tab-forms">
-  {% if form_types %}
+    {% if form_types %}
     <div class="form-grid">
-      {% for ft in form_types %}
-      <div class="form-card" onclick="window.location='/form-builder/{{ ft.form_type_id }}'">
-        <div class="form-card-header">
-          <div class="form-card-icon">📋</div>
-          <div>
-            <div class="form-card-name">{{ ft.form_name }}</div>
-            <div class="form-card-meta">v{{ ft.version }} · {{ ft.form_type_id }}</div>
-          </div>
+        {% for ft in form_types %}
+        <div
+            class="form-card"
+            onclick="window.location='/form-builder/{{ ft.form_type_id }}'"
+        >
+            <div class="form-card-header">
+                <div class="form-card-icon">📋</div>
+                <div>
+                    <div class="form-card-name">{{ ft.form_name }}</div>
+                    <div class="form-card-meta">
+                        v{{ ft.version }} · {{ ft.form_type_id }}
+                    </div>
+                </div>
+            </div>
+            <div
+                style="
+                    font-size: 11px;
+                    color: var(--text-muted);
+                    font-family: monospace;
+                    margin-bottom: 10px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                "
+            >
+                {{ ft.form_path }}
+            </div>
+            <div class="form-card-actions" onclick="event.stopPropagation()">
+                <a
+                    href="/forms/{{ ft.form_type_id }}/new"
+                    class="btn btn-sm btn-primary"
+                    >+ New Record</a
+                >
+                <a
+                    href="/forms/{{ ft.form_type_id }}"
+                    class="btn btn-sm btn-secondary"
+                    >List</a
+                >
+                <a
+                    href="/form-builder/{{ ft.form_type_id }}"
+                    class="btn btn-sm btn-secondary"
+                    >✏️ Build</a
+                >
+                <a
+                    href="/workflow-builder/{{ ft.form_type_id }}"
+                    class="btn btn-sm btn-secondary"
+                    >⚙ Workflow</a
+                >
+                <button
+                    class="btn btn-sm btn-danger"
+                    onclick="deleteForm('{{ ft.form_type_id }}','{{ ft.form_name }}')"
+                >
+                    Delete
+                </button>
+            </div>
         </div>
-        <div style="font-size:11px;color:var(--text-muted);font-family:monospace;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ft.form_path }}</div>
-        <div class="form-card-actions" onclick="event.stopPropagation()">
-          <a href="/forms/{{ ft.form_type_id }}/new" class="btn btn-sm btn-primary">+ New Record</a>
-          <a href="/forms/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">List</a>
-          <a href="/form-builder/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">✏️ Build</a>
-          <a href="/workflow-builder/{{ ft.form_type_id }}" class="btn btn-sm btn-secondary">⚙ Workflow</a>
-          <button class="btn btn-sm btn-danger" onclick="deleteForm('{{ ft.form_type_id }}','{{ ft.form_name }}')">Delete</button>
-        </div>
-      </div>
-      {% endfor %}
+        {% endfor %}
     </div>
-  {% else %}
+    {% else %}
     <div class="empty-state">
-      <div class="empty-icon">📋</div>
-      <h3>No form types yet</h3>
-      <p>Form types define the fields and schema for data entry at this stage.</p>
-      <button class="btn btn-primary" onclick="openCreateFormModal()">+ Create Form Type</button>
+        <div class="empty-icon">📋</div>
+        <h3>No form types yet</h3>
+        <p>
+            Form types define the fields and schema for data entry at this
+            stage.
+        </p>
+        <button class="btn btn-primary" onclick="openCreateFormModal()">
+            + Create Form Type
+        </button>
     </div>
-  {% endif %}
+    {% endif %}
 </div>
 
-<!-- Tab: Children -->
 <div class="tab-pane" id="tab-children">
-  {% if children %}
+    {% if children %}
     <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Path</th>
-            <th>Depth</th>
-            <th>Children</th>
-            <th>Forms</th>
-            <th>Visibility</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for child in children %}
-          <tr>
-            <td><a href="/stages/{{ child.stage_id }}" style="font-weight:600">{{ child.stage_name }}</a></td>
-            <td><code style="font-size:11px">{{ child.stage_path }}</code></td>
-            <td>{{ child.depth_level }}</td>
-            <td>{{ child.children_count }}</td>
-            <td>{{ child.formtype_count }}</td>
-            <td>
-              {% if child.visibility_scope == 'public' %}
-                <span class="badge badge-green">public</span>
-              {% elif child.visibility_scope == 'restricted' %}
-                <span class="badge badge-orange">restricted</span>
-              {% else %}
-                <span class="badge badge-gray">private</span>
-              {% endif %}
-            </td>
-            <td>
-              <div class="d-flex gap-1">
-                <a href="/stages/{{ child.stage_id }}" class="btn btn-xs btn-secondary">View</a>
-                <button class="btn btn-xs btn-danger" onclick="deleteStage('{{ child.stage_id }}','{{ child.stage_name }}')">Delete</button>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Path</th>
+                    <th>Depth</th>
+                    <th>Children</th>
+                    <th>Forms</th>
+                    <th>Visibility</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for child in children %}
+                <tr>
+                    <td>
+                        <a
+                            href="/stages/{{ child.stage_id }}"
+                            style="font-weight: 600"
+                            >{{ child.stage_name }}</a
+                        >
+                    </td>
+                    <td>
+                        <code style="font-size: 11px"
+                            >{{ child.stage_path }}</code
+                        >
+                    </td>
+                    <td>{{ child.depth_level }}</td>
+                    <td>{{ child.children_count }}</td>
+                    <td>{{ child.formtype_count }}</td>
+                    <td>
+                        {% if child.visibility_scope == 'public' %}
+                        <span class="badge badge-green">public</span>
+                        {% elif child.visibility_scope == 'restricted' %}
+                        <span class="badge badge-orange">restricted</span>
+                        {% else %}
+                        <span class="badge badge-gray">private</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a
+                                href="/stages/{{ child.stage_id }}"
+                                class="btn btn-xs btn-secondary"
+                                >View</a
+                            >
+                            <button
+                                class="btn btn-xs btn-danger"
+                                onclick="showDeletePreview('{{ child.stage_id }}','{{ child.stage_name }}')"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-    <div style="margin-top:14px">
-      <button class="btn btn-secondary btn-sm" onclick="openCreateChildModal()">+ Add Child Stage</button>
+    <div style="margin-top: 14px">
+        <button
+            class="btn btn-secondary btn-sm"
+            onclick="openCreateChildModal()"
+        >
+            + Add Child Stage
+        </button>
     </div>
-  {% else %}
+    {% else %}
     <div class="empty-state">
-      <div class="empty-icon">📂</div>
-      <h3>No child stages</h3>
-      <p>This stage has no children. Add a child stage to build hierarchy.</p>
-      <button class="btn btn-primary" onclick="openCreateChildModal()">+ Add Child Stage</button>
+        <div class="empty-icon">📂</div>
+        <h3>No child stages</h3>
+        <p>This stage has no children. Add a child stage to build hierarchy.</p>
+        <button class="btn btn-primary" onclick="openCreateChildModal()">
+            + Add Child Stage
+        </button>
     </div>
-  {% endif %}
+    {% endif %}
 </div>
 
-<!-- Tab: Permissions -->
 <div class="tab-pane" id="tab-permissions">
-  <div class="card card-sm">
-    <div class="card-header">
-      <div class="card-title">Role Permissions</div>
-      <button class="btn btn-sm btn-primary" onclick="openGrantModal()">+ Grant Permission</button>
+    <div class="card card-sm">
+        <div class="card-header">
+            <div class="card-title">Role Permissions</div>
+            <button class="btn btn-sm btn-primary" onclick="openGrantModal()">
+                + Grant Permission
+            </button>
+        </div>
+        <div id="permissions-container">
+            <div
+                style="
+                    color: var(--text-muted);
+                    font-size: 13px;
+                    padding: 8px 0;
+                "
+            >
+                Loading permissions…
+            </div>
+        </div>
     </div>
-    <div id="permissions-container">
-      <div style="color:var(--text-muted);font-size:13px;padding:8px 0">Loading permissions…</div>
-    </div>
-  </div>
 </div>
 
-<!-- Tab: Metadata -->
 <div class="tab-pane" id="tab-meta">
-  <div class="card card-sm">
-    <div class="card-header">
-      <div class="card-title">Stage Metadata</div>
-      <button class="btn btn-sm btn-secondary" onclick="copyMeta()">Copy JSON</button>
-    </div>
-    <pre id="meta-json" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:12px;overflow-x:auto;white-space:pre-wrap;max-height:500px">{{ {
+    <div class="card card-sm">
+        <div class="card-header">
+            <div class="card-title">Stage Metadata</div>
+            <button class="btn btn-sm btn-secondary" onclick="copyMeta()">
+                Copy JSON
+            </button>
+        </div>
+        <pre
+            id="meta-json"
+            style="
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: var(--radius);
+                padding: 16px;
+                font-size: 12px;
+                overflow-x: auto;
+                white-space: pre-wrap;
+                max-height: 500px;
+            "
+        >
+{{ {
       'stage_id': stage.stage_id,
       'stage_name': stage.stage_name,
       'stage_path': stage.stage_path,
@@ -192,302 +298,604 @@
       'created_at': stage.created_at | string,
       'updated_at': stage.updated_at | string
     } | tojson(indent=2) }}</pre>
-  </div>
+    </div>
 </div>
 
-<!-- ─── Modals ───────────────────────────────────────────── -->
-
-<!-- Create Form Modal -->
 <div class="modal-overlay" id="create-form-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">Create Form Type</span>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('create-form-modal')">✕</button>
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Create Form Type</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('create-form-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label required">Form Name</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="new-form-name"
+                    placeholder="e.g. Application Form"
+                />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Version</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="new-form-version"
+                    value="1.0.0"
+                    placeholder="1.0.0"
+                />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('create-form-modal')"
+            >
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="createForm()">
+                Create & Open Builder
+            </button>
+        </div>
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label required">Form Name</label>
-        <input type="text" class="form-control" id="new-form-name" placeholder="e.g. Application Form">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Version</label>
-        <input type="text" class="form-control" id="new-form-version" value="1.0.0" placeholder="1.0.0">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('create-form-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="createForm()">Create & Open Builder</button>
-    </div>
-  </div>
 </div>
 
-<!-- Create Child Stage Modal -->
 <div class="modal-overlay" id="create-child-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">Add Child Stage</span>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('create-child-modal')">✕</button>
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Add Child Stage</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('create-child-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label required">Stage Name</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="child-stage-name"
+                    placeholder="e.g. Screening"
+                />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Visibility</label>
+                <select class="form-control" id="child-stage-visibility">
+                    <option value="private">Private</option>
+                    <option value="public">Public</option>
+                    <option value="restricted">Restricted</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('create-child-modal')"
+            >
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="createChildStage()">
+                Create Stage
+            </button>
+        </div>
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label required">Stage Name</label>
-        <input type="text" class="form-control" id="child-stage-name" placeholder="e.g. Screening">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Visibility</label>
-        <select class="form-control" id="child-stage-visibility">
-          <option value="private">Private</option>
-          <option value="public">Public</option>
-          <option value="restricted">Restricted</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('create-child-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="createChildStage()">Create Stage</button>
-    </div>
-  </div>
 </div>
 
-<!-- Edit Stage Modal -->
 <div class="modal-overlay" id="edit-stage-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">Edit Stage</span>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('edit-stage-modal')">✕</button>
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Edit Stage</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('edit-stage-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label required">Stage Name</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="edit-stage-name"
+                    value="{{ stage.stage_name }}"
+                />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Visibility</label>
+                <select class="form-control" id="edit-stage-visibility">
+                    <option value="private" {% if stage.visibility_scope == 'private' %}selected{% endif %}>
+                        Private
+                    </option>
+                    <option value="public" {% if stage.visibility_scope == 'public' %}selected{% endif %}>
+                        Public
+                    </option>
+                    <option value="restricted" {% if stage.visibility_scope == 'restricted' %}selected{% endif %}>
+                        Restricted
+                    </option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('edit-stage-modal')"
+            >
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="saveStageEdit()">
+                Save Changes
+            </button>
+        </div>
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label required">Stage Name</label>
-        <input type="text" class="form-control" id="edit-stage-name" value="{{ stage.stage_name }}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Visibility</label>
-        <select class="form-control" id="edit-stage-visibility">
-          <option value="private" {% if stage.visibility_scope == 'private' %}selected{% endif %}>Private</option>
-          <option value="public" {% if stage.visibility_scope == 'public' %}selected{% endif %}>Public</option>
-          <option value="restricted" {% if stage.visibility_scope == 'restricted' %}selected{% endif %}>Restricted</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('edit-stage-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveStageEdit()">Save Changes</button>
-    </div>
-  </div>
 </div>
 
-<!-- Move Stage Modal -->
 <div class="modal-overlay" id="move-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">Move Stage</span>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('move-modal')">✕</button>
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Move Stage</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('move-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">New Parent Stage</label>
+                <select class="form-control" id="move-target">
+                    {% for s in all_stages %}
+                    <option value="{{ s.stage_id }}">{{ s.stage_path }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-hint">
+                Moving will update all descendant paths and lineage.
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('move-modal')"
+            >
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="moveStage()">
+                Move Stage
+            </button>
+        </div>
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label">New Parent Stage</label>
-        <select class="form-control" id="move-target">
-          {% for s in all_stages %}
-          <option value="{{ s.stage_id }}">{{ s.stage_path }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-hint">Moving will update all descendant paths and lineage.</div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('move-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="moveStage()">Move Stage</button>
-    </div>
-  </div>
 </div>
 
-<!-- Grant Permission Modal -->
 <div class="modal-overlay" id="grant-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title">Grant Permission</span>
-      <button class="btn btn-ghost btn-icon" onclick="closeModal('grant-modal')">✕</button>
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Grant Permission</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('grant-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label required">Role Name</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="grant-role"
+                    placeholder="e.g. hr_manager"
+                />
+            </div>
+            <div
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"
+            >
+                <label class="form-check"
+                    ><input type="checkbox" id="perm-view" checked /><span
+                        >View</span
+                    ></label
+                >
+                <label class="form-check"
+                    ><input type="checkbox" id="perm-create" /><span
+                        >Create</span
+                    ></label
+                >
+                <label class="form-check"
+                    ><input type="checkbox" id="perm-edit" /><span
+                        >Edit</span
+                    ></label
+                >
+                <label class="form-check"
+                    ><input type="checkbox" id="perm-delete" /><span
+                        >Delete</span
+                    ></label
+                >
+                <label class="form-check"
+                    ><input type="checkbox" id="perm-manage" /><span
+                        >Manage Permissions</span
+                    ></label
+                >
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('grant-modal')"
+            >
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="grantPermission()">
+                Grant
+            </button>
+        </div>
     </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label class="form-label required">Role Name</label>
-        <input type="text" class="form-control" id="grant-role" placeholder="e.g. hr_manager">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <label class="form-check"><input type="checkbox" id="perm-view" checked><span>View</span></label>
-        <label class="form-check"><input type="checkbox" id="perm-create"><span>Create</span></label>
-        <label class="form-check"><input type="checkbox" id="perm-edit"><span>Edit</span></label>
-        <label class="form-check"><input type="checkbox" id="perm-delete"><span>Delete</span></label>
-        <label class="form-check"><input type="checkbox" id="perm-manage"><span>Manage Permissions</span></label>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('grant-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="grantPermission()">Grant</button>
-    </div>
-  </div>
 </div>
 
-{% endblock %}
+<div class="modal-overlay" id="delete-preview-modal">
+    <div class="modal" style="max-width: 600px">
+        <div class="modal-header">
+            <span class="modal-title">🗑 Delete Confirmation</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('delete-preview-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <p>
+                Are you sure you want to delete
+                <strong id="delete-target-name"></strong>?
+            </p>
+            <div class="alert alert-warning" style="margin-top: 12px">
+                <strong>⚠ This will also delete:</strong>
+                <ul
+                    id="delete-preview-list"
+                    style="
+                        margin: 8px 0 0 20px;
+                        max-height: 300px;
+                        overflow-y: auto;
+                    "
+                >
+                    </ul>
+            </div>
+            <div class="form-check" style="margin-top: 12px">
+                <input type="checkbox" id="confirm-delete" checked />
+                <label class="form-check" for="confirm-delete"
+                    ><span
+                        >I understand this action cannot be undone</span
+                    ></label
+                >
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('delete-preview-modal')"
+            >
+                Cancel
+            </button>
+            <button
+                class="btn btn-danger"
+                id="confirm-delete-btn"
+                disabled
+                onclick="executeDelete()"
+            >
+                Delete Permanently
+            </button>
+        </div>
+    </div>
+</div>
 
-{% block extra_js %}
+{% endblock %} {% block extra_js %}
 <script>
-const STAGE_ID = '{{ stage.stage_id }}';
+    const STAGE_ID = "{{ stage.stage_id }}";
 
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
-  if (name === 'permissions') loadPermissions();
-}
+    function switchTab(name, btn) {
+        document
+            .querySelectorAll(".tab-pane")
+            .forEach((p) => p.classList.remove("active"));
+        document
+            .querySelectorAll(".tab-btn")
+            .forEach((b) => b.classList.remove("active"));
+        document.getElementById("tab-" + name).classList.add("active");
+        btn.classList.add("active");
+        if (name === "permissions") loadPermissions();
+    }
 
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-overlay').forEach(m => {
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
-});
-
-function openCreateFormModal() { openModal('create-form-modal'); }
-function openCreateChildModal() { openModal('create-child-modal'); }
-function openEditStageModal() { openModal('edit-stage-modal'); }
-function openMoveModal() { openModal('move-modal'); }
-function openGrantModal() { openModal('grant-modal'); }
-
-async function createForm() {
-  const name = document.getElementById('new-form-name').value.trim();
-  const version = document.getElementById('new-form-version').value.trim() || '1.0.0';
-  if (!name) { toast('Form name is required', 'error'); return; }
-  try {
-    const ft = await apiFetch(`${API}/form-types`, {
-      method: 'POST',
-      body: { form_name: name, stage_id: STAGE_ID, version, schema: { fields: [], settings: {} } }
+    function openModal(id) {
+        document.getElementById(id).classList.add("open");
+    }
+    function closeModal(id) {
+        document.getElementById(id).classList.remove("open");
+    }
+    document.querySelectorAll(".modal-overlay").forEach((m) => {
+        m.addEventListener("click", (e) => {
+            if (e.target === m) m.classList.remove("open");
+        });
     });
-    toast('Form type created', 'success');
-    closeModal('create-form-modal');
-    window.location = `/form-builder/${ft.form_type_id}`;
-  } catch(e) { toast(e.message, 'error'); }
-}
 
-async function createChildStage() {
-  const name = document.getElementById('child-stage-name').value.trim();
-  const visibility = document.getElementById('child-stage-visibility').value;
-  if (!name) { toast('Stage name is required', 'error'); return; }
-  try {
-    await apiFetch(`${API}/stages`, {
-      method: 'POST',
-      body: { stage_name: name, parent_stage_id: STAGE_ID, visibility_scope: visibility }
-    });
-    toast('Child stage created', 'success');
-    closeModal('create-child-modal');
-    setTimeout(() => location.reload(), 600);
-  } catch(e) { toast(e.message, 'error'); }
-}
+    function openCreateFormModal() {
+        openModal("create-form-modal");
+    }
+    function openCreateChildModal() {
+        openModal("create-child-modal");
+    }
+    function openEditStageModal() {
+        openModal("edit-stage-modal");
+    }
+    function openMoveModal() {
+        openModal("move-modal");
+    }
+    function openGrantModal() {
+        openModal("grant-modal");
+    }
 
-async function saveStageEdit() {
-  const name = document.getElementById('edit-stage-name').value.trim();
-  const visibility = document.getElementById('edit-stage-visibility').value;
-  try {
-    await apiFetch(`${API}/stages/${STAGE_ID}`, {
-      method: 'PUT',
-      body: { stage_name: name, visibility_scope: visibility }
-    });
-    toast('Stage updated', 'success');
-    closeModal('edit-stage-modal');
-    setTimeout(() => location.reload(), 600);
-  } catch(e) { toast(e.message, 'error'); }
-}
+    async function createForm() {
+        const name = document.getElementById("new-form-name").value.trim();
+        const version =
+            document.getElementById("new-form-version").value.trim() || "1.0.0";
+        if (!name) {
+            toast("Form name is required", "error");
+            return;
+        }
+        try {
+            const ft = await apiFetch(`${API}/form-types`, {
+                method: "POST",
+                body: {
+                    form_name: name,
+                    stage_id: STAGE_ID,
+                    version,
+                    schema: { fields: [], settings: {} },
+                },
+            });
+            toast("Form type created", "success");
+            closeModal("create-form-modal");
+            window.location = `/form-builder/${ft.form_type_id}`;
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
 
-async function moveStage() {
-  const target = document.getElementById('move-target').value;
-  try {
-    await apiFetch(`${API}/stages/${STAGE_ID}/move`, {
-      method: 'POST', body: { target_parent_id: target }
-    });
-    toast('Stage moved', 'success');
-    closeModal('move-modal');
-    setTimeout(() => location.reload(), 600);
-  } catch(e) { toast(e.message, 'error'); }
-}
+    async function createChildStage() {
+        const name = document.getElementById("child-stage-name").value.trim();
+        const visibility = document.getElementById(
+            "child-stage-visibility",
+        ).value;
+        if (!name) {
+            toast("Stage name is required", "error");
+            return;
+        }
+        try {
+            await apiFetch(`${API}/stages`, {
+                method: "POST",
+                body: {
+                    stage_name: name,
+                    parent_stage_id: STAGE_ID,
+                    visibility_scope: visibility,
+                },
+            });
+            toast("Child stage created", "success");
+            closeModal("create-child-modal");
+            setTimeout(() => location.reload(), 600);
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
 
-async function deleteThisStage() {
-  if (!confirm('Delete this stage and all its form types? This cannot be undone.')) return;
-  try {
-    await apiFetch(`${API}/stages/${STAGE_ID}`, { method: 'DELETE' });
-    toast('Stage deleted', 'success');
-    setTimeout(() => window.location = '/', 600);
-  } catch(e) { toast(e.message, 'error'); }
-}
+    async function saveStageEdit() {
+        const name = document.getElementById("edit-stage-name").value.trim();
+        const visibility = document.getElementById(
+            "edit-stage-visibility",
+        ).value;
+        try {
+            await apiFetch(`${API}/stages/${STAGE_ID}`, {
+                method: "PUT",
+                body: { stage_name: name, visibility_scope: visibility },
+            });
+            toast("Stage updated", "success");
+            closeModal("edit-stage-modal");
+            setTimeout(() => location.reload(), 600);
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
 
-async function deleteStage(id, name) {
-  if (!confirm(`Delete stage "${name}"?`)) return;
-  try {
-    await apiFetch(`${API}/stages/${id}`, { method: 'DELETE' });
-    toast('Stage deleted', 'success');
-    setTimeout(() => location.reload(), 600);
-  } catch(e) { toast(e.message, 'error'); }
-}
+    async function moveStage() {
+        const target = document.getElementById("move-target").value;
+        try {
+            await apiFetch(`${API}/stages/${STAGE_ID}/move`, {
+                method: "POST",
+                body: { target_parent_id: target },
+            });
+            toast("Stage moved", "success");
+            closeModal("move-modal");
+            setTimeout(() => location.reload(), 600);
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
 
-async function deleteForm(id, name) {
-  if (!confirm(`Delete form type "${name}"?`)) return;
-  try {
-    await apiFetch(`${API}/form-types/${id}`, { method: 'DELETE' });
-    toast('Form type deleted', 'success');
-    setTimeout(() => location.reload(), 600);
-  } catch(e) { toast(e.message, 'error'); }
-}
+    async function deleteThisStage() {
+        pendingDeleteId = STAGE_ID;
+        pendingDeleteName = "Current Stage";
+        await showDeletePreview(STAGE_ID, "Current Stage");
+    }
 
-async function cloneForm(id, name) {
-  try {
-    const src = await apiFetch(`${API}/form-types/${id}/schema`);
-    const newName = name + ' (Copy)';
-    const ft = await apiFetch(`${API}/form-types`, {
-      method: 'POST',
-      body: { form_name: newName, stage_id: STAGE_ID, version: src.version, schema: src.schema_data || { fields: [], settings: {} } }
-    });
-    toast('Form cloned', 'success');
-    setTimeout(() => location.reload(), 600);
-  } catch(e) { toast(e.message, 'error'); }
-}
+    // Show deletion preview - fetches what will be deleted from API
+    async function showDeletePreview(id, name) {
+        const modalId = "delete-preview-modal";
+        pendingDeleteId = id;
+        pendingDeleteName = name;
+        document.getElementById("delete-target-name").textContent = name;
 
-async function loadPermissions() {
-  // Load permissions from API
-  const container = document.getElementById('permissions-container');
-  try {
-    const data = await apiFetch(`${API}/metadata/stages/${STAGE_ID}`).catch(() => null);
-    container.innerHTML = `
+        // Get deletion preview from API
+        try {
+            const response = await apiFetch(
+                `${API}/stages/${id}?recursive=true&preview=true`,
+                { method: "DELETE" },
+            );
+            // console.log("Delete preview response:", response);
+
+            const previewList = document.getElementById("delete-preview-list");
+            let html = "";
+
+            // Add form types
+            if (response.form_types && response.form_types.length > 0) {
+                html +=
+                    "<li><strong>" +
+                    response.form_types.length +
+                    " Form Type(s):</strong></li>";
+                response.form_types.forEach((ft) => {
+                    html += `<li>${ft.form_name} <small style="color:#888">(v${ft.version})</small></li>`;
+                });
+            } else {
+                html += "<li>No form types found.</li>";
+            }
+
+            // Add descendant stages
+            if (response.descendants && response.descendants.length > 0) {
+                html +=
+                    "<li><strong>" +
+                    response.descendants.length +
+                    " Child Stage(s):</strong></li>";
+                response.descendants.forEach((desc) => {
+                    html += `<li>${desc.stage_name} <small style="color:#888">(${desc.stage_path})</small></li>`;
+                });
+            } else {
+                html += "<li>No child stages found.</li>";
+            }
+
+            previewList.innerHTML = html;
+            document.getElementById("confirm-delete-btn").disabled = false;
+            openModal(modalId);
+        } catch (e) {
+            toast("Error loading delete preview: " + e.message, "error");
+        }
+    }
+
+    let pendingDeleteId = null;
+    let pendingDeleteName = null;
+
+    async function executeDelete() {
+        if (!document.getElementById("confirm-delete").checked) {
+            toast(
+                "Please confirm you understand this action cannot be undone",
+                "error",
+            );
+            return;
+        }
+
+        if (!pendingDeleteId) {
+            toast("No stage selected for deletion", "error");
+            return;
+        }
+
+        closeModal("delete-preview-modal");
+
+        try {
+            await apiFetch(`${API}/stages/${pendingDeleteId}?recursive=true`, {
+                method: "DELETE",
+            });
+            toast("Stage and descendants deleted successfully", "success");
+            setTimeout(() => window.location = `/`, 800);
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    async function deleteForm(id, name) {
+        if (!confirm(`Delete form type "${name}"?`)) return;
+        try {
+            await apiFetch(`${API}/form-types/${id}`, { method: "DELETE" });
+            toast("Form type deleted", "success");
+            setTimeout(() => location.reload(), 600);
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    async function cloneForm(id, name) {
+        try {
+            const src = await apiFetch(`${API}/form-types/${id}/schema`);
+            const newName = name + " (Copy)";
+            const ft = await apiFetch(`${API}/form-types`, {
+                method: "POST",
+                body: {
+                    form_name: newName,
+                    stage_id: STAGE_ID,
+                    version: src.version,
+                    schema: src.schema_data || { fields: [], settings: {} },
+                },
+            });
+            toast("Form cloned", "success");
+            setTimeout(() => location.reload(), 600);
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    async function loadPermissions() {
+        // Load permissions from API
+        const container = document.getElementById("permissions-container");
+        try {
+            const data = await apiFetch(
+                `${API}/metadata/stages/${STAGE_ID}`,
+            ).catch(() => null);
+            container.innerHTML = `
       <p style="color:var(--text-muted);font-size:13px">
         Use the Grant Permission button to add roles. Permissions are inherited through stage lineage.
       </p>`;
-  } catch(e) {
-    container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions.</p>`;
-  }
-}
+        } catch (e) {
+            container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions.</p>`;
+        }
+    }
 
-async function grantPermission() {
-  const role = document.getElementById('grant-role').value.trim();
-  if (!role) { toast('Role name is required', 'error'); return; }
-  const body = {
-    role_name: role,
-    can_view: document.getElementById('perm-view').checked,
-    can_create: document.getElementById('perm-create').checked,
-    can_edit: document.getElementById('perm-edit').checked,
-    can_delete: document.getElementById('perm-delete').checked,
-    can_manage_permissions: document.getElementById('perm-manage').checked,
-    granted_by: 'system'
-  };
-  try {
-    await apiFetch(`${API}/permissions/stages/${STAGE_ID}`, { method: 'POST', body });
-    toast('Permission granted', 'success');
-    closeModal('grant-modal');
-  } catch(e) { toast(e.message, 'error'); }
-}
+    async function grantPermission() {
+        const role = document.getElementById("grant-role").value.trim();
+        if (!role) {
+            toast("Role name is required", "error");
+            return;
+        }
+        const body = {
+            role_name: role,
+            can_view: document.getElementById("perm-view").checked,
+            can_create: document.getElementById("perm-create").checked,
+            can_edit: document.getElementById("perm-edit").checked,
+            can_delete: document.getElementById("perm-delete").checked,
+            can_manage_permissions:
+                document.getElementById("perm-manage").checked,
+            granted_by: "system",
+        };
+        try {
+            await apiFetch(`${API}/permissions/stages/${STAGE_ID}`, {
+                method: "POST",
+                body,
+            });
+            toast("Permission granted", "success");
+            closeModal("grant-modal");
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
 
-function copyMeta() {
-  const txt = document.getElementById('meta-json').textContent;
-  navigator.clipboard.writeText(txt);
-  toast('Copied to clipboard');
-}
+    function copyMeta() {
+        const txt = document.getElementById("meta-json").textContent;
+        navigator.clipboard.writeText(txt);
+        toast("Copied to clipboard");
+    }
 </script>
 {% endblock %}

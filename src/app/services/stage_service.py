@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -33,6 +34,31 @@ class StageService:
     def generate_stage_id(prefix: str = "stage") -> str:
         """Generate unique stage ID."""
         return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+    async def _recompute_node_stats(self, node_id: Optional[str]) -> None:
+        """
+        Universally recalculate children_count, is_leaf, and is_root 
+        based strictly on the database truth to prevent any drift.
+        """
+        if not node_id:
+            return
+
+        node = await self.db.get(Stage, node_id)
+        if not node:
+            return
+
+        # Explicitly count direct children in the database
+        result = await self.db.execute(
+            select(func.count(Stage.stage_id)).where(
+                Stage.parent_stage_id == node_id
+            )
+        )
+        count = result.scalar() or 0
+
+        node.children_count = count
+        node.is_leaf = (count == 0)
+        # A root node is strictly one that has no parent
+        node.is_root = (count > 0) or (node.parent_stage_id is None)
 
     async def create_stage(
         self, stage_data: StageCreate, created_by: Optional[str] = None
@@ -68,7 +94,6 @@ class StageService:
 
         # Additional validation: Check if stage_name would conflict at the root level
         if not parent_stage:
-            # For root stages, ensure we're not creating a duplicate root-level name
             root_path_conflict = await self.db.execute(
                 select(Stage).where(
                     Stage.stage_path == f"/{stage_data.stage_name}")
@@ -95,12 +120,12 @@ class StageService:
         )
 
         self.db.add(new_stage)
+        # Flush so the new stage is readable by the recompute function
+        await self.db.flush()
 
-        # If this is a child stage, update parent's state
+        # Update parent's state based strictly on DB count
         if parent_stage:
-            parent_stage.is_root = True  # Set parent as root if it has children
-            parent_stage.is_leaf = False  # Parent is no longer a leaf
-            parent_stage.children_count += 1
+            await self._recompute_node_stats(parent_stage.stage_id)
 
         await self.db.commit()
         await self.db.refresh(new_stage)
@@ -267,8 +292,7 @@ class StageService:
         """Get all descendant stages using lineage."""
         # Use PostgreSQL's array containment operator
         query = select(Stage).where(
-            text(":ancestor_id = ANY(lineage_path)"
-        ).bindparams(ancestor_id=ancestor_stage_id)
+            text(":ancestor_id = ANY(lineage_path)").bindparams(ancestor_id=ancestor_stage_id)
         )
 
         if max_depth is not None:
@@ -284,30 +308,29 @@ class StageService:
     async def move_stage(
         self, stage_id: str, target_parent_id: Optional[str] = None, user_id: Optional[str] = None
     ) -> StageMoveResponse:
-    
-        import time
+        
         start_time = time.time()
-    
+        
         # --- helpers ---
         def build_path(parent_path: str, name: str) -> str:
             if not parent_path or parent_path == "/":
                 return f"/{name}"
             return f"{parent_path}/{name}"
-    
+        
         # --- fetch nodes ---
         stage = await self.db.get(Stage, stage_id)
         if not stage:
             raise ValueError(f"Stage {stage_id} not found")
-    
+        
         target_parent = None
         if target_parent_id:
             target_parent = await self.db.get(Stage, target_parent_id)
             if not target_parent:
                 raise ValueError(f"Target parent {target_parent_id} not found")
-        
+            
             if stage_id == target_parent_id:
                 raise ValueError("Cannot move stage to itself")
-        
+            
             # --- prevent circular move ---
             if stage_id in target_parent.lineage_path:
                 raise ValueError("Cannot move a node into its own descendant")
@@ -364,36 +387,17 @@ class StageService:
             # recalculate depth level
             d.depth_level = len(d.lineage_path)
     
-        # We must flush the pending changes to the database so the COUNT queries
-        # in the recompute function see the newly moved parent_stage_ids.
+        # Flush the pending parent modifications BEFORE recalculating stats
         await self.db.flush()
 
-        # --- recompute children counts + flags ---
-        async def recompute(node_id: Optional[str]):
-            if not node_id:
-                return
-    
-            node = await self.db.get(Stage, node_id)
-            if not node:
-                return
-    
-            result = await self.db.execute(
-                select(func.count(Stage.stage_id)).where(
-                    Stage.parent_stage_id == node_id
-                )
-            )
-            count = result.scalar()
-    
-            node.children_count = count
-            node.is_leaf = (count == 0)
-            node.is_root = (count > 0) or (node.parent_stage_id is None)
-    
-        await recompute(old_parent_id)
+        # --- recompute children counts + flags using centralized helper ---
+        if old_parent_id:
+            await self._recompute_node_stats(old_parent_id)
         if target_parent_id:
-            await recompute(target_parent_id)
+            await self._recompute_node_stats(target_parent_id)
     
         # --- update moved node flags ---
-        await recompute(stage_id)
+        await self._recompute_node_stats(stage_id)
     
         # --- update form paths ---
         stage_ids = [stage_id] + [d.stage_id for d in descendants]
@@ -432,20 +436,27 @@ class StageService:
         form_types = result.scalars().all()
 
         # Use regex to only replace the prefix of form_path, not all occurrences
-        # Escape special regex characters in old_path
         escaped_old_path = re.escape(old_path)
         pattern = re.compile(f'^{escaped_old_path}')
 
         for form_type in form_types:
-            # Replace only the prefix (start of string) of form_path
             form_type.form_path = pattern.sub(new_path, form_type.form_path)
 
         return len(form_types)
 
     async def delete_stage(
-        self, stage_id: str, recursive: bool = True
-    ) -> Dict[str, int]:
-        """Delete stage and all descendants recursively."""
+        self, stage_id: str, recursive: bool = True, preview: bool = False
+    ) -> Dict[str, Any]:
+        """Delete stage and all descendants recursively.
+
+        Args:
+            stage_id: The ID of the stage to delete
+            recursive: If True, delete all descendants. If False, delete only the stage.
+            preview: If True, return what would be deleted without actually deleting.
+
+        Returns:
+            Dictionary with delete results or preview data.
+        """
         # Get stage to delete
         stage_result = await self.db.execute(
             select(Stage).where(Stage.stage_id == stage_id)
@@ -461,10 +472,54 @@ class StageService:
         if recursive:
             # Get all descendants
             descendants = await self.get_descendant_stages(stage_id)
+            # IMPORTANT: Put descendants first to prevent foreign key cascade errors
             stage_ids = [d.stage_id for d in descendants] + [stage_id]
         else:
             stage_ids = [stage_id]
             descendants = []
+
+        # Get form types for preview
+        form_types = []
+        if preview:
+            # Get form types for all stages that would be deleted
+            from src.app.models.form_type import FormType
+            result = await self.db.execute(
+                select(FormType).where(FormType.stage_id.in_(stage_ids))
+            )
+            form_types = result.scalars().all()
+
+        if preview:
+            # Return preview of what would be deleted
+            return {
+                "preview": True,
+                "stage_to_delete": {
+                    "stage_id": stage.stage_id,
+                    "stage_name": stage.stage_name,
+                    "stage_path": stage.stage_path,
+                    "depth_level": stage.depth_level,
+                },
+                "descendants": [
+                    {
+                        "stage_id": d.stage_id,
+                        "stage_name": d.stage_name,
+                        "stage_path": d.stage_path,
+                        "depth_level": d.depth_level,
+                    }
+                    for d in descendants
+                ],
+                "form_types": [
+                    {
+                        "form_type_id": f.form_type_id,
+                        "form_name": f.form_name,
+                        "form_path": f.form_path,
+                        "version": f.version,
+                    }
+                    for f in form_types
+                ],
+                "total_stages": len(stage_ids),
+                "total_form_types": len(form_types),
+                "total_items": len(stage_ids) + len(form_types),
+            }
 
         # Delete stages (cascade will handle form types and permissions)
         for sid in stage_ids:
@@ -475,25 +530,13 @@ class StageService:
             if s:
                 await self.db.delete(s)
 
-        # Update parent's state if stage had a parent
-        if parent_id:
-            parent_result = await self.db.execute(
-                select(Stage).where(Stage.stage_id == parent_id)
-            )
-            parent = parent_result.scalar_one_or_none()
-            if parent:
-                # Check if parent still has remaining children
-                remaining_children_result = await self.db.execute(
-                    select(func.count(Stage.stage_id)).where(
-                        Stage.parent_stage_id == parent_id
-                    )
-                )
-                remaining_count = remaining_children_result.scalar()
+        # Explicitly flush pending deletes to the database transaction
+        await self.db.flush()
 
-                parent.children_count = remaining_count
-                parent.is_leaf = (remaining_count == 0)
-                # Keep is_root = True as parent was already a root node
-                logger.info(f"Updated parent {parent_id}: children_count={remaining_count}, is_leaf={parent.is_leaf}")
+        # Update parent's state if stage had a parent based on DB count
+        if parent_id:
+            await self._recompute_node_stats(parent_id)
+            logger.info(f"Updated parent {parent_id} stats after deletion.")
 
         await self.db.commit()
 
@@ -507,5 +550,6 @@ class StageService:
             "deleted_stage_name": stage.stage_name,
             "deleted_count": len(stage_ids),
             "descendants_count": len(descendants),
+            "deleted_form_types": len(form_types),
             "message": f"Successfully deleted stage '{stage.stage_name}' and {len(descendants)} descendant(s)"
         }
