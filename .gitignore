@@ -10,7 +10,8 @@ venv/
 env/
 .pytest_cache/
 .mypy_cache/
-storage/
 *.log
 postgres_data/
 redis_data/
+graphify*
+*.md
