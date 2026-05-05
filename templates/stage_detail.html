@@ -39,9 +39,20 @@ Builder{% endblock %} {% block content %}
         <button class="btn btn-secondary btn-sm" onclick="openMoveModal()">
             ↕️ Move
         </button>
-        <button class="btn btn-primary btn-sm" onclick="openCreateFormModal()">
-            + New Form Type
-        </button>
+        <div class="navbar-dropdown-container" style="position: relative; display: inline-block;">
+            <button class="btn btn-primary btn-sm" id="btn-new-dropdown" onclick="toggleNewDropdown()" style="display: flex; align-items: center; gap: 4px;">
+                + New
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+            <div id="new-dropdown-menu" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 4px; background: white; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); width: 160px; z-index: 1000;">
+                <a href="#" class="dropdown-item" onclick="openCreateChildModal(); toggleNewDropdown(); return false;" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px;">
+                    <span style="color: var(--text-muted);">+</span> New Stage
+                </a>
+                <a href="#" class="dropdown-item" onclick="openCreateFormModal(); toggleNewDropdown(); return false;" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px;">
+                    <span style="color: var(--text-muted);">📄</span> New Form Type
+                </a>
+            </div>
+        </div>
         <button
             class="btn btn-danger btn-sm"
             onclick="showDeletePreview('{{ stage.stage_id }}','{{ stage.stage_name }}')"
@@ -300,6 +311,59 @@ Builder{% endblock %} {% block content %}
     } | tojson(indent=2) }}</pre>
     </div>
 </div>
+
+<!-- Drive View -->
+<div id="drive-view-container" style="display: none; margin-top: 20px;">
+    <div class="form-grid">
+        {% for child in children %}
+        <div class="form-card" onclick="window.location='/stages/{{ child.stage_id }}'" style="border: 2px solid var(--border); box-shadow: none;">
+            <div class="form-card-header" style="align-items: center; margin-bottom: 0;">
+                <div class="form-card-icon" style="background: transparent; color: var(--text-muted); font-size: 24px; margin-right: 8px;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div>
+                    <div class="form-card-name" style="font-size: 15px;">{{ child.stage_name }}</div>
+                </div>
+                <div class="ml-auto" style="color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation();">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% for ft in form_types %}
+        <div class="form-card" onclick="window.location='/form-builder/{{ ft.form_type_id }}'" style="border: 1px solid var(--border); box-shadow: none;">
+            <div class="form-card-header" style="align-items: center; margin-bottom: 0;">
+                <div class="form-card-icon" style="background: transparent; color: var(--primary); font-size: 24px; margin-right: 8px;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="fill: var(--primary-light);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                </div>
+                <div>
+                    <div class="form-card-name" style="font-size: 15px;">{{ ft.form_name }}</div>
+                </div>
+                <div class="ml-auto" style="color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation();">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% if not children and not form_types %}
+        <div class="empty-state" style="grid-column: 1 / -1;">
+            <div class="empty-icon">📂</div>
+            <h3>Drive is empty</h3>
+            <p>Add a child stage or form type to get started.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        if (localStorage.getItem("drive-view") === "true") {
+            document.querySelectorAll('.stat-grid, .tabs, .tab-pane').forEach(el => el.style.display = 'none');
+            const driveView = document.getElementById("drive-view-container");
+            if(driveView) driveView.style.display = 'block';
+        }
+    });
+</script>
 
 <div class="modal-overlay" id="create-form-modal">
     <div class="modal">
@@ -603,6 +667,19 @@ Builder{% endblock %} {% block content %}
 {% endblock %} {% block extra_js %}
 <script>
     const STAGE_ID = "{{ stage.stage_id }}";
+    
+    // Dropdown Toggle
+    function toggleNewDropdown() {
+        const menu = document.getElementById("new-dropdown-menu");
+        menu.style.display = menu.style.display === "none" ? "block" : "none";
+    }
+    document.addEventListener("click", function (e) {
+        const btn = document.getElementById("btn-new-dropdown");
+        const menu = document.getElementById("new-dropdown-menu");
+        if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+            menu.style.display = "none";
+        }
+    });
 
     function switchTab(name, btn) {
         document

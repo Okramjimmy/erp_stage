@@ -203,8 +203,20 @@ function buildInput(f, val){
       return `<div style="display:flex;gap:2px">${stars}</div>`;
     case 'Attach': case 'Attach Image':
       return `<input type="file" class="form-control" style="padding:4px" onchange="handleFile('${f.fieldname}',this)">`;
-    case 'Link': case 'Dynamic Link': case 'Table': case 'Table MultiSelect':
+    case 'Dynamic Link': case 'Table': case 'Table MultiSelect':
       return ''; // handled separately
+    case 'Link': {
+      const selId = `link-sel-${f.fieldname}`;
+      const curVal = esc(cur);
+      const roAttr = f.read_only ? 'disabled' : '';
+      const reqAttr = f.required ? 'required' : '';
+      // Render a placeholder select; populate asynchronously
+      setTimeout(() => loadLinkOptions(f.fieldname, f.options, cur), 0);
+      return `<select id="${selId}" class="form-control" onchange="setVal('${f.fieldname}',this.value)" ${roAttr} ${reqAttr}>
+        <option value="">⏳ Loading…</option>
+        ${cur ? `<option value="${curVal}" selected>${curVal}</option>` : ''}
+      </select>`;
+    }
     default:
       return `<input type="text" class="form-control" value="${esc(cur)}" placeholder="${ph}" oninput="setVal('${f.fieldname}',this.value)" ${ro} ${req}>`;
   }
@@ -252,6 +264,39 @@ function buildField(f) {
 }
 
 let _childColsCache = {};
+let _linkCache = {}; // form_type_name -> [{docname, record_id}]
+
+async function loadLinkOptions(fieldname, formTypeName, currentVal) {
+  if (!formTypeName) return;
+  const selId = `link-sel-${fieldname}`;
+  try {
+    let records;
+    if (_linkCache[formTypeName]) {
+      records = _linkCache[formTypeName];
+    } else {
+      // 1. Resolve form type name → ID
+      const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(formTypeName)}&limit=5`);
+      const ft = fts.find(f => f.form_name === formTypeName);
+      if (!ft) throw new Error(`Form type "${formTypeName}" not found`);
+      // 2. Fetch records for that form type
+      const res = await apiFetch(`${API}/form-records?form_type_id=${encodeURIComponent(ft.form_type_id)}&limit=200`);
+      records = res.items || [];
+      _linkCache[formTypeName] = records;
+    }
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const opts = records.map(r =>
+      `<option value="${esc(r.docname)}"${r.docname === currentVal ? ' selected' : ''}>${esc(r.docname)}</option>`
+    ).join('');
+    sel.innerHTML = `<option value="">— Select ${esc(formTypeName)} —</option>${opts}`;
+    // Restore selected value in case it didn't match any option
+    if (currentVal) sel.value = currentVal;
+  } catch(e) {
+    const sel = document.getElementById(selId);
+    if (sel) sel.innerHTML = `<option value="">⚠ Failed to load</option>`;
+    console.error('loadLinkOptions error:', e);
+  }
+}
 
 function renderForm() {
   const fields = SCHEMA.fields || [];

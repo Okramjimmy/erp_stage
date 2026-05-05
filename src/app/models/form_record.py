@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, String, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -17,7 +17,7 @@ class FormRecord(Base):
     )
     docname = Column(String(255), nullable=False, index=True)
     status = Column(String(20), nullable=False, default="Draft")
-    data = Column(Text, nullable=True)
+    data = Column(JSON, nullable=True)
     amended_from = Column(
         String(50), ForeignKey("form_records.record_id"), nullable=True
     )

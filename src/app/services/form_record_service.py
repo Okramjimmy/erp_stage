@@ -44,7 +44,7 @@ class FormRecordService:
         parsed_data = None
         if record.data:
             try:
-                parsed_data = json.loads(record.data)
+                parsed_data = record.data
             except Exception:
                 parsed_data = {}
         return FormRecordResponse.model_validate({
@@ -73,7 +73,7 @@ class FormRecordService:
             form_type_id=payload.form_type_id,
             docname=docname,
             status="Draft",
-            data=json.dumps(payload.data),
+            data=payload.data,
             created_by=payload.created_by,
         )
         self.db.add(record)
@@ -107,7 +107,7 @@ class FormRecordService:
             raise ValueError(f"Record {record_id} not found")
         if record.status not in ("Draft", "Amended"):
             raise ValueError("Only Draft or Amended records can be edited")
-        record.data = json.dumps(payload.data)
+        record.data = payload.data
         await self.db.commit()
         await self.db.refresh(record)
         return self._parse(record)
