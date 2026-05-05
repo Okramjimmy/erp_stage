@@ -6,7 +6,7 @@
         <title>{% block title %}ERP Stage Builder{% endblock %}</title>
         <link
             rel="stylesheet"
-            href="{{ url_for('static', path='/css/main.css') }}"
+            href="{{ url_for('static', path='/app/css/main.css') }}"
         />
         {% block head %}{% endblock %}
     </head>
@@ -38,7 +38,7 @@
             </footer>
         </div>
 
-        <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+        <script src="{{ url_for('static', path='/app/js/main.js') }}"></script>
         {% block scripts %}{% endblock %}
     </body>
 </html>

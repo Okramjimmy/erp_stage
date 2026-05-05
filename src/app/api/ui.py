@@ -10,7 +10,7 @@ from src.app.services.form_record_service import FormRecordService
 from src.app.services.form_type_service import FormTypeService
 from src.app.services.stage_service import StageService
 
-templates = Jinja2Templates(directory="/app/templates")
+templates = Jinja2Templates(directory="/app/src/templates")
 router = APIRouter(tags=["UI"])
 
 

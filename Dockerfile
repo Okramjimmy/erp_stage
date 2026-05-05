@@ -29,8 +29,6 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY src/ ./src/
 COPY database/ ./database/
-COPY static/ ./static/
-COPY templates/ ./templates/
 
 # Set working directory to src
 WORKDIR /app/src

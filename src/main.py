@@ -77,10 +77,10 @@ app.add_middleware(
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="/app/static"), name="static")
+app.mount("/static", StaticFiles(directory="/app/src/static"), name="static")
 
 # Jinja2 Templates
-templates = Jinja2Templates(directory="/app/templates")
+templates = Jinja2Templates(directory="/app/src/templates")
 
 # Include UI routes (before API to avoid catch-all conflicts)
 app.include_router(ui_router.router)

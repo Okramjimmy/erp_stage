@@ -149,6 +149,81 @@
         <div class="app-layout">
             <!-- Sidebar -->
             <aside class="sidebar" id="sidebar">
+                <div
+                    class="sidebar-profile"
+                    style="
+                        display: flex;
+                        align-items: center;
+                        padding: 12px 16px;
+                        border-bottom: 1px solid var(--border-light);
+                        margin-bottom: 12px;
+                    "
+                >
+                    <img
+                        id="user-avatar"
+                        src="https://ui-avatars.com/api/?name=User&background=random"
+                        alt="User"
+                        style="
+                            width: 32px;
+                            height: 32px;
+                            border-radius: 50%;
+                            object-fit: cover;
+                            margin-right: 12px;
+                            flex-shrink: 0;
+                            background: var(--bg);
+                        "
+                    />
+                    <div class="profile-text" style="flex: 1; overflow: hidden">
+                        <div style="font-size: 11px; color: var(--text-muted)">
+                            User Profile
+                        </div>
+                        <div
+                            id="user-name-display"
+                            style="
+                                font-size: 13px;
+                                font-weight: 600;
+                                color: var(--text);
+                                white-space: nowrap;
+                                text-overflow: ellipsis;
+                                overflow: hidden;
+                            "
+                        >
+                            Loading...
+                        </div>
+                    </div>
+                    <button
+                        class="sidebar-toggle-btn"
+                        id="sidebar-toggle"
+                        onclick="toggleSidebar()"
+                        style="
+                            background: none;
+                            border: 1px solid var(--border);
+                            border-radius: 50%;
+                            width: 24px;
+                            height: 24px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            cursor: pointer;
+                            color: var(--text-muted);
+                            margin-left: 8px;
+                            flex-shrink: 0;
+                            transition: transform 0.2s;
+                        "
+                    >
+                        <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            pointer-events: none
+                        >
+                            <path d="m15 18-6-6 6-6" />
+                        </svg>
+                    </button>
+                </div>
                 <div class="sidebar-section">
                     <div class="sidebar-label">Navigation</div>
                     <a
@@ -215,7 +290,60 @@
                 </div>
 
                 <div class="sidebar-section">
-                    <div class="sidebar-label">Stage Tree</div>
+                    <div
+                        class="sidebar-label"
+                        style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            padding-right: 10px;
+                        "
+                    >
+                        <span>Stage Tree</span>
+                        <div
+                            class="drive-toggle"
+                            onclick="toggleDriveView()"
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 4px;
+                                color: var(--text);
+                                text-transform: none;
+                                font-size: 12px;
+                                cursor: pointer;
+                                font-weight: 500;
+                            "
+                        >
+                            <span
+                                class="drive-text"
+                                style="letter-spacing: normal"
+                                >Drive</span
+                            >
+                            <div
+                                style="
+                                    background: var(--primary);
+                                    color: white;
+                                    border-radius: 4px;
+                                    padding: 2px;
+                                    display: flex;
+                                "
+                            >
+                                <svg
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <rect x="3" y="3" width="7" height="7" />
+                                    <rect x="14" y="3" width="7" height="7" />
+                                    <rect x="3" y="14" width="7" height="7" />
+                                    <rect x="14" y="14" width="7" height="7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
                     <div id="sidebar-tree">
                         <div
                             style="
@@ -516,6 +644,62 @@
             function escapeRegex(string) {
                 return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             }
+
+            // Sidebar Toggle
+            function toggleSidebar() {
+                const sidebar = document.getElementById("sidebar");
+                const toggleBtn = document.getElementById("sidebar-toggle");
+                sidebar.classList.toggle("collapsed");
+                document.body.classList.toggle("sidebar-collapsed");
+                // Save state to localStorage
+                localStorage.setItem(
+                    "sidebar-collapsed",
+                    sidebar.classList.contains("collapsed"),
+                );
+            }
+
+            // Drive View Toggle
+            function toggleDriveView() {
+                const isDriveView =
+                    localStorage.getItem("drive-view") === "true";
+                localStorage.setItem("drive-view", !isDriveView);
+                // Reload or navigate based on current view
+                if (window.location.pathname.startsWith("/stages/")) {
+                    window.location.reload();
+                } else {
+                    window.location.href = "/stages/root";
+                }
+            }
+
+            // Fetch User Details
+            async function fetchUser() {
+                try {
+                    // Simulating a fetch, replace with actual endpoint when available
+                    // const res = await apiFetch(`${API}/auth/me`);
+                    const res = { name: "John Doe" };
+                    if (res && res.name) {
+                        document.getElementById(
+                            "user-name-display",
+                        ).textContent = res.name;
+                        document.getElementById("user-avatar").src =
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(res.name)}&background=random`;
+                    }
+                } catch (e) {
+                    document.getElementById("user-name-display").textContent =
+                        "John Doe";
+                }
+            }
+
+            // Initialize states on load
+            document.addEventListener("DOMContentLoaded", () => {
+                fetchUser();
+                if (localStorage.getItem("sidebar-collapsed") === "true") {
+                    document
+                        .getElementById("sidebar")
+                        .classList.add("collapsed");
+                    document.body.classList.add("sidebar-collapsed");
+                }
+            });
         </script>
 
         {% block extra_js %}{% endblock %}

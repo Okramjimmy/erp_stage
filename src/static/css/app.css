@@ -503,3 +503,59 @@ textarea.form-control { resize: vertical; min-height: 72px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Sidebar Container Default Width ────────────────────── */
+.sidebar {
+  width: 240px; /* Replace with your actual default width */
+  transition: width 0.3s ease;
+  flex-shrink: 0; /* Prevents the sidebar from squishing */
+}
+
+/* ── Sidebar Collapsed State ──────────────────────────────── */
+.sidebar.collapsed {
+    width: 60px;
+}
+.sidebar.collapsed .sidebar-label span,
+.sidebar.collapsed .sidebar-item-label,
+.sidebar.collapsed .profile-text,
+.sidebar.collapsed .badge,
+.sidebar.collapsed .sidebar-node-text,
+.sidebar.collapsed .drive-text {
+  display: none !important;
+}
+.sidebar.collapsed .sidebar-profile {
+  flex-direction: column;
+  padding: 12px 8px;
+}
+.sidebar.collapsed .sidebar-toggle-btn {
+  margin-left: 0;
+  margin-top: 12px;
+  transform: rotate(180deg);
+}
+.sidebar.collapsed .sidebar-label {
+  justify-content: center;
+  padding: 8px 4px 4px;
+}
+.sidebar.collapsed .sidebar-item {
+  justify-content: center;
+  padding: 8px 0;
+}
+.sidebar.collapsed .sidebar-item .icon {
+  margin: 0;
+}
+body.sidebar-collapsed .main-content {
+  margin-left: 60px;
+}
+
+/* ── Navbar Dropdown ──────────────────────────────────────── */
+.navbar-dropdown-container:hover .dropdown-menu {
+  /* display: block; we handle this via JS for click */
+}
+.dropdown-item:hover {
+  background-color: var(--bg);
+}
+
+/* ── Table cells ──────────────────────────────────────── */
+tr {
+  text-align: center !important;
+}
