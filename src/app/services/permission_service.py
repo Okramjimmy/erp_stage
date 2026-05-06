@@ -1,13 +1,14 @@
 """Permission service for hierarchical access control."""
 
+import datetime
 import logging
 from typing import Dict, List, Optional, Set
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.cache import cache
-from src.app.models.permission import FormTypePermission, StagePermission, UserRole
+from src.app.models.permission import FormTypePermission, Role, StagePermission, UserRole
 from src.app.models.stage import Stage
 from src.app.schemas.permission import (
     FormTypePermissionCreate,
@@ -178,102 +179,83 @@ class PermissionService:
     async def create_role(
         self, role_data: RoleCreate, created_by: Optional[str] = None
     ) -> RoleResponse:
-        """Create a new role.
-
-        Roles are not stored in a separate table but are created
-        implicitly when assigned. This method validates the role name
-        and returns the role information.
-        """
-        # Check if role already exists (in any permission table)
-        existing_in_stage = await self.db.execute(
-            select(StagePermission).where(
-                StagePermission.role_name == role_data.role_name
-            )
+        """Create a new role and persist it in the roles table."""
+        existing = await self.db.execute(
+            select(Role).where(Role.role_name == role_data.role_name)
         )
-        if existing_in_stage.scalars().first():
+        if existing.scalar_one_or_none():
             raise ValueError(f"Role '{role_data.role_name}' already exists")
 
-        existing_in_ft = await self.db.execute(
-            select(FormTypePermission).where(
-                FormTypePermission.role_name == role_data.role_name
-            )
-        )
-        if existing_in_ft.scalars().first():
-            raise ValueError(f"Role '{role_data.role_name}' already exists")
-
-        existing_in_user = await self.db.execute(
-            select(UserRole).where(UserRole.role_name == role_data.role_name)
-        )
-        if existing_in_user.scalars().first():
-            raise ValueError(f"Role '{role_data.role_name}' already exists")
-
-        # Since we don't have a separate Role table, we create a UserRole
-        # entry with a special user_id to track the role's creation
-        # This is a workaround to track role metadata
-        role_tracker = UserRole(
-            user_id=f"_role:{role_data.role_name}",
-            role_name=role_data.role_name,
-            assigned_by=created_by,
-        )
-        self.db.add(role_tracker)
-        await self.db.commit()
-
-        logger.info(f"Created role: {role_data.role_name} by {created_by}")
-
-        return RoleResponse(
+        new_role = Role(
             role_name=role_data.role_name,
             description=role_data.description,
-            created_at=role_tracker.assigned_at,
+            created_by=created_by,
         )
+        self.db.add(new_role)
+        await self.db.commit()
+        await self.db.refresh(new_role)
+
+        logger.info(f"Created role: {role_data.role_name} by {created_by}")
+        return RoleResponse.model_validate(new_role)
 
     async def get_user_roles(self, user_id: str) -> List[str]:
-        """Get all roles for a user."""
+        """Get all role names for a user by resolving their role_ids JSONB array."""
         result = await self.db.execute(
             select(UserRole).where(UserRole.user_id == user_id)
         )
-        user_roles = result.scalars().all()
-
-        return [ur.role_name for ur in user_roles]
+        row = result.scalar_one_or_none()
+        if not row or not row.role_ids:
+            return []
+        names_result = await self.db.execute(
+            select(Role.role_name).where(Role.role_id.in_(row.role_ids))
+        )
+        return [r[0] for r in names_result.all()]
 
     async def assign_user_role(
         self, role_data: UserRoleCreate, assigned_by: Optional[str] = None
     ) -> Dict[str, str]:
-        """Assign a role to a user."""
-        # Check if already assigned
-        existing = await self.db.execute(
-            select(UserRole).where(
-                and_(
-                    UserRole.user_id == role_data.user_id,
-                    UserRole.role_name == role_data.role_name,
-                )
-            )
+        """Assign a role to a user — resolves role_name → role_id, upserts into array."""
+        role_result = await self.db.execute(
+            select(Role).where(Role.role_name == role_data.role_name)
         )
+        role = role_result.scalar_one_or_none()
+        if not role:
+            raise ValueError(f"Role '{role_data.role_name}' does not exist. Create it first.")
 
-        if existing.scalar_one_or_none():
-            return {"status": "already_assigned", "role": role_data.role_name}
-
-        new_user_role = UserRole(
-            user_id=role_data.user_id,
-            role_name=role_data.role_name,
-            assigned_by=assigned_by,
+        result = await self.db.execute(
+            select(UserRole).where(UserRole.user_id == role_data.user_id)
         )
+        row = result.scalar_one_or_none()
 
-        self.db.add(new_user_role)
+        if row:
+            existing = set(row.role_ids or [])
+            if role.role_id in existing:
+                return {"status": "already_assigned", "role": role_data.role_name}
+            row.role_ids = sorted(existing | {role.role_id})
+            row.assigned_by = assigned_by
+        else:
+            self.db.add(UserRole(
+                user_id=role_data.user_id,
+                role_ids=[role.role_id],
+                assigned_by=assigned_by,
+            ))
+
         await self.db.commit()
-
-        # Invalidate user visible stages cache
         await cache.delete(f"user:{role_data.user_id}:visible_stages")
-
         return {"status": "assigned", "role": role_data.role_name}
 
-    async def get_visible_stages(self, user_id: str) -> List[str]:
+    async def get_visible_stages(self, user_id: str, is_superadmin: bool = False) -> List[str]:
         """
         Get all visible stage IDs for a user using lineage-based visibility.
 
-        A user can see:
-        - Stages where they have direct permission
-        - All descendants of those stages (via lineage)
+        Superadmins can see ALL stages.
+        Regular users see stages where they have direct permission and all descendants.
         """
+        # Superadmins can see everything
+        if is_superadmin:
+            result = await self.db.execute(select(Stage.stage_id))
+            return [r[0] for r in result.all()]
+
         # Try cache first
         cache_key = f"user:{user_id}:visible_stages"
         cached = await cache.get(cache_key)
@@ -321,14 +303,19 @@ class PermissionService:
         return visible_stages
 
     async def check_stage_permission(
-        self, user_id: str, stage_id: str, permission_type: str = "can_view"
+        self, user_id: str, stage_id: str, permission_type: str = "can_view",
+        is_superadmin: bool = False
     ) -> bool:
         """
         Check if user has specific permission on a stage.
 
-        Uses lineage-based visibility: user has permission on stage if
-        they have permission on ANY ancestor of the stage.
+        Superadmins always have all permissions.
+        Regular users: uses lineage-based visibility.
         """
+        # Superadmins have all permissions
+        if is_superadmin:
+            return True
+
         # Get user roles
         roles = await self.get_user_roles(user_id)
         if not roles:
@@ -420,9 +407,13 @@ class PermissionService:
         )
         form_type_permissions = form_type_result.scalars().all()
 
-        # Get unique role names
-        roles_result = await self.db.execute(select(UserRole.role_name).distinct())
-        all_roles = [r[0] for r in roles_result.all()]
+        # Collect all unique role names from stage/form tables
+        stage_roles_res = await self.db.execute(select(StagePermission.role_name).distinct())
+        ft_roles_res = await self.db.execute(select(FormTypePermission.role_name).distinct())
+        all_roles = sorted(
+            {r[0] for r in stage_roles_res.all()}
+            | {r[0] for r in ft_roles_res.all()}
+        )
 
         return {
             "role_name": role_name,
@@ -437,63 +428,54 @@ class PermissionService:
         }
 
     async def list_all_roles(self) -> List[Dict]:
-        """List all unique roles with their permission counts."""
-        # Get all unique role names from stage permissions
-        stage_roles_result = await self.db.execute(
-            select(StagePermission.role_name).distinct()
-        )
-        stage_roles = [r[0] for r in stage_roles_result.all()]
+        """List all roles from the roles table with permission and user counts."""
+        roles_result = await self.db.execute(select(Role).order_by(Role.role_name))
+        roles = roles_result.scalars().all()
 
-        # Get all unique role names from form type permissions
-        ft_roles_result = await self.db.execute(
-            select(FormTypePermission.role_name).distinct()
-        )
-        ft_roles = [r[0] for r in ft_roles_result.all()]
-
-        # Get all unique role names from user roles
-        user_roles_result = await self.db.execute(select(UserRole.role_name).distinct())
-        user_roles = [r[0] for r in user_roles_result.all()]
-
-        # Combine all roles
-        all_roles = set(stage_roles + ft_roles + user_roles)
-
-        # Get permission counts for each role
         roles_info = []
-        for role in all_roles:
-            # Count stage permissions
+        for role in roles:
             stage_count_result = await self.db.execute(
-                select(StagePermission).where(StagePermission.role_name == role)
+                select(StagePermission).where(StagePermission.role_name == role.role_name)
             )
             stage_count = len(stage_count_result.scalars().all())
 
-            # Count form type permissions
             ft_count_result = await self.db.execute(
-                select(FormTypePermission).where(FormTypePermission.role_name == role)
+                select(FormTypePermission).where(FormTypePermission.role_name == role.role_name)
             )
             ft_count = len(ft_count_result.scalars().all())
 
-            # Count users with this role
+            # Count users who have this role_id in their JSONB array
             users_count_result = await self.db.execute(
-                select(UserRole).where(UserRole.role_name == role)
+                text("SELECT COUNT(*) FROM user_roles WHERE role_ids @> CAST(:id_json AS jsonb)").bindparams(
+                    id_json=f'[{role.role_id}]'
+                )
             )
-            users_count = len(users_count_result.scalars().all())
+            users_count = users_count_result.scalar() or 0
 
-            roles_info.append(
-                {
-                    "role_name": role,
-                    "stage_permissions_count": stage_count,
-                    "form_type_permissions_count": ft_count,
-                    "users_count": users_count,
-                    "total_permissions": stage_count + ft_count,
-                }
-            )
+            roles_info.append({
+                "role_id": role.role_id,
+                "role_name": role.role_name,
+                "description": role.description,
+                "stage_permissions_count": stage_count,
+                "form_type_permissions_count": ft_count,
+                "users_count": users_count,
+                "total_permissions": stage_count + ft_count,
+            })
 
-        # Sort by role name
-        roles_info.sort(key=lambda x: x["role_name"])
         return roles_info
 
     async def delete_role(self, role_name: str) -> Dict[str, str]:
-        """Delete a role and all its associated permissions."""
+        """Delete a role from the roles table.
+        Cascades automatically delete user_roles rows.
+        Stage/form-type permissions are deleted explicitly.
+        """
+        role_result = await self.db.execute(
+            select(Role).where(Role.role_name == role_name)
+        )
+        role = role_result.scalar_one_or_none()
+        if not role:
+            raise ValueError(f"Role '{role_name}' not found")
+
         # Delete stage permissions
         stage_result = await self.db.execute(
             select(StagePermission).where(StagePermission.role_name == role_name)
@@ -510,31 +492,54 @@ class PermissionService:
         for perm in ft_perms:
             await self.db.delete(perm)
 
-        # Delete user role assignments
-        user_result = await self.db.execute(
-            select(UserRole).where(UserRole.role_name == role_name)
+        # Update or delete UserRole rows
+        users_result = await self.db.execute(
+            select(UserRole).where(
+                text("role_ids @> CAST(:id_json AS jsonb)").bindparams(id_json=f"[{role.role_id}]")
+            )
         )
-        user_roles = user_result.scalars().all()
-        for ur in user_roles:
-            await self.db.delete(ur)
+        user_roles = users_result.scalars().all()
+        users_count = len(user_roles)
 
+        for ur in user_roles:
+            current_ids = ur.role_ids or []
+            if role.role_id in current_ids:
+                if len(current_ids) == 1:
+                    await self.db.delete(ur)
+                else:
+                    ur.role_ids = [rid for rid in current_ids if rid != role.role_id]
+                    self.db.add(ur)
+
+        # Delete the role row
+        await self.db.delete(role)
         await self.db.commit()
 
-        # Invalidate cache
         await cache.delete_pattern(f"permission:{role_name}:*")
 
         return {
             "deleted": role_name,
             "stage_permissions_deleted": len(stage_perms),
             "form_type_permissions_deleted": len(ft_perms),
-            "user_assignments_deleted": len(user_roles),
+            "user_assignments_deleted": users_count,
         }
 
     async def rename_role(
         self, old_role_name: str, new_role_name: str
     ) -> Dict[str, str]:
-        """Rename a role across all tables."""
-        # Update stage permissions
+        """Rename a role: update roles.role_name (single truth source), then
+        propagate to stage/form-type permission rows which still store role_name.
+        user_roles rows don't need updating — they store role_id.
+        """
+        role_result = await self.db.execute(
+            select(Role).where(Role.role_name == old_role_name)
+        )
+        role = role_result.scalar_one_or_none()
+        if not role:
+            raise ValueError(f"Role '{old_role_name}' not found")
+
+        role.role_name = new_role_name
+
+        # Update stage permissions (still store role_name string)
         stage_result = await self.db.execute(
             select(StagePermission).where(StagePermission.role_name == old_role_name)
         )
@@ -552,17 +557,7 @@ class PermissionService:
         for perm in ft_perms:
             perm.role_name = new_role_name
 
-        # Update user role assignments
-        user_result = await self.db.execute(
-            select(UserRole).where(UserRole.role_name == old_role_name)
-        )
-        user_roles = user_result.scalars().all()
-        for ur in user_roles:
-            ur.role_name = new_role_name
-
         await self.db.commit()
-
-        # Invalidate cache for both old and new role names
         await cache.delete_pattern(f"permission:{old_role_name}:*")
         await cache.delete_pattern(f"permission:{new_role_name}:*")
 
@@ -570,5 +565,95 @@ class PermissionService:
             "renamed": f"{old_role_name} -> {new_role_name}",
             "stage_permissions_updated": len(stage_perms),
             "form_type_permissions_updated": len(ft_perms),
-            "user_assignments_updated": len(user_roles),
+            "user_assignments_updated": 0,  # stored by role_id — no update needed
         }
+
+    # ------------------------------------------------------------------
+    # Superadmin Role Seeding
+    # ------------------------------------------------------------------
+
+    async def seed_superadmin_role(self) -> None:
+        """
+        Ensures a 'superadmin' role tracker exists, then grants it full permissions
+        on every stage and form-type currently in the database.
+
+        This is idempotent — safe to call on every startup. It upserts permissions
+        rather than creating duplicates.
+        """
+        from src.app.models.form_type import FormType
+
+        ROLE = "superadmin"
+
+        # Ensure the 'superadmin' role exists in the roles table
+        existing_role = await self.db.execute(select(Role).where(Role.role_name == ROLE))
+        if not existing_role.scalar_one_or_none():
+            self.db.add(Role(
+                role_name=ROLE,
+                description="Full system access",
+                created_by="system",
+            ))
+            await self.db.flush()
+
+        # Grant full permissions on every stage
+        stages_result = await self.db.execute(select(Stage))
+        stages = stages_result.scalars().all()
+        for stage in stages:
+            existing = await self.db.execute(
+                select(StagePermission).where(
+                    StagePermission.stage_id == stage.stage_id,
+                    StagePermission.role_name == ROLE,
+                )
+            )
+            perm = existing.scalar_one_or_none()
+            if perm:
+                perm.can_view = True
+                perm.can_create = True
+                perm.can_edit = True
+                perm.can_delete = True
+                perm.can_manage_permissions = True
+            else:
+                self.db.add(StagePermission(
+                    stage_id=stage.stage_id,
+                    role_name=ROLE,
+                    can_view=True,
+                    can_create=True,
+                    can_edit=True,
+                    can_delete=True,
+                    can_manage_permissions=True,
+                    granted_by="system",
+                ))
+
+        # Grant full permissions on every form type
+        ft_result = await self.db.execute(select(FormType))
+        form_types = ft_result.scalars().all()
+        for ft in form_types:
+            existing = await self.db.execute(
+                select(FormTypePermission).where(
+                    FormTypePermission.form_type_id == ft.form_type_id,
+                    FormTypePermission.role_name == ROLE,
+                )
+            )
+            perm = existing.scalar_one_or_none()
+            if perm:
+                perm.can_view = True
+                perm.can_create = True
+                perm.can_edit = True
+                perm.can_delete = True
+                perm.can_submit = True
+                perm.can_manage_permissions = True
+            else:
+                self.db.add(FormTypePermission(
+                    form_type_id=ft.form_type_id,
+                    role_name=ROLE,
+                    can_view=True,
+                    can_create=True,
+                    can_edit=True,
+                    can_delete=True,
+                    can_submit=True,
+                    can_manage_permissions=True,
+                    granted_by="system",
+                ))
+
+        await self.db.commit()
+        await cache.delete_pattern(f"permission:{ROLE}:*")
+        logger.info(f"Seeded '{ROLE}' role with full permissions on {len(stages)} stages and {len(form_types)} form types.")

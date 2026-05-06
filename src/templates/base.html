@@ -161,8 +161,8 @@
                 >
                     <img
                         id="user-avatar"
-                        src="https://ui-avatars.com/api/?name=User&background=random"
-                        alt="User"
+                        src="{% if current_user %}https://ui-avatars.com/api/?name={{ current_user.full_name | urlencode }}&background=random{% else %}https://ui-avatars.com/api/?name=User&background=random{% endif %}"
+                        alt="{% if current_user %}{{ current_user.full_name }}{% else %}User{% endif %}"
                         style="
                             width: 32px;
                             height: 32px;
@@ -188,7 +188,7 @@
                                 overflow: hidden;
                             "
                         >
-                            Loading...
+                            {% if current_user %}{{ current_user.full_name }}{% else %}Loading...{% endif %}
                         </div>
                     </div>
                     <button
@@ -245,6 +245,24 @@
                         Dashboard
                     </a>
                     <a
+                        href="/users"
+                        class="sidebar-item {% block nav_users %}{% endblock %}"
+                    >
+                        <svg
+                            class="icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        Users
+                    </a>
+                    <a
                         href="/roles"
                         class="sidebar-item {% block nav_roles %}{% endblock %}"
                     >
@@ -255,15 +273,11 @@
                             stroke="currentColor"
                             stroke-width="2"
                         >
-                            <path
-                                d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-                            />
-                            <circle cx="9" cy="7" r="4" />
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                         </svg>
                         Roles
                     </a>
+
                     <a
                         href="/permissions"
                         class="sidebar-item {% block nav_permissions %}{% endblock %}"
@@ -671,28 +685,10 @@
                 }
             }
 
-            // Fetch User Details
-            async function fetchUser() {
-                try {
-                    // Simulating a fetch, replace with actual endpoint when available
-                    // const res = await apiFetch(`${API}/auth/me`);
-                    const res = { name: "John Doe" };
-                    if (res && res.name) {
-                        document.getElementById(
-                            "user-name-display",
-                        ).textContent = res.name;
-                        document.getElementById("user-avatar").src =
-                            `https://ui-avatars.com/api/?name=${encodeURIComponent(res.name)}&background=random`;
-                    }
-                } catch (e) {
-                    document.getElementById("user-name-display").textContent =
-                        "John Doe";
-                }
-            }
+            // Fetch User Details removed (handled server-side via jinja)
 
             // Initialize states on load
             document.addEventListener("DOMContentLoaded", () => {
-                fetchUser();
                 if (localStorage.getItem("sidebar-collapsed") === "true") {
                     document
                         .getElementById("sidebar")

@@ -70,6 +70,7 @@ services:
       MINIO_SECURE: "false"
       MINIO_BUCKET_NAME: erp-stage-storage
       DEBUG: "true"
+      WATCHFILES_FORCE_POLLING: "true"
     ports:
       - "8000:8000"
     depends_on:
@@ -83,7 +84,7 @@ services:
       - ./src:/app/src
     networks:
       - erp_network
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
 
 volumes:
   postgres_data:

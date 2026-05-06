@@ -1,21 +1,72 @@
 """UI routes — renders Jinja2 HTML templates."""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.core.auth import get_current_user, get_current_user_optional
 from src.app.database import get_db
 from src.app.services.form_record_service import FormRecordService
 from src.app.services.form_type_service import FormTypeService
 from src.app.services.stage_service import StageService
+from src.app.services.user_service import UserService
 
-templates = Jinja2Templates(directory="/app/src/templates")
+templates = Jinja2Templates(directory="/app/src/templates", auto_reload=True)
 router = APIRouter(tags=["UI"])
 
 
+# ---------------------------------------------------------------------------
+# Auth pages (no login required)
+# ---------------------------------------------------------------------------
+
+@router.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Show login page. Redirect to dashboard if already authenticated."""
+    from src.app.core.auth import get_session_user_id
+    if get_session_user_id(request):
+        return RedirectResponse(url="/", status_code=302)
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@router.get("/logout")
+async def logout(request: Request):
+    """Clear session and redirect to login."""
+    from src.app.core.auth import clear_session
+    clear_session(request)
+    return RedirectResponse(url="/login", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# Helper: auth guard for UI routes
+# ---------------------------------------------------------------------------
+
+async def _require_auth(request: Request, db: AsyncSession):
+    """Return (user, roles) or redirect to /login."""
+    from src.app.core.auth import get_session_user_id
+    user_id = get_session_user_id(request)
+    if not user_id:
+        return None, None
+    service = UserService(db)
+    result = await service.get_user_with_roles(user_id)
+    if not result:
+        return None, None
+    user, roles = result
+    if not user.is_active:
+        return None, None
+    return user, roles
+
+
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     stage_service = StageService(db)
     ft_service = FormTypeService(db)
 
@@ -32,14 +83,24 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "form_types": form_types,
             "total_stages": len(stages),
             "total_forms": len(form_types),
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
+
+# ---------------------------------------------------------------------------
+# Stage detail
+# ---------------------------------------------------------------------------
 
 @router.get("/stages/{stage_id}", response_class=HTMLResponse)
 async def stage_detail(
     request: Request, stage_id: str, db: AsyncSession = Depends(get_db)
 ):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     stage_service = StageService(db)
     stage = await stage_service.get_stage(stage_id)
     if not stage:
@@ -52,7 +113,6 @@ async def stage_detail(
     children = [s for s in all_stages if s.parent_stage_id == stage_id]
     all_stages_for_move = [s for s in all_stages if s.stage_id != stage_id]
 
-    # Build breadcrumb from lineage
     breadcrumb = []
     for ancestor_id in stage.lineage_path:
         ancestor = await stage_service.get_stage(ancestor_id)
@@ -68,14 +128,24 @@ async def stage_detail(
             "children": children,
             "breadcrumb": breadcrumb,
             "all_stages": all_stages_for_move,
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
+
+# ---------------------------------------------------------------------------
+# Form builder
+# ---------------------------------------------------------------------------
 
 @router.get("/form-builder/new/{stage_id}", response_class=HTMLResponse)
 async def new_form_builder(
     request: Request, stage_id: str, db: AsyncSession = Depends(get_db)
 ):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     stage_service = StageService(db)
     stage = await stage_service.get_stage(stage_id)
     if not stage:
@@ -87,6 +157,8 @@ async def new_form_builder(
             "request": request,
             "form_type": None,
             "stage": stage,
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
@@ -95,6 +167,10 @@ async def new_form_builder(
 async def form_builder(
     request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
 ):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     ft_service = FormTypeService(db)
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
     if not form_type:
@@ -109,14 +185,24 @@ async def form_builder(
             "request": request,
             "form_type": form_type,
             "stage": stage,
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
+
+# ---------------------------------------------------------------------------
+# Form views
+# ---------------------------------------------------------------------------
 
 @router.get("/forms/{form_type_id}/new", response_class=HTMLResponse)
 async def new_form_view(
     request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
 ):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     ft_service = FormTypeService(db)
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
     if not form_type:
@@ -130,6 +216,8 @@ async def new_form_view(
             "form_type": form_type,
             "stage": stage,
             "record": None,
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
@@ -141,6 +229,10 @@ async def edit_form_view(
     record_id: str,
     db: AsyncSession = Depends(get_db),
 ):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     ft_service = FormTypeService(db)
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
     if not form_type:
@@ -158,6 +250,8 @@ async def edit_form_view(
             "form_type": form_type,
             "stage": stage,
             "record": record,
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
@@ -166,6 +260,10 @@ async def edit_form_view(
 async def list_form_view(
     request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
 ):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     ft_service = FormTypeService(db)
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
     if not form_type:
@@ -182,21 +280,28 @@ async def list_form_view(
             "stage": stage,
             "records": items,
             "total": total,
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
 
+# ---------------------------------------------------------------------------
+# Permissions & Roles
+# ---------------------------------------------------------------------------
+
 @router.get("/permissions", response_class=HTMLResponse)
 async def permissions_page(request: Request, db: AsyncSession = Depends(get_db)):
-    """Permissions management page."""
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     stage_service = StageService(db)
     ft_service = FormTypeService(db)
 
     stages = await stage_service.get_all_stages(limit=500)
     form_types = await ft_service.get_all_form_types(limit=500)
 
-    # Convert Pydantic models to dicts for JSON serialization in template
-    # Use mode='json' to convert datetime to ISO format strings
     stages_data = [stage.model_dump(mode="json") for stage in stages]
     form_types_data = [ft.model_dump(mode="json") for ft in form_types]
 
@@ -206,13 +311,18 @@ async def permissions_page(request: Request, db: AsyncSession = Depends(get_db))
             "request": request,
             "stages": stages_data,
             "form_types": form_types_data,
+            "current_user": user,
+            "current_user_roles": roles,
         },
     )
 
 
 @router.get("/roles", response_class=HTMLResponse)
 async def roles_page(request: Request, db: AsyncSession = Depends(get_db)):
-    """Roles management page."""
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
     stage_service = StageService(db)
     ft_service = FormTypeService(db)
 
@@ -225,5 +335,74 @@ async def roles_page(request: Request, db: AsyncSession = Depends(get_db)):
             "request": request,
             "stages": stages,
             "form_types": form_types,
+            "current_user": user,
+            "current_user_roles": roles,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# User Profile
+# ---------------------------------------------------------------------------
+
+@router.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    # Resolve presigned photo URL if photo key is set
+    photo_url = None
+    if user.profile_photo_url:
+        from datetime import timedelta
+        from src.app.storage import storage_service
+        photo_url = storage_service.generate_presigned_url(
+            object_name=user.profile_photo_url,
+            expires=timedelta(hours=1),
+        )
+
+    return templates.TemplateResponse(
+        "profile.html",
+        {
+            "request": request,
+            "current_user": user,
+            "current_user_roles": roles,
+            "photo_url": photo_url,
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# User Management (superadmin only)
+# ---------------------------------------------------------------------------
+
+@router.get("/users", response_class=HTMLResponse)
+async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if not user.is_superadmin:
+        return HTMLResponse("Access denied — superadmin only", status_code=403)
+
+    user_service = UserService(db)
+    all_users_with_roles = await user_service.list_users(limit=200)
+
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    all_roles = await perm_service.list_all_roles()
+
+    users_data = [
+        {**u.to_dict(), "roles": r}
+        for u, r in all_users_with_roles
+    ]
+
+    return templates.TemplateResponse(
+        "users.html",
+        {
+            "request": request,
+            "current_user": user,
+            "current_user_roles": roles,
+            "users": users_data,
+            "all_roles": all_roles,
         },
     )

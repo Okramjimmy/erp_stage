@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 
 from src.app.cache import cache
 from src.app.models.form_type import FormType
+from src.app.models.permission import StagePermission
 from src.app.models.stage import Stage
 from src.app.schemas.stage import (
     FormTypeRef,
@@ -130,11 +131,44 @@ class StageService:
         await self.db.commit()
         await self.db.refresh(new_stage)
 
+        # Automatically grant all permissions to the 'superadmin' role
+        await self._grant_superadmin_stage_permission(new_stage.stage_id)
+
         # Invalidate caches
         await cache.invalidate_master_metadata()
         await cache.invalidate_stage_cache(new_stage.stage_id)
 
         return StageResponse.model_validate(new_stage)
+
+    async def _grant_superadmin_stage_permission(self, stage_id: str) -> None:
+        """Grant full permissions for the 'superadmin' role on a given stage (idempotent)."""
+        ROLE = "superadmin"
+        existing = await self.db.execute(
+            select(StagePermission).where(
+                StagePermission.stage_id == stage_id,
+                StagePermission.role_name == ROLE,
+            )
+        )
+        perm = existing.scalar_one_or_none()
+        if perm:
+            perm.can_view = True
+            perm.can_create = True
+            perm.can_edit = True
+            perm.can_delete = True
+            perm.can_manage_permissions = True
+        else:
+            self.db.add(StagePermission(
+                stage_id=stage_id,
+                role_name=ROLE,
+                can_view=True,
+                can_create=True,
+                can_edit=True,
+                can_delete=True,
+                can_manage_permissions=True,
+                granted_by="system",
+            ))
+        await self.db.commit()
+        logger.info(f"Auto-granted '{ROLE}' full permissions on stage {stage_id}")
 
     async def get_stage(self, stage_id: str) -> Optional[StageResponse]:
         """Get stage by ID."""

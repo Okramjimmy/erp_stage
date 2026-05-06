@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = True
     secret_key: str = "your-secret-key-here-change-in-production"
+    # Used to sign the session cookie — override in .env in production
+    session_secret_key: str = "your-session-secret-key-change-in-production"
 
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/erp_stage"

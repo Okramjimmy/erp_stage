@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.cache import cache
 from src.app.models.form_type import FormType
+from src.app.models.permission import FormTypePermission
 from src.app.models.stage import Stage
 from src.app.schemas.form_type import (
     FormTypeCreate,
@@ -71,10 +72,45 @@ class FormTypeService:
         await self.db.commit()
         await self.db.refresh(new_form_type)
 
+        # Automatically grant all permissions to the 'superadmin' role
+        await self._grant_superadmin_form_permission(new_form_type.form_type_id)
+
         # Invalidate caches
         await cache.invalidate_stage_cache(form_data.stage_id)
 
         return FormTypeResponse.model_validate(new_form_type)
+
+    async def _grant_superadmin_form_permission(self, form_type_id: str) -> None:
+        """Grant full permissions for the 'superadmin' role on a given form type (idempotent)."""
+        ROLE = "superadmin"
+        existing = await self.db.execute(
+            select(FormTypePermission).where(
+                FormTypePermission.form_type_id == form_type_id,
+                FormTypePermission.role_name == ROLE,
+            )
+        )
+        perm = existing.scalar_one_or_none()
+        if perm:
+            perm.can_view = True
+            perm.can_create = True
+            perm.can_edit = True
+            perm.can_delete = True
+            perm.can_submit = True
+            perm.can_manage_permissions = True
+        else:
+            self.db.add(FormTypePermission(
+                form_type_id=form_type_id,
+                role_name=ROLE,
+                can_view=True,
+                can_create=True,
+                can_edit=True,
+                can_delete=True,
+                can_submit=True,
+                can_manage_permissions=True,
+                granted_by="system",
+            ))
+        await self.db.commit()
+        logger.info(f"Auto-granted '{ROLE}' full permissions on form type {form_type_id}")
 
     async def get_form_type(self, form_type_id: str) -> Optional[FormTypeResponse]:
         """Get form type by ID."""

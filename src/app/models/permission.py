@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, String
+from sqlalchemy import BigInteger, Boolean, Integer, Column, DateTime, ForeignKey, String, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -103,27 +103,66 @@ class FormTypePermission(Base):
         }
 
 
+class Role(Base):
+    """Dedicated roles table — the single source of truth for role names."""
+
+    __tablename__ = "roles"
+
+    role_id = Column(Integer, primary_key=True, autoincrement=True)
+    role_name = Column(String(100), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(String(100))
+
+
+    def __repr__(self):
+        return f"<Role(id={self.role_id}, name={self.role_name})>"
+
+    def to_dict(self):
+        return {
+            "role_id": self.role_id,
+            "role_name": self.role_name,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_by": self.created_by,
+        }
+
+
 class UserRole(Base):
-    """SQLAlchemy model for User to Role mapping."""
+    """
+    One row per user.
+    role_ids is a JSONB array of integer role IDs referencing the roles table.
+    e.g. [1, 3, 7]
+    """
 
     __tablename__ = "user_roles"
 
-    # Composite primary key
-    user_id = Column(String(100), primary_key=True)
-    role_name = Column(String(100), primary_key=True)
-
-    # Timestamps
+    user_id = Column(
+        String(100),
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    role_ids = Column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default="'[]'::jsonb",
+    )
     assigned_at = Column(DateTime(timezone=True), server_default=func.now())
     assigned_by = Column(String(100))
 
+    # Relationship back to User (many UserRole rows per user is no longer the case —
+    # the User side declares uselist=False so this is the scalar back-populates)
+    user = relationship("User", back_populates="roles")
+
     def __repr__(self):
-        return f"<UserRole(user={self.user_id}, role={self.role_name})>"
+        return f"<UserRole(user={self.user_id}, role_ids={self.role_ids})>"
 
     def to_dict(self):
-        """Convert model to dictionary."""
         return {
             "user_id": self.user_id,
-            "role_name": self.role_name,
+            "role_ids": self.role_ids or [],
             "assigned_at": self.assigned_at.isoformat() if self.assigned_at else None,
             "assigned_by": self.assigned_by,
         }
+

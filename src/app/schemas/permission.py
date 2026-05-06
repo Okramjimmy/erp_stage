@@ -114,16 +114,17 @@ class RolePermissionsResponse(BaseModel):
 
 
 class UserRoleCreate(BaseModel):
-    """Schema for creating User role."""
+    """Schema for assigning a role to a user."""
 
     user_id: str = Field(..., min_length=1, max_length=100)
     role_name: str = Field(..., min_length=1, max_length=100)
 
 
 class UserRoleResponse(BaseModel):
-    """Schema for User role response."""
+    """Schema for User role assignment response."""
 
     user_id: str
+    role_id: int
     role_name: str
     assigned_at: datetime
     assigned_by: Optional[str] = None

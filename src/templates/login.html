@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign In — ERP Stage Builder</title>
+    <meta name="description" content="Sign in to ERP Stage Builder to manage your workflow stages, forms, and permissions." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --primary-glow: rgba(37,99,235,0.35);
+            --bg: #0f1117;
+            --surface: rgba(255,255,255,0.05);
+            --surface-border: rgba(255,255,255,0.10);
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --error: #f87171;
+            --error-bg: rgba(248,113,113,0.10);
+            --radius: 14px;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Animated gradient orbs */
+        .bg-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.25;
+            animation: drift 12s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+        .bg-orb-1 { width: 500px; height: 500px; background: #2563eb; top: -150px; left: -100px; animation-delay: 0s; }
+        .bg-orb-2 { width: 400px; height: 400px; background: #7c3aed; bottom: -100px; right: -80px; animation-delay: -4s; }
+        .bg-orb-3 { width: 300px; height: 300px; background: #0891b2; top: 50%; left: 50%; animation-delay: -8s; }
+
+        @keyframes drift {
+            from { transform: translate(0, 0) scale(1); }
+            to   { transform: translate(30px, -20px) scale(1.05); }
+        }
+
+        /* Login card */
+        .login-card {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 420px;
+            margin: 16px;
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--radius);
+            padding: 48px 40px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+            animation: card-in 0.5s cubic-bezier(0.22,1,0.36,1) both;
+        }
+
+        @keyframes card-in {
+            from { opacity: 0; transform: translateY(24px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 36px;
+        }
+
+        .brand-logo {
+            width: 36px;
+            height: 36px;
+            background: var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #fff;
+            font-size: 16px;
+            box-shadow: 0 0 16px var(--primary-glow);
+        }
+
+        .brand-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            letter-spacing: -0.2px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 32px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            letter-spacing: 0.1px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 11px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--surface-border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        input::placeholder { color: rgba(148,163,184,0.5); }
+
+        .btn-signin {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            letter-spacing: 0.1px;
+            margin-top: 8px;
+            transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-signin:hover { background: var(--primary-hover); box-shadow: 0 4px 18px var(--primary-glow); }
+        .btn-signin:active { transform: scale(0.98); }
+        .btn-signin:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-signin .spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-box {
+            display: none;
+            background: var(--error-bg);
+            border: 1px solid rgba(248,113,113,0.25);
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--error);
+            margin-bottom: 20px;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 28px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Background orbs -->
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="bg-orb bg-orb-3"></div>
+
+    <div class="login-card">
+        <div class="brand">
+            <div class="brand-logo">E</div>
+            <span class="brand-name">ERP Stage Builder</span>
+        </div>
+
+        <h1>Welcome back</h1>
+        <p class="subtitle">Sign in to your workspace</p>
+
+        <div class="error-box" id="error-box" role="alert"></div>
+
+        <form id="login-form" novalidate>
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    placeholder="Enter your username"
+                    autocomplete="username"
+                    autofocus
+                    required
+                />
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                    required
+                />
+            </div>
+            <button type="submit" class="btn-signin" id="signin-btn">
+                <span id="btn-text">Sign in</span>
+                <div class="spinner" id="btn-spinner"></div>
+            </button>
+        </form>
+
+        <p class="footer-note">Contact your administrator if you need access.</p>
+    </div>
+
+    <script>
+        const form = document.getElementById('login-form');
+        const errorBox = document.getElementById('error-box');
+        const btnText = document.getElementById('btn-text');
+        const btnSpinner = document.getElementById('btn-spinner');
+        const signinBtn = document.getElementById('signin-btn');
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.style.display = 'block';
+        }
+
+        function hideError() {
+            errorBox.style.display = 'none';
+        }
+
+        function setLoading(loading) {
+            signinBtn.disabled = loading;
+            btnText.style.display = loading ? 'none' : 'inline';
+            btnSpinner.style.display = loading ? 'block' : 'none';
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!username || !password) {
+                showError('Please enter your username and password.');
+                return;
+            }
+
+            setLoading(true);
+
+            try {
+                const res = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                });
+
+                if (res.ok) {
+                    // Redirect to dashboard (or redirect param if present)
+                    const params = new URLSearchParams(window.location.search);
+                    window.location.href = params.get('next') || '/';
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    showError(data.detail || 'Invalid username or password.');
+                    setLoading(false);
+                }
+            } catch (err) {
+                showError('Network error. Please try again.');
+                setLoading(false);
+            }
+        });
+
+        // Enter key on password field submits
+        document.getElementById('password').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') form.requestSubmit();
+        });
+    </script>
+</body>
+</html>

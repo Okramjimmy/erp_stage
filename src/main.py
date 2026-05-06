@@ -14,9 +14,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 from src.app.api import ui as ui_router
 from src.app.api.v1 import form_records, form_types, metadata, permissions, stages, storage
+from src.app.api.v1 import auth as auth_router
+from src.app.api.v1 import users as users_router
 import src.app.models  # noqa: F401 — ensures all models are registered with Base
 from src.app.cache import cache
 from src.app.database import close_db, init_db
@@ -41,6 +44,15 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await init_db()
     logger.info("Database initialized")
+
+    # Seed superadmin user and role
+    from src.app.database import async_session_maker
+    from src.app.services.user_service import UserService
+    from src.app.services.permission_service import PermissionService
+    async with async_session_maker() as seed_db:
+        await UserService(seed_db).seed_superadmin()
+        await PermissionService(seed_db).seed_superadmin_role()
+    logger.info("Superadmin seed check complete")
 
     # Connect to Redis
     await cache.connect()
@@ -76,16 +88,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Session middleware (must be added AFTER CORS)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret_key,
+    session_cookie="erp_session",
+    https_only=False,   # set True in production behind HTTPS
+    same_site="lax",
+)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="/app/src/static"), name="static")
 
 # Jinja2 Templates
-templates = Jinja2Templates(directory="/app/src/templates")
+templates = Jinja2Templates(directory="/app/src/templates", auto_reload=True)
 
 # Include UI routes (before API to avoid catch-all conflicts)
 app.include_router(ui_router.router)
 
 # Include API routers
+app.include_router(auth_router.router, prefix="/api/v1")
+app.include_router(users_router.router, prefix="/api/v1")
 app.include_router(stages.router, prefix="/api/v1")
 app.include_router(form_types.router, prefix="/api/v1")
 app.include_router(form_records.router, prefix="/api/v1")
