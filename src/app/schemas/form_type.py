@@ -50,6 +50,21 @@ class FormTypeResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    @field_validator("schema_reference", mode="before")
+    @classmethod
+    def parse_schema_reference(cls, v):
+        if v == "null":
+            return None
+        if isinstance(v, str):
+            try:
+                import json
+                parsed = json.loads(v)
+                if parsed is None or isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                pass
+        return v
+
 
 class FormTypeWithSchema(FormTypeResponse):
     """Schema for Form Type with schema (backwards compatible alias)."""
@@ -59,3 +74,18 @@ class FormTypeWithSchema(FormTypeResponse):
         alias="schema_reference",
         description="Alias for schema_reference for backwards compatibility"
     )
+
+    @field_validator("schema_data", mode="before")
+    @classmethod
+    def parse_schema_data(cls, v):
+        if v == "null":
+            return None
+        if isinstance(v, str):
+            try:
+                import json
+                parsed = json.loads(v)
+                if parsed is None or isinstance(parsed, dict):
+                    return parsed
+            except Exception:
+                pass
+        return v
