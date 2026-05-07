@@ -51,12 +51,21 @@ async def list_users(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_superadmin),
+    current_user: User = Depends(get_current_user),
 ):
     """List all users with their assigned roles."""
     service = UserService(db)
     pairs = await service.list_users(skip=skip, limit=limit)
-    return [_user_to_list_item(u, r) for u, r in pairs]
+    
+    if current_user.is_superadmin:
+        return [_user_to_list_item(u, r) for u, r in pairs]
+        
+    # Non-superadmins can only see users who are not superadmins
+    return [
+        _user_to_list_item(u, r) 
+        for u, r in pairs 
+        if not u.is_superadmin and "superadmin" not in (r or [])
+    ]
 
 
 @router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

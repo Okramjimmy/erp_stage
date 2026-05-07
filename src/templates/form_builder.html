@@ -239,10 +239,10 @@
 
 <script>
 const API = '/api/v1';
-window.FORM_DATA = {{ (form_type.schema_data | tojson) if form_type and form_type.schema_data else '{"fields":[],"settings":{}}' | safe }};
+window.FORM_DATA = {% if form_type and form_type.schema_data %}{{ form_type.schema_data | tojson | safe }}{% else %}{"fields":[],"settings":{}}{% endif %};
 window.FORM_META = {
-  id:       {{ ('"' ~ form_type.form_type_id ~ '"') | safe if form_type else 'null' }},
-  name:     {{ ('"' ~ form_type.form_name ~ '"') | safe if form_type else '"Untitled Form"' }},
+  id:       {% if form_type %}"{{ form_type.form_type_id }}"{% else %}null{% endif %},
+  name:     {% if form_type %}"{{ form_type.form_name }}"{% else %}"Untitled Form"{% endif %},
   stage_id: '{{ stage.stage_id }}'
 };
 </script>
@@ -303,6 +303,10 @@ let availableFormTypes = [];
 async function loadAvailableFormTypes(){
   try { availableFormTypes = await apiFetch(`${API}/form-types?limit=500`); }
   catch(e){ availableFormTypes=[]; console.error('Failed to load form types:', e); }
+  
+  if (!availableFormTypes.find(ft => ft.form_name === 'Users')) {
+    availableFormTypes.unshift({ form_name: 'Users', form_path: 'System Table' });
+  }
 }
 async function reloadFTDropdown(fid){
   await loadAvailableFormTypes();

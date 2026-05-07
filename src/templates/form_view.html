@@ -138,10 +138,10 @@
 <script>
 const API = '/api/v1';
 const FORM_TYPE_ID = '{{ form_type.form_type_id }}';
-const RECORD_ID = {{ ('"' ~ record.record_id ~ '"') | safe if record else 'null' }};
-const IS_READONLY = {{ 'true' if is_readonly else 'false' }};
-const SCHEMA = {{ (form_type.schema_data | tojson) if form_type.schema_data else '{"fields":[],"settings":{}}' | safe }};
-const SAVED_DATA = {{ (record.data | tojson) if record and record.data else '{}' | safe }};
+const RECORD_ID = {% if record %}"{{ record.record_id }}"{% else %}null{% endif %};
+const IS_READONLY = {% if is_readonly %}true{% else %}false{% endif %};
+const SCHEMA = {% if form_type.schema_data %}{{ form_type.schema_data | tojson | safe }}{% else %}{"fields":[],"settings":{}}{% endif %};
+const SAVED_DATA = {% if record and record.data %}{{ record.data | tojson | safe }}{% else %}{}{% endif %};
 
 let formData = Object.assign({}, SAVED_DATA);
 let dirty = false;
@@ -273,6 +273,14 @@ async function loadLinkOptions(fieldname, formTypeName, currentVal) {
     let records;
     if (_linkCache[formTypeName]) {
       records = _linkCache[formTypeName];
+    } else if (formTypeName === 'Users') {
+      const res = await apiFetch(`${API}/users?limit=200`);
+      records = res.map(u => {
+        const dept = u.department || 'No Dept';
+        const roles = u.roles && u.roles.length > 0 ? u.roles.join(', ') : 'No Role';
+        return { docname: `${u.full_name} (${dept} - ${roles})` };
+      });
+      _linkCache[formTypeName] = records;
     } else {
       // 1. Resolve form type name → ID
       const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(formTypeName)}&limit=5`);
