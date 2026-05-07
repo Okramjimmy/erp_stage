@@ -23,9 +23,11 @@ router = APIRouter(tags=["UI"])
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, db: AsyncSession = Depends(get_db)):
     """Show login page. Redirect to dashboard if already authenticated."""
-    from src.app.core.auth import get_session_user_id
-    if get_session_user_id(request):
+    from src.app.core.auth import get_current_user_optional, clear_session
+    user = await get_current_user_optional(request, db)
+    if user:
         return RedirectResponse(url="/", status_code=302)
+    clear_session(request)
     return templates.TemplateResponse("login.html", {"request": request})
 
 
@@ -70,9 +72,14 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     stage_service = StageService(db)
     ft_service = FormTypeService(db)
 
-    tree = await stage_service.get_stage_tree()
-    stages = await stage_service.get_all_stages(limit=200)
-    form_types = await ft_service.get_all_form_types(limit=200)
+    tree = await stage_service.get_stage_tree(user_id=user.user_id)
+    
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id, user.is_superadmin))
+    
+    stages = [s for s in await stage_service.get_all_stages(limit=200) if s.stage_id in visible_stage_ids]
+    form_types = [ft for ft in await ft_service.get_all_form_types(limit=200) if ft.stage_id in visible_stage_ids]
 
     return templates.TemplateResponse(
         "index.html",
@@ -295,6 +302,8 @@ async def permissions_page(request: Request, db: AsyncSession = Depends(get_db))
     user, roles = await _require_auth(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
+    if not user.is_superadmin:
+        return HTMLResponse("Access denied — superadmin only", status_code=403)
 
     stage_service = StageService(db)
     ft_service = FormTypeService(db)
@@ -322,6 +331,8 @@ async def roles_page(request: Request, db: AsyncSession = Depends(get_db)):
     user, roles = await _require_auth(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
+    if not user.is_superadmin:
+        return HTMLResponse("Access denied — superadmin only", status_code=403)
 
     stage_service = StageService(db)
     ft_service = FormTypeService(db)

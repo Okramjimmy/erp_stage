@@ -4,7 +4,7 @@ import datetime
 import logging
 from typing import Dict, List, Optional, Set
 
-from sqlalchemy import and_, or_, select, text
+from sqlalchemy import and_, or_, select, text, func, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.cache import cache
@@ -21,6 +21,7 @@ from src.app.schemas.permission import (
     UserRoleCreate,
 )
 from src.config import settings
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +288,7 @@ class PermissionService:
                 select(Stage.stage_id).where(
                     or_(
                         Stage.stage_id.in_(accessible_stage_ids),
-                        Stage.lineage_path.overlap(list(accessible_stage_ids)),
+                        cast(Stage.lineage_path, PG_ARRAY(String)).overlap(list(accessible_stage_ids)),
                     )
                 )
             )
@@ -428,29 +429,62 @@ class PermissionService:
         }
 
     async def list_all_roles(self) -> List[Dict]:
-        """List all roles from the roles table with permission and user counts."""
-        roles_result = await self.db.execute(select(Role).order_by(Role.role_name))
+        """List all roles with permission and user counts."""
+        # Fetch all roles
+        roles_result = await self.db.execute(
+            select(Role).order_by(Role.role_name)
+        )
         roles = roles_result.scalars().all()
 
+        # Stage permission counts grouped by role
+        stage_counts_result = await self.db.execute(
+            select(
+                StagePermission.role_name,
+                func.count().label("count")
+            ).group_by(StagePermission.role_name)
+        )
+
+        stage_counts = {
+            row.role_name: row.count
+            for row in stage_counts_result
+        }
+
+        # Form type permission counts grouped by role
+        ft_counts_result = await self.db.execute(
+            select(
+                FormTypePermission.role_name,
+                func.count().label("count")
+            ).group_by(FormTypePermission.role_name)
+        )
+
+        ft_counts = {
+            row.role_name: row.count
+            for row in ft_counts_result
+        }
+
+        # User counts grouped by role_id from JSONB array
+        users_count_result = await self.db.execute(
+            text("""
+                SELECT
+                    role_id::int,
+                    COUNT(*) AS users_count
+                FROM user_roles,
+                jsonb_array_elements(role_ids) AS role_id
+                GROUP BY role_id
+            """)
+        )
+
+        user_counts = {
+            row.role_id: row.users_count
+            for row in users_count_result
+        }
+
         roles_info = []
+
         for role in roles:
-            stage_count_result = await self.db.execute(
-                select(StagePermission).where(StagePermission.role_name == role.role_name)
-            )
-            stage_count = len(stage_count_result.scalars().all())
-
-            ft_count_result = await self.db.execute(
-                select(FormTypePermission).where(FormTypePermission.role_name == role.role_name)
-            )
-            ft_count = len(ft_count_result.scalars().all())
-
-            # Count users who have this role_id in their JSONB array
-            users_count_result = await self.db.execute(
-                text("SELECT COUNT(*) FROM user_roles WHERE role_ids @> CAST(:id_json AS jsonb)").bindparams(
-                    id_json=f'[{role.role_id}]'
-                )
-            )
-            users_count = users_count_result.scalar() or 0
+            stage_count = stage_counts.get(role.role_name, 0)
+            ft_count = ft_counts.get(role.role_name, 0)
+            users_count = user_counts.get(role.role_id, 0)
 
             roles_info.append({
                 "role_id": role.role_id,

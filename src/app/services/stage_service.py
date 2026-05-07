@@ -238,9 +238,25 @@ class StageService:
         return [StageResponse.model_validate(s) for s in stages]
 
     async def get_stage_tree(
-        self, root_stage_id: Optional[str] = None, max_depth: Optional[int] = None
+        self, 
+        root_stage_id: Optional[str] = None, 
+        max_depth: Optional[int] = None,
+        user_id: Optional[str] = None
     ) -> List[StageTreeNode]:
         """Get hierarchical stage tree."""
+
+        visible_stage_ids = None
+        if user_id:
+            from src.app.models.user import User
+            from src.app.services.permission_service import PermissionService
+
+            user = (await self.db.execute(select(User).where(User.user_id == user_id))).scalar_one_or_none()
+            if not user:
+                raise ValueError(f"User {user_id} not found")
+            
+            perm_service = PermissionService(self.db)
+            visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id, user.is_superadmin))
+
         query = select(Stage).order_by(Stage.depth_level, Stage.stage_name)
 
         if root_stage_id:
@@ -272,6 +288,9 @@ class StageService:
         root_nodes: List[StageTreeNode] = []
 
         for stage in stages:
+            if visible_stage_ids is not None and stage.stage_id not in visible_stage_ids:
+                continue
+
             # Get form types for this stage
             form_types_result = await self.db.execute(
                 select(FormType).where(FormType.stage_id == stage.stage_id)

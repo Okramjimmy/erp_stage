@@ -1,6 +1,7 @@
-from sqlalchemy import BigInteger, Boolean, Integer, Column, DateTime, ForeignKey, String, Text, JSON
+from sqlalchemy import BigInteger, Boolean, Integer, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import JSONB
 
 from src.app.database import Base
 
@@ -143,7 +144,7 @@ class UserRole(Base):
         primary_key=True,
     )
     role_ids = Column(
-        JSON,
+        JSONB,
         nullable=False,
         default=list,
         server_default="'[]'::jsonb",

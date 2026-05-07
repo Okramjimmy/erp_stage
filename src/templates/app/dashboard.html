@@ -839,6 +839,32 @@ endblock %} {% block head %}
         try {
             const response = await fetch("/api/v1/stages/tree");
             const stages = await response.json();
+            
+            // Calculate total stages and form types from the filtered tree
+            let totalStagesCount = 0;
+            let totalFormsCount = 0;
+            
+            function countNodes(nodes) {
+                for (const node of nodes) {
+                    totalStagesCount++;
+                    if (node.form_types) {
+                        totalFormsCount += node.form_types.length;
+                    }
+                    if (node.children && node.children.length > 0) {
+                        countNodes(node.children);
+                    }
+                }
+            }
+            if (stages && stages.length > 0) {
+                countNodes(stages);
+            }
+            
+            const stagesEl = document.getElementById("total-stages");
+            if (stagesEl) stagesEl.textContent = totalStagesCount;
+            
+            const formsEl = document.getElementById("total-formtypes");
+            if (formsEl) formsEl.textContent = totalFormsCount;
+
             renderStageTree(stages);
         } catch (error) {
             console.error("Error loading stage tree:", error);

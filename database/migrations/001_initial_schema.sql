@@ -161,25 +161,38 @@ CREATE INDEX idx_form_type_permissions_role ON form_type_permissions(role_name);
 
 
 -- =================================================================
+-- 4.5. ROLES TABLE
+-- =================================================================
+-- Dedicated roles table
+-- =================================================================
+CREATE TABLE roles (
+    role_id SERIAL PRIMARY KEY,
+    role_name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(100)
+);
+
+-- =================================================================
 -- 5. USER_ROLES TABLE
 -- =================================================================
 -- User to role mapping for permission evaluation
 -- =================================================================
 CREATE TABLE user_roles (
     user_id VARCHAR(100) NOT NULL,
-    role_name VARCHAR(100) NOT NULL,
+    role_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
 
     -- Timestamps
     assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     assigned_by VARCHAR(100),
 
     -- Constraints
-    CONSTRAINT pk_user_roles PRIMARY KEY (user_id, role_name)
+    CONSTRAINT pk_user_roles PRIMARY KEY (user_id)
 );
 
 -- Indexes for user_roles
 CREATE INDEX idx_user_roles_user ON user_roles(user_id);
-CREATE INDEX idx_user_roles_role ON user_roles(role_name);
+CREATE INDEX idx_user_roles_role_ids ON user_roles USING GIN(role_ids);
 
 
 -- =================================================================
@@ -318,10 +331,11 @@ DECLARE
     v_has_permission BOOLEAN;
 BEGIN
     -- Get user roles
-    SELECT ARRAY_AGG(DISTINCT role_name)
+    SELECT ARRAY_AGG(DISTINCT r.role_name)
     INTO v_user_roles
-    FROM user_roles
-    WHERE user_id = p_user_id;
+    FROM user_roles ur, jsonb_array_elements_text(ur.role_ids) AS rid
+    JOIN roles r ON r.role_id = rid::int
+    WHERE ur.user_id = p_user_id;
 
     IF NOT FOUND OR CARDINALITY(v_user_roles) = 0 THEN
         RETURN FALSE;

@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.core.auth import get_current_user_optional
 from src.app.database import get_db
 from src.app.schemas.stage import (
     StageCreate,
@@ -52,18 +53,26 @@ async def get_stage_tree(
     max_depth: Optional[int] = Query(
         None, ge=0, description="Maximum depth to traverse"
     ),
+    user_id: Optional[str] = Query(
+        None, description="User ID to filter by stage visibility"
+    ),
     db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user_optional),
 ):
     """
     Get hierarchical stage tree.
 
     - **root_stage_id**: Optional root stage ID to get subtree
     - **max_depth**: Optional maximum depth to limit tree traversal
+    - **user_id**: Optional user ID to filter by stage visibility (only stages visible to this user)
     """
+    if not user_id and current_user:
+        user_id = current_user.user_id
+
     service = StageService(db)
     try:
         return await service.get_stage_tree(
-            root_stage_id=root_stage_id, max_depth=max_depth
+            root_stage_id=root_stage_id, max_depth=max_depth, user_id=user_id
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

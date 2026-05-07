@@ -244,6 +244,7 @@
                         </svg>
                         Dashboard
                     </a>
+                    {% if current_user and current_user.is_superadmin %}
                     <a
                         href="/users"
                         class="sidebar-item {% block nav_users %}{% endblock %}"
@@ -301,6 +302,7 @@
                         </svg>
                         Permissions
                     </a>
+                    {% endif %}
                 </div>
 
                 <div class="sidebar-section">
