@@ -14,6 +14,7 @@ from src.app.schemas.form_record import (
     FormRecordResponse,
     FormRecordUpdate,
 )
+from src.app.storage.minio_storage import storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -61,19 +62,120 @@ class FormRecordService:
             "updated_at": record.updated_at,
         })
 
+    def _get_attach_field(self, ft: FormType, field_name: str) -> Optional[dict]:
+        """Look up a field definition by name; return it only if it is an Attach type."""
+        if not ft.schema_reference:
+            logger.error(f"FormType {ft.form_type_id} has no schema_reference")
+            return None
+        schema_reference = json.loads(ft.schema_reference)
+        for field in schema_reference.get("fields", []):
+            logger.info(f"Field {field}")
+            if field.get("fieldname") == field_name:
+                field_type = field.get("fieldtype") or ""
+                if field_type in ("Attach", "Attach Image"):
+                    logger.info(f"Attach field found: {field}")
+                    return field
+        return None
+
+    def _build_minio_path(self, ft: FormType, field: dict, filename: str) -> str:
+        """Build the canonical MinIO path: stage_id/form_name/field_label/filename."""
+        field_label = field.get("label") or field.get("fieldname")
+        return f"{ft.stage_id}/{ft.form_name}/{field_label}/{filename}"
+
+    def _process_attachments(self, ft: FormType, data: dict) -> dict:
+        """Relocate any attachment paths that are not already in the canonical location."""
+        if not data or not ft.schema_reference:
+            return data
+
+        schema = ft.schema_reference
+        if not isinstance(schema, dict):
+            return data
+
+        for field in schema.get("fields", []):
+            field_type = field.get("fieldtype") or ""
+            if field_type not in ("Attach", "Attach Image"):
+                continue
+            field_name = field.get("fieldname")
+            if not field_name or field_name not in data:
+                continue
+            value = data[field_name]
+            if not value or not isinstance(value, str):
+                continue
+
+            filename = value.split('/')[-1]
+            expected_path = self._build_minio_path(ft, field, filename)
+
+            if value != expected_path:
+                success = storage_service.move_file(value, expected_path)
+                if success:
+                    data[field_name] = expected_path
+                    logger.info(f"Moved attachment {value} -> {expected_path}")
+                else:
+                    logger.warning(f"Failed to move attachment {value} -> {expected_path}")
+        return data
+
+    async def upload_attachment(
+        self,
+        record_id: str,
+        field_name: str,
+        file_bytes: bytes,
+        filename: str,
+        content_type: str = "application/octet-stream",
+    ) -> FormRecordResponse:
+        """Upload a file to MinIO and store the canonical path in record.data[field_name]."""
+        record = await self.db.get(FormRecord, record_id)
+        if not record:
+            raise ValueError(f"Record {record_id} not found")
+        if record.status not in ("Draft", "Amended"):
+            raise ValueError("Attachments can only be uploaded for Draft or Amended records")
+
+        ft = await self.db.get(FormType, record.form_type_id)
+        if not ft:
+            raise ValueError(f"FormType {record.form_type_id} not found")
+
+        attach_field = self._get_attach_field(ft, field_name)
+        logger.info(f"`~~~~~~~~~~~~~~~~~~~~~~~~~Attach field for record {record_id}, field '{field_name}' -> {attach_field}")
+        if attach_field is None:
+            raise ValueError(
+                f"Field '{field_name}' is not an Attach field in form type '{ft.form_name}'"
+            )
+
+        object_name = self._build_minio_path(ft, attach_field, filename)
+
+        success = storage_service.upload_file(
+            file_data=file_bytes,
+            object_name=object_name,
+            content_type=content_type,
+        )
+        if not success:
+            raise RuntimeError(f"Failed to upload file to MinIO at path: {object_name}")
+
+        logger.info(f"Uploaded attachment for record {record_id}, field '{field_name}' -> {object_name}")
+
+        # Persist the path in the record
+        data = dict(record.data) if record.data else {}
+        data[field_name] = object_name
+        record.data = data
+        await self.db.commit()
+        await self.db.refresh(record)
+        return self._parse(record)
+
     async def create(self, payload: FormRecordCreate) -> FormRecordResponse:
         ft = await self.db.get(FormType, payload.form_type_id)
         if not ft:
             raise ValueError(f"FormType {payload.form_type_id} not found")
 
         docname = await self._next_docname(payload.form_type_id, ft.form_name)
+        
+        # Process attachments
+        processed_data = self._process_attachments(ft, payload.data)
 
         record = FormRecord(
             record_id=self._new_id(),
             form_type_id=payload.form_type_id,
             docname=docname,
             status="Draft",
-            data=payload.data,
+            data=processed_data,
             created_by=payload.created_by,
         )
         self.db.add(record)
@@ -107,7 +209,11 @@ class FormRecordService:
             raise ValueError(f"Record {record_id} not found")
         if record.status not in ("Draft", "Amended"):
             raise ValueError("Only Draft or Amended records can be edited")
-        record.data = payload.data
+            
+        ft = await self.db.get(FormType, record.form_type_id)
+        processed_data = self._process_attachments(ft, payload.data)
+        
+        record.data = processed_data
         await self.db.commit()
         await self.db.refresh(record)
         return self._parse(record)

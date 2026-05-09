@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.database import get_db
@@ -81,6 +81,38 @@ async def amend_record(record_id: str, db: AsyncSession = Depends(get_db)):
         return await svc.amend(record_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/{record_id}/upload-attachment",
+    response_model=FormRecordResponse,
+    summary="Upload a file for an Attach/Attach Image field",
+    description=(
+        "Accepts a multipart/form-data request with the file and the target field name. "
+        "The file is stored in MinIO at `stage_id/form_name/field_label/filename` and "
+        "the resulting path is saved into `record.data[field_name]`."
+    ),
+)
+async def upload_attachment(
+    record_id: str,
+    field_name: str = Form(..., description="Name of the Attach field in the form schema"),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    svc = FormRecordService(db)
+    try:
+        file_bytes = await file.read()
+        return await svc.upload_attachment(
+            record_id=record_id,
+            field_name=field_name,
+            file_bytes=file_bytes,
+            filename=file.filename,
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/{record_id}", status_code=204)

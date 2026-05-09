@@ -5,11 +5,11 @@ Handles file storage operations using MinIO S3-compatible storage
 
 from minio import Minio
 from minio.error import S3Error
+from minio.commonconfig import CopySource
 from datetime import timedelta
 import io
 from typing import Optional, Tuple
 from src.config import settings
-
 
 class MinIOStorageService:
     def __init__(self):
@@ -112,6 +112,35 @@ class MinIOStorageService:
             return True
         except S3Error as e:
             print(f"Error deleting file: {e}")
+            return False
+
+    def move_file(self, source_object_name: str, dest_object_name: str) -> bool:
+        """
+        Move a file from source to destination in MinIO
+
+        Args:
+            source_object_name: Current name of the object
+            dest_object_name: New name for the object
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if source_object_name == dest_object_name:
+                return True
+                
+            self.client.copy_object(
+                bucket_name=self.bucket_name,
+                object_name=dest_object_name,
+                source=CopySource(self.bucket_name, source_object_name)
+            )
+            self.client.remove_object(
+                bucket_name=self.bucket_name,
+                object_name=source_object_name
+            )
+            return True
+        except S3Error as e:
+            print(f"Error moving file: {e}")
             return False
 
     def generate_presigned_url(

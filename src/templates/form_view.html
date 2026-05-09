@@ -145,6 +145,8 @@ const SAVED_DATA = {% if record and record.data %}{{ record.data | tojson | safe
 
 let formData = Object.assign({}, SAVED_DATA);
 let dirty = false;
+// fieldname -> File object for pending (not-yet-uploaded) attachments
+const pendingFiles = {};
 
 function toast(msg, type=''){
   const el=document.createElement('div'); el.className='toast '+type; el.textContent=msg;
@@ -156,6 +158,14 @@ async function apiFetch(url,opts={}){
   if(!r.ok){const e=await r.json().catch(()=>({detail:r.statusText}));throw new Error(e.detail||r.statusText);}
   return r.json();
 }
+async function uploadFile(recordId, fieldName, file) {
+  const fd = new FormData();
+  fd.append('field_name', fieldName);
+  fd.append('file', file);
+  const r = await fetch(`${API}/form-records/${recordId}/upload-attachment`, {method:'POST', body:fd});
+  if(!r.ok){const e=await r.json().catch(()=>({detail:r.statusText}));throw new Error(e.detail||r.statusText);}
+  return r.json(); // returns updated FormRecordResponse
+}
 function esc(s){if(!s&&s!==0)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function markDirty(){dirty=true;document.getElementById('dirty-dot').style.display='';}
 
@@ -164,6 +174,19 @@ const LAYOUT = new Set(['Section Break','Column Break','Tab Break','Heading','HT
 
 function buildInput(f, val){
   if(IS_READONLY) {
+    if ((f.fieldtype === 'Attach' || f.fieldtype === 'Attach Image') && val) {
+      const filename = String(val).split('/').pop();
+      if (f.fieldtype === 'Attach Image') {
+        return `<div class="form-control" style="background:var(--bg);min-height:34px;padding:6px">
+          <a href="${API}/storage/download/${encodeURIComponent(val)}" target="_blank">
+            <img src="${API}/storage/download/${encodeURIComponent(val)}" style="max-height:100px;border-radius:4px;border:1px solid var(--border)" alt="${esc(filename)}">
+          </a>
+        </div>`;
+      }
+      return `<div class="form-control" style="background:var(--bg);min-height:34px;padding-top:7px">
+        <a href="${API}/storage/download/${encodeURIComponent(val)}" target="_blank">📎 ${esc(filename)}</a>
+      </div>`;
+    }
     const v = val!==undefined&&val!==null&&val!=='' ? val : '—';
     return `<div class="form-control" style="background:var(--bg);min-height:34px;padding-top:7px">${esc(String(v))}</div>`;
   }
@@ -201,8 +224,31 @@ function buildInput(f, val){
     case 'Rating':
       const stars = [1,2,3,4,5].map(n=>`<span style="font-size:22px;cursor:pointer;color:${n<=(+cur||0)?'#f59e0b':'#d1d5db'}" onclick="setVal('${f.fieldname}',${n});renderForm()">★</span>`).join('');
       return `<div style="display:flex;gap:2px">${stars}</div>`;
-    case 'Attach': case 'Attach Image':
-      return `<input type="file" class="form-control" style="padding:4px" onchange="handleFile('${f.fieldname}',this)">`;
+    case 'Attach': case 'Attach Image': {
+      const isImage = f.fieldtype === 'Attach Image';
+      const pending = pendingFiles[f.fieldname];
+      // Show current stored path or pending filename
+      let previewHtml = '';
+      if (pending) {
+        const objectUrl = URL.createObjectURL(pending);
+        if (isImage) {
+          previewHtml = `<div style="margin-top:6px"><img src="${objectUrl}" style="max-height:80px;border-radius:4px;border:1px solid var(--border)" alt="preview"></div>`;
+        } else {
+          previewHtml = `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">📎 ${esc(pending.name)} — pending upload</div>`;
+        }
+      } else if (cur) {
+        const filename = cur.split('/').pop();
+        if (isImage) {
+          previewHtml = `<div style="margin-top:6px"><a href="${API}/storage/url/${encodeURIComponent(cur)}" target="_blank"><img src="${API}/storage/download/${encodeURIComponent(cur)}" style="max-height:80px;border-radius:4px;border:1px solid var(--border)" alt="${esc(filename)}"></a></div>`;
+        } else {
+          previewHtml = `<div style="margin-top:4px;font-size:11px"><a href="${API}/storage/download/${encodeURIComponent(cur)}" target="_blank">📎 ${esc(filename)}</a></div>`;
+        }
+      }
+      return `<div>
+        <input type="file" class="form-control" style="padding:4px" onchange="handleFile('${f.fieldname}',this)"${isImage?' accept="image/*"':''}>
+        ${previewHtml}
+      </div>`;
+    }
     case 'Dynamic Link': case 'Table': case 'Table MultiSelect':
       return ''; // handled separately
     case 'Link': {
@@ -423,28 +469,77 @@ function removeChildRow(tableName, idx) {
 function handleFile(fieldname, input) {
   const file = input.files[0];
   if(!file) return;
-  setVal(fieldname, file.name);
+  pendingFiles[fieldname] = file;
+  // Don't put filename in formData — the path will come from MinIO after upload
+  markDirty();
+  // Re-render just the attach field preview without a full form re-render
+  renderForm();
 }
 
 async function saveRecord() {
   const btn = document.getElementById('save-btn');
-  btn.disabled = true; btn.innerHTML = '⏳ Saving…';
+  btn.disabled = true;
+  const saveSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save';
   try {
-    let rec;
-    if(RECORD_ID) {
-      rec = await apiFetch(`${API}/form-records/${RECORD_ID}`, {method:'PUT', body:{data:formData}});
-    } else {
-      rec = await apiFetch(`${API}/form-records`, {method:'POST', body:{form_type_id:FORM_TYPE_ID, data:formData}});
-      window.history.replaceState({}, '', `/forms/${FORM_TYPE_ID}/${rec.record_id}`);
-      window.location.replace(`/forms/${FORM_TYPE_ID}/${rec.record_id}`);
-      return;
+    // ── Step 1: build payload with ALL schema fields (null for untouched ones) ──
+    const dataToSave = Object.assign({}, formData);
+    // Ensure every non-layout field defined in the schema is present in the payload,
+    // even if the user never interacted with it (so the backend receives explicit nulls).
+    const LAYOUT_TYPES = new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
+    for (const f of (SCHEMA.fields || [])) {
+      if (LAYOUT_TYPES.has(f.fieldtype)) continue;
+      if (!(f.fieldname in dataToSave)) {
+        dataToSave[f.fieldname] = null;
+      }
     }
+    // Set pending attach fields to null in the initial payload (field must be present);
+    // the actual MinIO path will be written back in Step 3 after upload.
+    for (const fn of Object.keys(pendingFiles)) dataToSave[fn] = null;
+
+    // ── Step 2: create or update the record ──
+    let rec;
+    let currentRecordId = RECORD_ID;
+    if (currentRecordId) {
+      btn.innerHTML = '⏳ Saving…';
+      rec = await apiFetch(`${API}/form-records/${currentRecordId}`, {method:'PUT', body:{data:dataToSave}});
+    } else {
+      btn.innerHTML = '⏳ Creating…';
+      rec = await apiFetch(`${API}/form-records`, {method:'POST', body:{form_type_id:FORM_TYPE_ID, data:dataToSave}});
+      currentRecordId = rec.record_id;
+      // Update URL without reload so uploads use the new record id
+      window.history.replaceState({}, '', `/forms/${FORM_TYPE_ID}/${currentRecordId}`);
+    }
+
+    // ── Step 3: upload each pending file ──
+    const fileEntries = Object.entries(pendingFiles);
+    if (fileEntries.length > 0) {
+      btn.innerHTML = `⏳ Uploading files (0/${fileEntries.length})…`;
+      let uploaded = 0;
+      for (const [fieldName, file] of fileEntries) {
+        rec = await uploadFile(currentRecordId, fieldName, file);
+        // Update formData with the path returned by the server
+        formData[fieldName] = (rec.data || {})[fieldName] || '';
+        delete pendingFiles[fieldName];
+        uploaded++;
+        btn.innerHTML = `⏳ Uploading files (${uploaded}/${fileEntries.length})…`;
+      }
+    }
+
     dirty = false;
     document.getElementById('dirty-dot').style.display = 'none';
     document.getElementById('fv-docname').textContent = rec.docname;
     toast('Saved', 'success');
+
+    // If record was just created, redirect to its permanent URL
+    if (!RECORD_ID) {
+      window.location.replace(`/forms/${FORM_TYPE_ID}/${currentRecordId}`);
+      return;
+    }
+
+    // Re-render to refresh attachment previews with updated MinIO paths
+    renderForm();
   } catch(e) { toast(e.message, 'error'); }
-  finally { btn.disabled = false; btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save'; }
+  finally { btn.disabled = false; btn.innerHTML = saveSvg; }
 }
 
 async function submitRecord() {
