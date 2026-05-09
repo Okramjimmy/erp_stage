@@ -13,10 +13,10 @@ from pydantic import BaseModel, EmailStr, Field
 class UserCreate(BaseModel):
     """Schema for creating a new user."""
 
-    username: str = Field(..., min_length=3, max_length=100, pattern=r"^[a-z0-9_]+$")
+    username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr
     full_name: str = Field(..., min_length=1, max_length=255)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=8, max_length=128, pattern=r"^[a-z0-9_]+$")
     department: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=50)
     is_superadmin: bool = False

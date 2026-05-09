@@ -307,6 +307,9 @@ async function loadAvailableFormTypes(){
   if (!availableFormTypes.find(ft => ft.form_name === 'Users')) {
     availableFormTypes.unshift({ form_name: 'Users', form_path: 'System Table' });
   }
+  if (!availableFormTypes.find(ft => ft.form_name === 'Empty Table')) {
+    availableFormTypes.unshift({ form_name: 'Empty Table', form_path: 'Dynamic Table' });
+  }
 }
 async function reloadFTDropdown(fid){
   await loadAvailableFormTypes();
@@ -325,7 +328,7 @@ function mkField(type){
   const id=mkId();
   return {
     _id:id, label:type, fieldname:snake(type)+'_'+id, fieldtype:type,
-    options:'', default:'', placeholder:'', description:'',
+    options:'', empty_table_columns:'', default:'', placeholder:'', description:'',
     required:false, unique:false, read_only:false, hidden:false, bold:false,
     in_list_view:false, in_filter:false, search_index:false, print_hide:false,
     no_copy:false, allow_on_submit:false,
@@ -699,6 +702,13 @@ function renderProps(f){
       </select>
       ${noForms ? `<div class="form-hint" style="color:var(--warning)">No form types found. <a href="#" onclick="reloadFTDropdown(${f._id});return false">Reload</a></div>` : '<div class="form-hint">Form Type this field links to</div>'}
     </div>`;
+    if (f.options === 'Empty Table') {
+      optField += `<div class="form-group" style="margin-top:10px">
+        <label class="form-label">Table Columns</label>
+        <textarea class="form-control" rows="4" oninput="fieldUpd(${f._id},'empty_table_columns',this.value)" placeholder="Enter one column header per line">${esc(f.empty_table_columns||'')}</textarea>
+        <div class="form-hint">One column header per line. Sl. No. will be added automatically as the first column.</div>
+      </div>`;
+    }
   } else if(f.fieldtype==='HTML'){
     optField=`<div class="form-group">
       <label class="form-label">HTML Content</label>

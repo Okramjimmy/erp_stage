@@ -224,7 +224,27 @@ function buildInput(f, val){
 
 function buildChildTable(f) {
   const rows = Array.isArray(formData[f.fieldname]) ? formData[f.fieldname] : [];
-  const cols = (f._childCols || []);
+  
+  let cols = [];
+  let isUsersTable = false;
+  
+  if (f.options === 'Empty Table') {
+     const colHeaders = (f.empty_table_columns || '').split('\n').map(c => c.trim()).filter(Boolean);
+     cols = [{label: 'Sl. No.', fieldname: '_sl_no'}];
+     colHeaders.forEach((header, idx) => {
+        cols.push({ label: header, fieldname: 'col_' + idx });
+     });
+  } else if (f.options === 'Users') {
+     isUsersTable = true;
+     cols = [
+       {label: 'Sl. No.', fieldname: '_sl_no'},
+       {label: 'User', fieldname: 'user'},
+      //  {label: 'Department', fieldname: 'department'}
+     ];
+  } else {
+     cols = (f._childCols || []);
+  }
+
   if(!cols.length){
     return `<div class="child-table-wrap">
       <div style="padding:14px;text-align:center;color:var(--text-muted);font-size:12px">⊞ ${esc(f.options||f.fieldname)} — <a href="#" onclick="return false">configure linked form type</a></div>
@@ -232,7 +252,19 @@ function buildChildTable(f) {
   }
   const headers = cols.map(c=>`<th>${esc(c.label||c.fieldname)}</th>`).join('') + '<th style="width:32px"></th>';
   const bodyRows = rows.map((row,ri)=>{
-    const cells = cols.map(c=>`<td><input class="form-control" style="border:none;background:transparent" value="${esc(row[c.fieldname]||'')}" oninput="setChildVal('${f.fieldname}',${ri},'${c.fieldname}',this.value)" ${IS_READONLY?'readonly':''}></td>`).join('');
+    const cells = cols.map(c=>{
+      if (c.fieldname === '_sl_no') {
+        return `<td style="text-align:center;color:var(--text-muted);font-size:12px;width:50px">${ri + 1}</td>`;
+      }
+      if (isUsersTable && c.fieldname === 'user') {
+        setTimeout(() => loadLinkOptions(f.fieldname + '_' + ri, 'Users', row[c.fieldname]), 0);
+        return `<td><select id="link-sel-${f.fieldname}_${ri}" class="form-control" style="border:none;background:transparent;padding:2px 4px;height:auto" onchange="setChildVal('${f.fieldname}',${ri},'${c.fieldname}',this.value)" ${IS_READONLY?'disabled':''}>
+          <option value="">⏳ Loading…</option>
+          ${row[c.fieldname] ? `<option value="${esc(row[c.fieldname])}" selected>${esc(row[c.fieldname])}</option>` : ''}
+        </select></td>`;
+      }
+      return `<td><input class="form-control" style="border:none;background:transparent" value="${esc(row[c.fieldname]||'')}" oninput="setChildVal('${f.fieldname}',${ri},'${c.fieldname}',this.value)" ${IS_READONLY?'readonly':''}></td>`;
+    }).join('');
     const del = IS_READONLY ? '<td></td>' : `<td><button class="btn btn-ghost btn-xs" style="color:var(--danger);padding:2px 5px" onclick="removeChildRow('${f.fieldname}',${ri})">✕</button></td>`;
     return `<tr>${cells}${del}</tr>`;
   }).join('');

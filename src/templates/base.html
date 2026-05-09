@@ -137,6 +137,15 @@
                 ></div>
             </div>
             <div class="navbar-actions">
+                <a href="/">
+                    {% if current_user %}
+                        <button class="navbar-link" style="cursor: pointer;color: gray;border: 1px solid gray;background-color: white;" onclick="logout()" >
+                            Logout
+                        </button>
+                    {% else %}
+                        <a href="/login" class="navbar-link">Login</a>
+                    {% endif %} 
+                </a>
                 <a
                     href="/"
                     class="navbar-link {% block nav_home %}{% endblock %}"
@@ -684,6 +693,18 @@
                     window.location.reload();
                 } else {
                     window.location.href = "/stages/root";
+                }
+            }
+
+            async function logout() {
+                const response = await fetch('/api/v1/auth/logout', {
+                    method: 'POST',
+                });
+
+                if (response.status === 204) {
+                    window.location.href = "/login";
+                } else {
+                    alert("Logout failed");
                 }
             }
 
