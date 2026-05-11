@@ -85,13 +85,16 @@ class MinIOStorageService:
             File data as bytes, or None if failed
         """
         try:
+            print(f"MinIO: Attempting to download: {object_name}")
             response = self.client.get_object(
                 bucket_name=self.bucket_name,
                 object_name=object_name
             )
-            return response.read()
+            data = response.read()
+            print(f"MinIO: Successfully downloaded {len(data)} bytes")
+            return data
         except S3Error as e:
-            print(f"Error downloading file: {e}")
+            print(f"MinIO error downloading file '{object_name}': {e}")
             return None
 
     def delete_file(self, object_name: str) -> bool:

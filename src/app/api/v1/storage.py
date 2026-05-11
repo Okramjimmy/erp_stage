@@ -10,6 +10,7 @@ import io
 
 from ...storage import storage_service
 from src.config import settings
+from urllib.parse import unquote
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -72,6 +73,28 @@ async def upload_file(file: UploadFile = File(...), path: Optional[str] = None):
         )
 
 
+@router.get("/list/{prefix:path}")
+async def list_files(prefix: str = ""):
+    """
+    List files in MinIO storage with a given prefix
+
+    Args:
+        prefix: Path prefix to filter files
+
+    Returns:
+        List of file paths
+    """
+    try:
+        files = storage_service.list_files(prefix)
+        return {"files": files}
+    except Exception as e:
+        logger.error(f"Error listing files: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error listing files: {str(e)}"
+        )
+
+
 @router.get("/download/{file_name:path}")
 async def download_file(file_name: str):
     """
@@ -84,19 +107,31 @@ async def download_file(file_name: str):
         File response with the file content
     """
     try:
-        # Download from MinIO
-        file_content = storage_service.download_file(file_name)
+        # FastAPI automatically decodes path parameters, so file_name is already decoded
+        # MinIO stores files with actual characters (not URL-encoded), so we use it directly
+        logger.info(f"Attempting to download file from MinIO: {file_name}")
+
+        # Decode each path segment individually to match the stored path
+        path_segments = file_name.split('/')
+        decoded_path = '/'.join(unquote(segment) for segment in path_segments)
+        logger.info(f"Decoded path for MinIO: {decoded_path}")
+        
+
+        file_content = storage_service.download_file(decoded_path)
 
         if file_content is None:
+            logger.error(f"File not found in MinIO: {decoded_path}")
             raise HTTPException(
                 status_code=404,
                 detail="File not found"
             )
 
+        logger.info(f"Successfully downloaded file: {decoded_path}")
+
         # Try to determine content type from file extension
         content_type = "application/octet-stream"
-        if '.' in file_name:
-            ext = file_name.rsplit('.', 1)[1].lower()
+        if '.' in decoded_path:
+            ext = decoded_path.rsplit('.', 1)[1].lower()
             content_types = {
                 'txt': 'text/plain',
                 'pdf': 'application/pdf',
@@ -114,7 +149,7 @@ async def download_file(file_name: str):
             content=file_content,
             media_type=content_type,
             headers={
-                "Content-Disposition": f"attachment; filename={file_name.split('/')[-1]}",
+                "Content-Disposition": f"attachment; filename={decoded_path.split('/')[-1]}",
                 "Content-Length": str(len(file_content))
             }
         )

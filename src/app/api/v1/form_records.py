@@ -95,12 +95,14 @@ async def amend_record(record_id: str, db: AsyncSession = Depends(get_db)):
 )
 async def upload_attachment(
     record_id: str,
-    field_name: str = Form(..., description="Name of the Attach field in the form schema"),
+    field_name: str | None = Form(None, description="Name of the Attach field in the form schema"),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
     svc = FormRecordService(db)
     try:
+        if not field_name:
+            raise HTTPException(status_code=400, detail="Field name is required")
         file_bytes = await file.read()
         return await svc.upload_attachment(
             record_id=record_id,

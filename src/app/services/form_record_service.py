@@ -28,6 +28,23 @@ class FormRecordService:
         return f"rec_{uuid.uuid4().hex[:12]}"
 
     @staticmethod
+    def get_attachment_download_url(object_path: str, api_prefix: str = "/api/v1") -> str:
+        """Return the API download URL for a MinIO object path.
+
+        Each path segment is percent-encoded individually so that forward
+        slashes are preserved as real URL path separators (not %2F), which is
+        required by FastAPI's ``{file_name:path}`` route converter.
+
+        Example::
+
+            get_attachment_download_url("stage1/My Form/Attachment/report.pdf")
+            # → "/api/v1/download/stage1/My%20Form/Attachment/report.pdf"
+        """
+        from urllib.parse import quote
+        encoded = "/".join(quote(segment, safe="") for segment in object_path.split("/"))
+        return f"{api_prefix}/download/{encoded}"
+
+    @staticmethod
     def _abbrev(form_name: str) -> str:
         words = form_name.upper().split()
         if len(words) == 1:
@@ -46,6 +63,13 @@ class FormRecordService:
         if record.data:
             try:
                 parsed_data = record.data
+                # Convert attachment paths to download URLs
+                if isinstance(parsed_data, dict):
+                    for field_name, field_value in parsed_data.items():
+                        if isinstance(field_value, str) and '/' in field_value:
+                            # This looks like a file path (stage_id/form_name/record_id/field_label/filename)
+                            # Convert to download URL
+                            parsed_data[field_name] = self.get_attachment_download_url(field_value)
             except Exception:
                 parsed_data = {}
         return FormRecordResponse.model_validate({
@@ -77,12 +101,12 @@ class FormRecordService:
                     return field
         return None
 
-    def _build_minio_path(self, ft: FormType, field: dict, filename: str) -> str:
-        """Build the canonical MinIO path: stage_id/form_name/field_label/filename."""
+    def _build_minio_path(self, ft: FormType, field: dict, filename: str, record_id: str) -> str:
+        """Build the canonical MinIO path: stage_id/form_name/record_id/field_label/filename."""
         field_label = field.get("label") or field.get("fieldname")
-        return f"{ft.stage_id}/{ft.form_name}/{field_label}/{filename}"
+        return f"{ft.stage_id}/{ft.form_name}/{record_id}/{field_label}/{filename}"
 
-    def _process_attachments(self, ft: FormType, data: dict) -> dict:
+    def _process_attachments(self, ft: FormType, data: dict, record_id: str) -> dict:
         """Relocate any attachment paths that are not already in the canonical location."""
         if not data or not ft.schema_reference:
             return data
@@ -103,7 +127,7 @@ class FormRecordService:
                 continue
 
             filename = value.split('/')[-1]
-            expected_path = self._build_minio_path(ft, field, filename)
+            expected_path = self._build_minio_path(ft, field, filename, record_id)
 
             if value != expected_path:
                 success = storage_service.move_file(value, expected_path)
@@ -134,13 +158,12 @@ class FormRecordService:
             raise ValueError(f"FormType {record.form_type_id} not found")
 
         attach_field = self._get_attach_field(ft, field_name)
-        logger.info(f"`~~~~~~~~~~~~~~~~~~~~~~~~~Attach field for record {record_id}, field '{field_name}' -> {attach_field}")
         if attach_field is None:
             raise ValueError(
                 f"Field '{field_name}' is not an Attach field in form type '{ft.form_name}'"
             )
 
-        object_name = self._build_minio_path(ft, attach_field, filename)
+        object_name = self._build_minio_path(ft, attach_field, filename, record_id=record_id)
 
         success = storage_service.upload_file(
             file_data=file_bytes,
@@ -166,12 +189,13 @@ class FormRecordService:
             raise ValueError(f"FormType {payload.form_type_id} not found")
 
         docname = await self._next_docname(payload.form_type_id, ft.form_name)
-        
+        record_id = self._new_id()
+
         # Process attachments
-        processed_data = self._process_attachments(ft, payload.data)
+        processed_data = self._process_attachments(ft, payload.data, record_id)
 
         record = FormRecord(
-            record_id=self._new_id(),
+            record_id=record_id,
             form_type_id=payload.form_type_id,
             docname=docname,
             status="Draft",
@@ -209,10 +233,10 @@ class FormRecordService:
             raise ValueError(f"Record {record_id} not found")
         if record.status not in ("Draft", "Amended"):
             raise ValueError("Only Draft or Amended records can be edited")
-            
+
         ft = await self.db.get(FormType, record.form_type_id)
-        processed_data = self._process_attachments(ft, payload.data)
-        
+        processed_data = self._process_attachments(ft, payload.data, record_id)
+
         record.data = processed_data
         await self.db.commit()
         await self.db.refresh(record)
