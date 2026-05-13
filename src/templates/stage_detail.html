@@ -17,10 +17,11 @@ Builder{% endblock %} {% block content %}
             <div class="page-title" id="stage-title-display">
                 {{ stage.stage_name }}
             </div>
-            {% if stage.is_root %}<span class="badge badge-blue">root</span>{% endif %}
-            {% if stage.is_leaf %}<span class="badge badge-green">leaf</span>{% endif %}
-            
-            {% if stage.visibility_scope == 'public' %}
+            {% if stage.is_root %}<span class="badge badge-blue">root</span> {%
+            endif %} {% if stage.is_leaf %}<span class="badge badge-green"
+                >leaf</span
+            >
+            {% endif %} {% if stage.visibility_scope == 'public' %}
             <span class="badge badge-green">{{ stage.visibility_scope }}</span>
             {% elif stage.visibility_scope == 'restricted' %}
             <span class="badge badge-orange">{{ stage.visibility_scope }}</span>
@@ -39,17 +40,85 @@ Builder{% endblock %} {% block content %}
         <button class="btn btn-secondary btn-sm" onclick="openMoveModal()">
             ↕️ Move
         </button>
-        <div class="navbar-dropdown-container" style="position: relative; display: inline-block;">
-            <button class="btn btn-primary btn-sm" id="btn-new-dropdown" onclick="toggleNewDropdown()" style="display: flex; align-items: center; gap: 4px;">
+        <div
+            class="navbar-dropdown-container"
+            style="position: relative; display: inline-block"
+        >
+            <button
+                class="btn btn-primary btn-sm"
+                id="btn-new-dropdown"
+                onclick="toggleNewDropdown()"
+                style="display: flex; align-items: center; gap: 4px"
+            >
                 + New
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <path d="m6 9 6 6 6-6" />
+                </svg>
             </button>
-            <div id="new-dropdown-menu" class="dropdown-menu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 4px; background: white; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); width: 160px; z-index: 1000;">
-                <a href="#" class="dropdown-item" onclick="openCreateChildModal(); toggleNewDropdown(); return false;" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px;">
-                    <span style="color: var(--text-muted);">+</span> New Stage
+            <div
+                id="new-dropdown-menu"
+                class="dropdown-menu"
+                style="
+                    display: none;
+                    position: absolute;
+                    right: 0;
+                    top: 100%;
+                    margin-top: 4px;
+                    background: white;
+                    border: 1px solid var(--border);
+                    border-radius: var(--radius);
+                    box-shadow: var(--shadow-md);
+                    width: 160px;
+                    z-index: 1000;
+                "
+            >
+                <a
+                    href="#"
+                    class="dropdown-item"
+                    onclick="
+                        openCreateChildModal();
+                        toggleNewDropdown();
+                        return false;
+                    "
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 8px 12px;
+                        color: var(--text);
+                        text-decoration: none;
+                        font-size: 13px;
+                    "
+                >
+                    <span style="color: var(--text-muted)">+</span> New Stage
                 </a>
-                <a href="#" class="dropdown-item" onclick="openCreateFormModal(); toggleNewDropdown(); return false;" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px;">
-                    <span style="color: var(--text-muted);">📄</span> New Form Type
+                <a
+                    href="#"
+                    class="dropdown-item"
+                    onclick="
+                        openBuildModal('new-form');
+                        toggleNewDropdown();
+                        return false;
+                    "
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 8px 12px;
+                        color: var(--text);
+                        text-decoration: none;
+                        font-size: 13px;
+                    "
+                >
+                    <span style="color: var(--text-muted)">📄</span> New Form
+                    Type
                 </a>
             </div>
         </div>
@@ -99,7 +168,7 @@ Builder{% endblock %} {% block content %}
         {% for ft in form_types %}
         <div
             class="form-card"
-            onclick="window.location='/form-builder/{{ ft.form_type_id }}'"
+            onclick="openBuildModal('explicit', '{{ ft.form_type_id }}')"
         >
             <div class="form-card-header">
                 <div class="form-card-icon">📋</div>
@@ -134,16 +203,23 @@ Builder{% endblock %} {% block content %}
                     class="btn btn-sm btn-secondary"
                     >List</a
                 >
-                <a
-                    href="/form-builder/{{ ft.form_type_id }}"
+                <button
                     class="btn btn-sm btn-secondary"
-                    >✏️ Build</a
+                    onclick="openBuildModal('explicit', '{{ ft.form_type_id }}')"
                 >
+                    ✏️ Build
+                </button>
                 <a
                     href="/workflow-builder/{{ ft.form_type_id }}"
                     class="btn btn-sm btn-secondary"
                     >⚙ Workflow</a
                 >
+                <button
+                    class="btn btn-sm btn-secondary"
+                    onclick="exportFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')"
+                >
+                    Export
+                </button>
                 <button
                     class="btn btn-sm btn-danger"
                     onclick="deleteForm('{{ ft.form_type_id }}','{{ ft.form_name }}')"
@@ -162,7 +238,7 @@ Builder{% endblock %} {% block content %}
             Form types define the fields and schema for data entry at this
             stage.
         </p>
-        <button class="btn btn-primary" onclick="openCreateFormModal()">
+        <button class="btn btn-primary" onclick="openBuildModal('new-form')">
             + Create Form Type
         </button>
     </div>
@@ -308,45 +384,135 @@ Builder{% endblock %} {% block content %}
       'created_by': stage.created_by,
       'created_at': stage.created_at | string,
       'updated_at': stage.updated_at | string
-    } | tojson(indent=2) }}</pre>
+    } | tojson(indent=2) }}</pre
+        >
     </div>
 </div>
 
 <!-- Drive View -->
-<div id="drive-view-container" style="display: none; margin-top: 20px;">
+<div id="drive-view-container" style="display: none; margin-top: 20px">
     <div class="form-grid">
         {% for child in children %}
-        <div class="form-card" onclick="window.location='/stages/{{ child.stage_id }}'" style="border: 2px solid var(--border); box-shadow: none;">
-            <div class="form-card-header" style="align-items: center; margin-bottom: 0;">
-                <div class="form-card-icon" style="background: transparent; color: var(--text-muted); font-size: 24px; margin-right: 8px;">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <div
+            class="form-card"
+            onclick="window.location='/stages/{{ child.stage_id }}'"
+            style="border: 2px solid var(--border); box-shadow: none"
+        >
+            <div
+                class="form-card-header"
+                style="align-items: center; margin-bottom: 0"
+            >
+                <div
+                    class="form-card-icon"
+                    style="
+                        background: transparent;
+                        color: var(--text-muted);
+                        font-size: 24px;
+                        margin-right: 8px;
+                    "
+                >
+                    <svg
+                        width="32"
+                        height="32"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                    >
+                        <path
+                            d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+                        />
+                    </svg>
                 </div>
                 <div>
-                    <div class="form-card-name" style="font-size: 15px;">{{ child.stage_name }}</div>
+                    <div class="form-card-name" style="font-size: 15px">
+                        {{ child.stage_name }}
+                    </div>
                 </div>
-                <div class="ml-auto" style="color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation();">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                <div
+                    class="ml-auto"
+                    style="color: var(--text-muted); cursor: pointer"
+                    onclick="event.stopPropagation()"
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="12" cy="5" r="1" />
+                        <circle cx="12" cy="19" r="1" />
+                    </svg>
                 </div>
             </div>
         </div>
-        {% endfor %}
-        {% for ft in form_types %}
-        <div class="form-card" onclick="window.location='/form-builder/{{ ft.form_type_id }}'" style="border: 1px solid var(--border); box-shadow: none;">
-            <div class="form-card-header" style="align-items: center; margin-bottom: 0;">
-                <div class="form-card-icon" style="background: transparent; color: var(--primary); font-size: 24px; margin-right: 8px;">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="fill: var(--primary-light);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        {% endfor %} {% for ft in form_types %}
+        <div
+            class="form-card"
+            onclick="openBuildModal('explicit', '{{ ft.form_type_id }}')"
+            style="border: 1px solid var(--border); box-shadow: none"
+        >
+            <div
+                class="form-card-header"
+                style="align-items: center; margin-bottom: 0"
+            >
+                <div
+                    class="form-card-icon"
+                    style="
+                        background: transparent;
+                        color: var(--primary);
+                        font-size: 24px;
+                        margin-right: 8px;
+                    "
+                >
+                    <svg
+                        width="32"
+                        height="32"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        style="fill: var(--primary-light)"
+                    >
+                        <path
+                            d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                        />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="16" y1="13" x2="8" y2="13" />
+                        <line x1="16" y1="17" x2="8" y2="17" />
+                        <polyline points="10 9 9 9 8 9" />
+                    </svg>
                 </div>
                 <div>
-                    <div class="form-card-name" style="font-size: 15px;">{{ ft.form_name }}</div>
+                    <div class="form-card-name" style="font-size: 15px">
+                        {{ ft.form_name }}
+                    </div>
                 </div>
-                <div class="ml-auto" style="color: var(--text-muted); cursor: pointer;" onclick="event.stopPropagation();">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                <div
+                    class="ml-auto"
+                    style="color: var(--text-muted); cursor: pointer"
+                    onclick="event.stopPropagation()"
+                >
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="12" cy="5" r="1" />
+                        <circle cx="12" cy="19" r="1" />
+                    </svg>
                 </div>
             </div>
         </div>
-        {% endfor %}
-        {% if not children and not form_types %}
-        <div class="empty-state" style="grid-column: 1 / -1;">
+        {% endfor %} {% if not children and not form_types %}
+        <div class="empty-state" style="grid-column: 1 / -1">
             <div class="empty-icon">📂</div>
             <h3>Drive is empty</h3>
             <p>Add a child stage or form type to get started.</p>
@@ -358,9 +524,11 @@ Builder{% endblock %} {% block content %}
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         if (localStorage.getItem("drive-view") === "true") {
-            document.querySelectorAll('.stat-grid, .tabs, .tab-pane').forEach(el => el.style.display = 'none');
+            document
+                .querySelectorAll(".stat-grid, .tabs, .tab-pane")
+                .forEach((el) => (el.style.display = "none"));
             const driveView = document.getElementById("drive-view-container");
-            if(driveView) driveView.style.display = 'block';
+            if (driveView) driveView.style.display = "block";
         }
     });
 </script>
@@ -368,13 +536,44 @@ Builder{% endblock %} {% block content %}
 <div class="modal-overlay" id="create-form-modal">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">Create Form Type</span>
+            <span class="modal-title" id="create-form-modal-title"
+                >Create Form Type</span
+            >
             <button
                 class="btn btn-ghost btn-icon"
                 onclick="closeModal('create-form-modal')"
             >
                 ✕
             </button>
+        </div>
+        <div
+            id="template-indicator"
+            style="
+                display: none;
+                background: var(--primary-light);
+                padding: 12px 16px;
+                border-bottom: 1px solid var(--border);
+            "
+        >
+            <div
+                style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: var(--primary);
+                "
+            >
+                <span>📋</span>
+                <strong>Selected Template:</strong>
+                <span id="selected-template-name">-</span>
+                <button
+                    class="btn btn-sm btn-secondary"
+                    onclick="clearTemplateSelection()"
+                    style="margin-left: auto; font-size: 11px; padding: 4px 8px"
+                >
+                    ✕ Clear
+                </button>
+            </div>
         </div>
         <div class="modal-body">
             <div class="form-group">
@@ -406,6 +605,240 @@ Builder{% endblock %} {% block content %}
             </button>
             <button class="btn btn-primary" onclick="createForm()">
                 Create & Open Builder
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Build Options Modal -->
+<div class="modal-overlay" id="build-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Create Form</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('build-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="color: var(--text-muted); margin-bottom: 16px">
+                Choose how you want to create your form:
+            </p>
+            <div class="row" style="display: flex; gap: 16px">
+                <div
+                    class="col-6"
+                    style="
+                        flex: 1;
+                        cursor: pointer;
+                        transition: var(--transition);
+                    "
+                    onclick="openCreateFormModal('new')"
+                >
+                    <div
+                        class="card"
+                        style="
+                            border: 2px solid var(--border);
+                            border-radius: var(--radius-lg);
+                            padding: 20px;
+                            text-align: center;
+                            transition: var(--transition);
+                        "
+                        onmouseover="
+                            this.style.borderColor = 'var(--primary)';
+                            this.style.transform = 'translateY(-4px)';
+                            this.style.boxShadow = 'var(--shadow-md)';
+                        "
+                        onmouseout="
+                            this.style.borderColor = 'var(--border)';
+                            this.style.transform = 'translateY(0)';
+                            this.style.boxShadow = 'none';
+                        "
+                    >
+                        <div style="font-size: 40px; margin-bottom: 12px">
+                            📝
+                        </div>
+                        <h4 style="margin-bottom: 8px">New Formtype</h4>
+                        <p
+                            style="
+                                font-size: 12px;
+                                color: var(--text-muted);
+                                margin-bottom: 16px;
+                            "
+                        >
+                            Start with a blank canvas and build your form from
+                            scratch
+                        </p>
+                        <button
+                            class="btn btn-primary btn-sm"
+                            style="width: 100%"
+                        >
+                            Get Started
+                        </button>
+                    </div>
+                </div>
+                <div
+                    class="col-6"
+                    style="
+                        flex: 1;
+                        cursor: pointer;
+                        transition: var(--transition);
+                    "
+                    onclick="openTemplateModal()"
+                >
+                    <div
+                        class="card"
+                        style="
+                            border: 2px solid var(--border);
+                            border-radius: var(--radius-lg);
+                            padding: 20px;
+                            text-align: center;
+                            transition: var(--transition);
+                        "
+                        onmouseover="
+                            this.style.borderColor = 'var(--primary)';
+                            this.style.transform = 'translateY(-4px)';
+                            this.style.boxShadow = 'var(--shadow-md)';
+                        "
+                        onmouseout="
+                            this.style.borderColor = 'var(--border)';
+                            this.style.transform = 'translateY(0)';
+                            this.style.boxShadow = 'none';
+                        "
+                    >
+                        <div style="font-size: 40px; margin-bottom: 12px">
+                            📋
+                        </div>
+                        <h4 style="margin-bottom: 8px">
+                            Start with a Template
+                        </h4>
+                        <p
+                            style="
+                                font-size: 12px;
+                                color: var(--text-muted);
+                                margin-bottom: 16px;
+                            "
+                        >
+                            Choose from existing form templates to speed up your
+                            development
+                        </p>
+                        <button
+                            class="btn btn-primary btn-sm"
+                            style="width: 100%"
+                        >
+                            Browse Templates
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template Selection Modal -->
+<div class="modal-overlay" id="template-modal">
+    <div class="modal" style="max-width: 800px">
+        <div class="modal-header">
+            <span class="modal-title">Choose a Template</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('template-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Search Templates</label>
+                <div style="display: flex; gap: 8px">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="template-search"
+                        placeholder="Search by form name or path..."
+                        oninput="filterTemplates()"
+                    />
+                    <button
+                        class="btn btn-secondary"
+                        onclick="filterTemplates()"
+                    >
+                        🔍
+                    </button>
+                </div>
+            </div>
+            <div
+                id="template-list"
+                style="
+                    max-height: 400px;
+                    overflow-y: auto;
+                    border: 1px solid var(--border);
+                    border-radius: var(--radius);
+                "
+            >
+                <p
+                    style="
+                        padding: 20px;
+                        text-align: center;
+                        color: var(--text-muted);
+                    "
+                >
+                    Loading templates...
+                </p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('template-modal')"
+            >
+                Cancel
+            </button>
+            <button
+                class="btn btn-primary"
+                id="use-template-btn"
+                onclick="useSelectedTemplate()"
+                disabled
+            >
+                Use Selected Template
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Template Preview Modal -->
+<div class="modal-overlay" id="template-preview-modal">
+    <div class="modal" style="max-width: 900px">
+        <div class="modal-header">
+            <span class="modal-title" id="preview-title">Preview Template</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('template-preview-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div
+                id="preview-content"
+                style="max-height: 500px; overflow-y: auto"
+            >
+                Loading preview...
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('template-preview-modal')"
+            >
+                Close
+            </button>
+            <button
+                class="btn btn-primary"
+                id="use-preview-template-btn"
+                onclick="usePreviewedTemplate()"
+            >
+                Use This Template
             </button>
         </div>
     </div>
@@ -479,13 +912,25 @@ Builder{% endblock %} {% block content %}
             <div class="form-group">
                 <label class="form-label">Visibility</label>
                 <select class="form-control" id="edit-stage-visibility">
-                    <option value="private" {% if stage.visibility_scope == 'private' %}selected{% endif %}>
+                    <option
+                        value="private"
+                        {% if stage.visibility_scope == "private" %}selected{%
+                        endif %}
+                    >
                         Private
                     </option>
-                    <option value="public" {% if stage.visibility_scope == 'public' %}selected{% endif %}>
+                    <option
+                        value="public"
+                        {% if stage.visibility_scope == "public" %}selected{%
+                        endif %}
+                    >
                         Public
                     </option>
-                    <option value="restricted" {% if stage.visibility_scope == 'restricted' %}selected{% endif %}>
+                    <option
+                        value="restricted"
+                        {% if stage.visibility_scope == "restricted" %}selected{%
+                        endif %}
+                    >
                         Restricted
                     </option>
                 </select>
@@ -633,8 +1078,7 @@ Builder{% endblock %} {% block content %}
                         max-height: 300px;
                         overflow-y: auto;
                     "
-                >
-                    </ul>
+                ></ul>
             </div>
             <div class="form-check" style="margin-top: 12px">
                 <input type="checkbox" id="confirm-delete" checked />
@@ -667,7 +1111,7 @@ Builder{% endblock %} {% block content %}
 {% endblock %} {% block extra_js %}
 <script>
     const STAGE_ID = "{{ stage.stage_id }}";
-    
+
     // Dropdown Toggle
     function toggleNewDropdown() {
         const menu = document.getElementById("new-dropdown-menu");
@@ -676,7 +1120,12 @@ Builder{% endblock %} {% block content %}
     document.addEventListener("click", function (e) {
         const btn = document.getElementById("btn-new-dropdown");
         const menu = document.getElementById("new-dropdown-menu");
-        if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+        if (
+            btn &&
+            menu &&
+            !btn.contains(e.target) &&
+            !menu.contains(e.target)
+        ) {
             menu.style.display = "none";
         }
     });
@@ -705,9 +1154,7 @@ Builder{% endblock %} {% block content %}
         });
     });
 
-    function openCreateFormModal() {
-        openModal("create-form-modal");
-    }
+    // openCreateFormModal is now defined below with mode parameter
     function openCreateChildModal() {
         openModal("create-child-modal");
     }
@@ -721,31 +1168,7 @@ Builder{% endblock %} {% block content %}
         openModal("grant-modal");
     }
 
-    async function createForm() {
-        const name = document.getElementById("new-form-name").value.trim();
-        const version =
-            document.getElementById("new-form-version").value.trim() || "1.0.0";
-        if (!name) {
-            toast("Form name is required", "error");
-            return;
-        }
-        try {
-            const ft = await apiFetch(`${API}/form-types`, {
-                method: "POST",
-                body: {
-                    form_name: name,
-                    stage_id: STAGE_ID,
-                    version,
-                    schema: { fields: [], settings: {} },
-                },
-            });
-            toast("Form type created", "success");
-            closeModal("create-form-modal");
-            window.location = `/form-builder/${ft.form_type_id}`;
-        } catch (e) {
-            toast(e.message, "error");
-        }
-    }
+    // createForm is now defined below with template support
 
     async function createChildStage() {
         const name = document.getElementById("child-stage-name").value.trim();
@@ -888,7 +1311,7 @@ Builder{% endblock %} {% block content %}
                 method: "DELETE",
             });
             toast("Stage and descendants deleted successfully", "success");
-            setTimeout(() => window.location = `/`, 800);
+            setTimeout(() => (window.location = `/`), 800);
         } catch (e) {
             toast(e.message, "error");
         }
@@ -905,7 +1328,31 @@ Builder{% endblock %} {% block content %}
         }
     }
 
-    async function cloneForm(id, name) {
+    async function exportFormType(id, name) {
+        try {
+            const src = await apiFetch(`${API}/form-types/${id}/schema`);
+            const data = src.schema_reference || src.schema_data || {};
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], {
+                type: "application/json",
+            });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = url;
+            a.download = `${name.replace(/\s+/g, "_").toLowerCase()}_schema.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            toast("Form exported", "success");
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    async function cloneFormType(id, name) {
         try {
             const src = await apiFetch(`${API}/form-types/${id}/schema`);
             const newName = name + " (Copy)";
@@ -973,6 +1420,572 @@ Builder{% endblock %} {% block content %}
         const txt = document.getElementById("meta-json").textContent;
         navigator.clipboard.writeText(txt);
         toast("Copied to clipboard");
+    }
+
+    // ---------------------------------------------------------------------------
+    // Build Modal Functions
+    // ---------------------------------------------------------------------------
+    let selectedTemplateFormTypeId = null;
+    let selectedTemplateData = null;
+
+    function openBuildModal(mode, formTypeId = null) {
+        if (mode === "explicit") {
+            // Directly open the form builder for existing form
+            window.location = `/form-builder/${formTypeId}`;
+            return;
+        }
+        // Open the build options modal
+        openModal("build-modal");
+    }
+
+    function openTemplateModal() {
+        closeModal("build-modal");
+        openModal("template-modal");
+        loadAllFormTypes();
+        selectedTemplateFormTypeId = null;
+        selectedTemplateData = null;
+        document.getElementById("use-template-btn").disabled = true;
+    }
+
+    async function loadAllFormTypes() {
+        try {
+            const data = await apiFetch(
+                `${API}/form-types/with-schema?limit=100`,
+            );
+            const templateList = document.getElementById("template-list");
+
+            if (!data || data.length === 0) {
+                templateList.innerHTML =
+                    '<p style="padding: 20px; text-align: center; color: var(--text-muted);">No templates found. Create a new Formtype first.</p>';
+                return;
+            }
+
+            // Store form types globally for filtering
+            window.allTemplates = data;
+            renderTemplateList(data);
+        } catch (e) {
+            toast(e.message, "error");
+            document.getElementById("template-list").innerHTML =
+                '<p style="padding: 20px; text-align: center; color: var(--danger);">Error loading templates: ' +
+                e.message +
+                "</p>";
+        }
+    }
+
+    function renderTemplateList(formTypes) {
+        const templateList = document.getElementById("template-list");
+
+        if (formTypes.length === 0) {
+            templateList.innerHTML =
+                '<p style="padding: 20px; text-align: center; color: var(--text-muted);">No matching templates found.</p>';
+            return;
+        }
+
+        const html = formTypes
+            .map(
+                (ft) => `
+            <div class="template-item" data-form-type-id="${ft.form_type_id}"
+                 style="
+                    padding: 12px 16px;
+                    border-bottom: 1px solid var(--border);
+                    cursor: pointer;
+                    transition: var(--transition);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                 "
+                 onclick="selectTemplate('${ft.form_type_id}')">
+                <div style="
+                    flex-shrink: 0;
+                    width: 40px;
+                    height: 40px;
+                    background: var(--primary-light);
+                    border-radius: var(--radius);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 18px;
+                ">
+                    📄
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="
+                        font-weight: 600;
+                        font-size: 14px;
+                        color: var(--text);
+                        margin-bottom: 2px;
+                    ">${ft.form_name}</div>
+                    <div style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        font-family: monospace;
+                    ">${ft.form_path}</div>
+                </div>
+                <div style="
+                    display: flex;
+                    gap: 8px;
+                ">
+                    <button
+                        class="btn btn-secondary btn-sm"
+                        onclick="event.stopPropagation(); previewTemplate('${ft.form_type_id}')"
+                        style="font-size: 11px; padding: 4px 10px;"
+                    >
+                        👁 Preview
+                    </button>
+                    <button
+                        class="btn btn-primary btn-sm select-template-btn"
+                        data-id="${ft.form_type_id}"
+                        onclick="event.stopPropagation(); selectTemplateAndProceed('${ft.form_type_id}')"
+                        style="font-size: 11px; padding: 4px 10px;"
+                    >
+                        ✓ Select
+                    </button>
+                </div>
+            </div>
+        `,
+            )
+            .join("");
+
+        templateList.innerHTML = html;
+    }
+
+    function filterTemplates() {
+        const searchTerm = document
+            .getElementById("template-search")
+            .value.toLowerCase()
+            .trim();
+        if (!searchTerm) {
+            renderTemplateList(window.allTemplates);
+            return;
+        }
+
+        const filtered = window.allTemplates.filter(
+            (ft) =>
+                ft.form_name.toLowerCase().includes(searchTerm) ||
+                ft.form_path.toLowerCase().includes(searchTerm),
+        );
+        renderTemplateList(filtered);
+    }
+
+    function selectTemplate(formTypeId) {
+        // Remove previous selection highlighting
+        document.querySelectorAll(".template-item").forEach((item) => {
+            item.style.background = "";
+        });
+
+        // Highlight selected item
+        const selectedItem = document.querySelector(
+            `.template-item[data-form-type-id="${formTypeId}"]`,
+        );
+        if (selectedItem) {
+            selectedItem.style.background = "var(--primary-light)";
+            selectedItem.style.borderColor = "var(--primary)";
+        }
+
+        selectedTemplateFormTypeId = formTypeId;
+        selectedTemplateData = window.allTemplates.find(
+            (ft) => ft.form_type_id === formTypeId,
+        );
+
+        console.log("Selected template:", selectedTemplateData);
+        console.log(
+            "Template schema_reference:",
+            selectedTemplateData?.schema_reference,
+        );
+        console.log("Template schema_data:", selectedTemplateData?.schema_data);
+
+        document.getElementById("use-template-btn").disabled = false;
+    }
+
+    function selectTemplateAndProceed(formTypeId) {
+        selectTemplate(formTypeId);
+        closeModal("template-modal");
+        openCreateFormModal("template");
+    }
+
+    async function useSelectedTemplate() {
+        if (!selectedTemplateFormTypeId) {
+            toast("Please select a template first", "error");
+            return;
+        }
+        closeModal("template-modal");
+        openCreateFormModal("template");
+    }
+
+    async function previewTemplate(formTypeId) {
+        try {
+            // Get the form type from already loaded data
+            const ft = window.allTemplates.find(
+                (f) => f.form_type_id === formTypeId,
+            );
+
+            if (!ft) {
+                toast("Template not found", "error");
+                return;
+            }
+
+            // Get schema from the form type data
+            const schema = ft.schema_data || ft.schema_reference || {};
+
+            document.getElementById("preview-title").textContent =
+                `Preview: ${ft.form_name}`;
+            const previewContent = document.getElementById("preview-content");
+
+            if (
+                !schema.fields ||
+                (schema.fields && schema.fields.length === 0)
+            ) {
+                previewContent.innerHTML =
+                    '<p style="padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 14px;">This template has no fields defined yet.</p>';
+            } else {
+                // Render actual form preview with real inputs
+                let html = '<form style="padding: 24px; background: #fff;">';
+
+                // Add form header
+                html += `
+                    <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--border);">
+                        <h2 style="margin: 0 0 8px 0; font-size: 20px;">${esc(ft.form_name)}</h2>
+                        <div style="color: var(--text-muted); font-size: 12px;">
+                            <strong>Path:</strong> <code style="background: var(--bg); padding: 2px 6px; border-radius: 3px;">${esc(ft.form_path)}</code>
+                            <span style="margin: 0 8px;">|</span>
+                            <strong>Version:</strong> <code>${esc(ft.version)}</code>
+                        </div>
+                    </div>
+                `;
+
+                // Render fields
+                schema.fields.forEach((field) => {
+                    const FieldType = field.fieldtype || field.type || "Data";
+                    const label = field.label || field.name || "Unnamed Field";
+                    const fieldname = field.fieldname || field.name || "";
+                    const required = field.required ? " *" : "";
+                    const readonly = field.read_only ? "readonly" : "";
+                    const placeholder = field.placeholder || "";
+                    const description = field.description || "";
+                    const defaultValue = field.default || "";
+                    const options = field.options || "";
+
+                    // Description hint
+                    const hint = description
+                        ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${esc(description)}</div>`
+                        : "";
+
+                    // Skip layout elements for now
+                    if (
+                        [
+                            "Section Break",
+                            "Column Break",
+                            "Tab Break",
+                            "Heading",
+                        ].includes(FieldType)
+                    ) {
+                        return;
+                    }
+
+                    if (FieldType === "HTML") {
+                        html += `<div style="margin-bottom: 16px;">${options || ""}</div>`;
+                        return;
+                    }
+
+                    // Get field type info
+                    const typeInfo = getFieldTypeIcon(FieldType);
+
+                    // Render based on field type
+                    if (FieldType === "Check") {
+                        html += `
+                            <div style="margin-bottom: 16px;">
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                    <input type="checkbox" ${readonly} ${defaultValue === "1" ? "checked" : ""}>
+                                    <span style="font-size: 13px; font-weight: 600;">${typeInfo.icon} ${esc(label)}${required}</span>
+                                </label>
+                                ${hint}
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Label for all other fields
+                    const labelText = `<label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">${typeInfo.icon} ${esc(label)}${required}</label>`;
+
+                    let inputHtml = "";
+
+                    switch (FieldType) {
+                        case "Select":
+                        case "Autocomplete":
+                            inputHtml = `
+                                <select class="form-control" ${readonly}>
+                                    <option value="">-- Select --</option>
+                                    ${options
+                                        .split("\n")
+                                        .filter(Boolean)
+                                        .map(
+                                            (opt) =>
+                                                `<option value="${esc(opt)}" ${defaultValue === opt ? "selected" : ""}>${esc(opt)}</option>`,
+                                        )
+                                        .join("")}
+                                </select>
+                            `;
+                            break;
+                        case "Link":
+                        case "Dynamic Link":
+                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="Search ${esc(options)}...">`;
+                            break;
+                        case "Table":
+                        case "Table MultiSelect":
+                            inputHtml = `<div style="border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; color: var(--text-muted); font-size: 13px; text-align: center; background: var(--bg);">📋 ${esc(options)} <br><small>No child records yet</small></div>`;
+                            break;
+                        case "Date":
+                            inputHtml = `<input type="date" class="form-control" ${readonly}>`;
+                            break;
+                        case "Datetime":
+                            inputHtml = `<input type="datetime-local" class="form-control" ${readonly}>`;
+                            break;
+                        case "Time":
+                            inputHtml = `<input type="time" class="form-control" ${readonly}>`;
+                            break;
+                        case "Int":
+                            inputHtml = `<input type="number" step="1" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+                            break;
+                        case "Float":
+                        case "Currency":
+                        case "Percent":
+                            inputHtml = `<input type="number" step="any" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+                            break;
+                        case "Small Text":
+                            inputHtml = `<textarea class="form-control" rows="2" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                            break;
+                        case "Long Text":
+                        case "Text Editor":
+                            inputHtml = `<textarea class="form-control" rows="4" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                            break;
+                        case "Code":
+                        case "JSON":
+                            inputHtml = `<textarea class="form-control" rows="4" style="font-family: monospace; font-size: 12px;" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                            break;
+                        case "Password":
+                            inputHtml = `<input type="password" class="form-control" ${readonly} placeholder="${esc(placeholder)}">`;
+                            break;
+                        case "Color":
+                            inputHtml = `<input type="color" style="width: 60px; height: 40px; border-radius: var(--radius); border: 1px solid var(--border); cursor: pointer;">`;
+                            break;
+                        case "Rating":
+                            inputHtml = `<div style="font-size: 28px; letter-spacing: 4px; color: #ffd700;">⭐⭐⭐⭐⭐</div>`;
+                            break;
+                        case "Attach":
+                        case "Attach Image":
+                            inputHtml = `<input type="file" ${readonly} class="form-control" style="padding: 8px;">`;
+                            break;
+                        case "Signature":
+                            inputHtml = `<div style="height: 80px; border: 2px dashed var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; background: var(--bg);">✒ Click to sign</div>`;
+                            break;
+                        case "Duration":
+                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="HH:MM:SS" value="${esc(defaultValue)}">`;
+                            break;
+                        case "Geolocation":
+                            inputHtml = `<div style="height: 44px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; padding: 0 16px; color: var(--text-muted); font-size: 13px; background: var(--bg);">📍 Click to pick location</div>`;
+                            break;
+                        default:
+                            // Default text input
+                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+                    }
+
+                    html += `<div style="margin-bottom: 20px;">${labelText}${inputHtml}${hint}</div>`;
+                });
+
+                addPreviewActions(html);
+            }
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    function addPreviewActions(html) {
+        const previewContent = document.getElementById("preview-content");
+        // Add form actions
+        html += `
+            <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeModal('template-preview-modal')">Close Preview</button>
+            </div>
+        </form>
+        `;
+        previewContent.innerHTML = html;
+
+        // Set up the use button
+        const useBtn = document.getElementById("use-preview-template-btn");
+        useBtn.onclick = function () {
+            closeModal("template-preview-modal");
+            selectTemplate(formTypeId);
+            openCreateFormModal("template");
+        };
+
+        openModal("template-preview-modal");
+    }
+
+    // Helper function to get field type icon and description
+    function getFieldTypeIcon(fieldtype) {
+        const fieldTypes = {
+            Data: { icon: "📝", desc: "Text" },
+            Int: { icon: "🔢", desc: "Number" },
+            Float: { icon: "🔣", desc: "Decimal" },
+            Currency: { icon: "💰", desc: "Money" },
+            Percent: { icon: "％", desc: "Percentage" },
+            Check: { icon: "☑", desc: "Checkbox" },
+            Date: { icon: "📅", desc: "Date" },
+            Datetime: { icon: "🕐", desc: "Date & Time" },
+            Time: { icon: "⏱", desc: "Time" },
+            Duration: { icon: "⏳", desc: "Duration" },
+            "Small Text": { icon: "📄", desc: "Short Text" },
+            "Long Text": { icon: "📜", desc: "Long Text" },
+            "Text Editor": { icon: "✍", desc: "Rich Text" },
+            Code: { icon: "💻", desc: "Code" },
+            Password: { icon: "🔒", desc: "Password" },
+            JSON: { icon: "{}", desc: "JSON" },
+            Select: { icon: "▾", desc: "Dropdown" },
+            Autocomplete: { icon: "🔍", desc: "Search" },
+            Rating: { icon: "⭐", desc: "Rating" },
+            Color: { icon: "🎨", desc: "Color" },
+            Link: { icon: "🔗", desc: "Link" },
+            "Dynamic Link": { icon: "⚡", desc: "Dynamic Link" },
+            Table: { icon: "⊞", desc: "Table" },
+            "Table MultiSelect": { icon: "☰", desc: "Multi-Select" },
+            Attach: { icon: "📎", desc: "File" },
+            "Attach Image": { icon: "🖼", desc: "Image" },
+            Signature: { icon: "✒", desc: "Signature" },
+            Geolocation: { icon: "📍", desc: "Location" },
+        };
+        return fieldTypes[fieldtype] || { icon: "📝", desc: fieldtype };
+    }
+
+    // Helper function to escape HTML
+    function esc(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function openCreateFormModal(mode = "new") {
+        if (mode === "new") {
+            // New formtype - clear any template selection
+            selectedTemplateFormTypeId = null;
+            selectedTemplateData = null;
+        }
+
+        // Update template indicator
+        const indicator = document.getElementById("template-indicator");
+        const templateName = document.getElementById("selected-template-name");
+        const modalTitle = document.getElementById("create-form-modal-title");
+
+        if (selectedTemplateData) {
+            indicator.style.display = "block";
+            templateName.textContent = selectedTemplateData.form_name;
+            modalTitle.textContent = "Create Form from Template";
+        } else {
+            indicator.style.display = "none";
+            templateName.textContent = "-";
+            modalTitle.textContent = "Create Form Type";
+        }
+
+        closeModal("build-modal");
+        openModal("create-form-modal");
+    }
+
+    function clearTemplateSelection() {
+        selectedTemplateFormTypeId = null;
+        selectedTemplateData = null;
+        document.getElementById("template-indicator").style.display = "none";
+        document.getElementById("selected-template-name").textContent = "-";
+        document.getElementById("create-form-modal-title").textContent =
+            "Create Form Type";
+    }
+
+    async function createForm() {
+        const name = document.getElementById("new-form-name").value.trim();
+        const version =
+            document.getElementById("new-form-version").value.trim() || "1.0.0";
+
+        if (!name) {
+            toast("Form name is required", "error");
+            return;
+        }
+
+        try {
+            let schema = { fields: [], settings: {} };
+
+            // If we have a selected template, copy its schema
+            if (selectedTemplateData) {
+                console.log("Selected template data:", selectedTemplateData);
+
+                // Try to get schema from either property
+                const templateSchema =
+                    selectedTemplateData.schema_reference;
+
+                if (templateSchema && typeof templateSchema === "object") {
+                    console.log("Template schema to copy:", templateSchema);
+
+                    // Deep clone the schema to avoid reference issues
+                    schema = JSON.parse(JSON.stringify(templateSchema));
+
+                    console.log("Copied schema:", schema);
+                    console.log(
+                        "Schema has fields?",
+                        schema.fields && schema.fields.length > 0,
+                    );
+                } else {
+                    console.warn(
+                        "Template schema is null or invalid:",
+                        templateSchema,
+                    );
+                    toast("Template has no schema to copy", "warning");
+                }
+            }
+
+            // console.log("Final schema to send:", schema);
+            console.log("Request body will be:", {
+                form_name: name,
+                stage_id: STAGE_ID,
+                version: version,
+                schema: schema,
+            });
+
+            const requestBody = {
+                form_name: name,
+                stage_id: STAGE_ID,
+                version,
+                schema_reference: schema,
+            };
+            // console.log("Actual request body:", requestBody);
+            // console.log(
+            //     "Request schema fields count:",
+            //     requestBody.schema?.fields?.length || 0,
+            // );
+
+            const ft = await apiFetch(`${API}/form-types`, {
+                method: "POST",
+                body: requestBody,
+            });
+
+            // console.log("Created form type response:", ft);
+            // console.log("Response schema_reference:", ft.schema_reference);
+            // console.log(
+            //     "Response schema has fields?",
+            //     ft.schema_reference?.fields?.length > 0,
+            // );
+
+            toast("Form type created", "success");
+            closeModal("create-form-modal");
+
+            // Small delay to ensure data is saved before redirecting
+            setTimeout(() => {
+                window.location = `/form-builder/${ft.form_type_id}`;
+            }, 500);
+        } catch (e) {
+            console.error("Error creating form:", e);
+            toast(e.message, "error");
+        }
     }
 </script>
 {% endblock %}

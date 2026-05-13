@@ -47,6 +47,17 @@ async def list_form_types(
     return await service.get_all_form_types(skip=skip, limit=limit)
 
 
+@router.get("/with-schema", response_model=List[FormTypeWithSchema])
+async def list_form_types_with_schema(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all form types with schema data for template selection."""
+    service = FormTypeService(db)
+    return await service.get_all_form_types_with_schema(skip=skip, limit=limit)
+
+
 @router.get("/search", response_model=List[FormTypeResponse])
 async def search_form_types(
     q: str = Query(..., min_length=1, description="Search query"),

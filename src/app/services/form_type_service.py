@@ -168,6 +168,20 @@ class FormTypeService:
 
         return [FormTypeResponse.model_validate(ft) for ft in form_types]
 
+    async def get_all_form_types_with_schema(
+        self, skip: int = 0, limit: int = 100
+    ) -> List[FormTypeWithSchema]:
+        """Get all form types with schema data for template selection."""
+        result = await self.db.execute(
+            select(FormType)
+            .order_by(FormType.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        form_types = result.scalars().all()
+
+        return [FormTypeWithSchema.model_validate(ft) for ft in form_types]
+
     async def update_form_type(
         self, form_type_id: str, form_data: FormTypeUpdate
     ) -> FormTypeResponse:
