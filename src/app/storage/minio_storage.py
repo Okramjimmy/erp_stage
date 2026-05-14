@@ -5,6 +5,7 @@ Handles file storage operations using MinIO S3-compatible storage
 
 from minio import Minio
 from minio.error import S3Error
+from minio.deleteobjects import DeleteObject
 from minio.commonconfig import CopySource
 from datetime import timedelta
 import io
@@ -99,22 +100,50 @@ class MinIOStorageService:
 
     def delete_file(self, object_name: str) -> bool:
         """
-        Delete a file from MinIO
-
-        Args:
-            object_name: Name of the object to delete
-
-        Returns:
-            True if successful, False otherwise
+        Delete a file or all objects under a prefix(folder)
         """
+    
         try:
+            # Check if this path has children objects
+            prefix = object_name.rstrip("/") + "/"
+    
+            objects = list(
+                self.client.list_objects(
+                    bucket_name=self.bucket_name,
+                    prefix=prefix,
+                    recursive=True
+                )
+            )
+    
+            # If objects exist under prefix => delete folder contents
+            if objects:
+    
+                delete_objects = [
+                    DeleteObject(obj.object_name)
+                    for obj in objects
+                ]
+    
+                errors = self.client.remove_objects(
+                    bucket_name=self.bucket_name,
+                    delete_object_list=delete_objects
+                )
+    
+                for error in errors:
+                    print(f"Delete error: {error}")
+                    return False
+    
+                return True
+    
+            # Otherwise delete as single file
             self.client.remove_object(
                 bucket_name=self.bucket_name,
                 object_name=object_name
             )
+    
             return True
+    
         except S3Error as e:
-            print(f"Error deleting file: {e}")
+            print(f"Error deleting file/folder: {e}")
             return False
 
     def move_file(self, source_object_name: str, dest_object_name: str) -> bool:

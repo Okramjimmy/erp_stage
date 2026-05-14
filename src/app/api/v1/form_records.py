@@ -1,9 +1,11 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.core.auth import get_current_user
 from src.app.database import get_db
+from src.app.models.user import User
 from src.app.schemas.form_record import (
     FormRecordCreate,
     FormRecordList,
@@ -16,10 +18,15 @@ router = APIRouter(prefix="/form-records", tags=["Form Records"])
 
 
 @router.post("", response_model=FormRecordResponse, status_code=201)
-async def create_record(payload: FormRecordCreate, db: AsyncSession = Depends(get_db)):
+async def create_record(
+    payload: FormRecordCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new form record. The created_by field is automatically set from the authenticated user."""
     svc = FormRecordService(db)
     try:
-        return await svc.create(payload)
+        return await svc.create(payload, created_by=current_user.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -57,10 +64,15 @@ async def update_record(
 
 
 @router.post("/{record_id}/submit", response_model=FormRecordResponse)
-async def submit_record(record_id: str, db: AsyncSession = Depends(get_db)):
+async def submit_record(
+    record_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Submit a form record. The submitted_by field is automatically set from the authenticated user."""
     svc = FormRecordService(db)
     try:
-        return await svc.submit(record_id)
+        return await svc.submit(record_id, submitted_by=current_user.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -75,10 +87,15 @@ async def cancel_record(record_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{record_id}/amend", response_model=FormRecordResponse)
-async def amend_record(record_id: str, db: AsyncSession = Depends(get_db)):
+async def amend_record(
+    record_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Amend a submitted form record. The created_by field is automatically set from the authenticated user."""
     svc = FormRecordService(db)
     try:
-        return await svc.amend(record_id)
+        return await svc.amend(record_id, created_by=current_user.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

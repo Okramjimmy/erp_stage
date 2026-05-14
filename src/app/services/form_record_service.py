@@ -103,8 +103,8 @@ class FormRecordService:
 
     def _build_minio_path(self, ft: FormType, field: dict, filename: str, record_id: str) -> str:
         """Build the canonical MinIO path: stage_id/form_name/record_id/field_label/filename."""
-        field_label = field.get("label") or field.get("fieldname")
-        return f"{ft.stage_id}/{ft.form_id}/{record_id}/{field_label}/{filename}"
+        field_label = field.get("fieldname")
+        return f"{ft.stage_id}/{ft.form_type_id}/{record_id}/{field_label}/{filename}"
 
     def _process_attachments(self, ft: FormType, data: dict, record_id: str) -> dict:
         """Relocate any attachment paths that are not already in the canonical location."""
@@ -179,11 +179,16 @@ class FormRecordService:
         data = dict(record.data) if record.data else {}
         data[field_name] = object_name
         record.data = data
+        logger.debug(f"------Updated record data: {data}")
         await self.db.commit()
         await self.db.refresh(record)
         return self._parse(record)
 
-    async def create(self, payload: FormRecordCreate) -> FormRecordResponse:
+    async def create(
+        self,
+        payload: FormRecordCreate,
+        created_by: str = "system"
+    ) -> FormRecordResponse:
         ft = await self.db.get(FormType, payload.form_type_id)
         if not ft:
             raise ValueError(f"FormType {payload.form_type_id} not found")
@@ -200,7 +205,7 @@ class FormRecordService:
             docname=docname,
             status="Draft",
             data=processed_data,
-            created_by=payload.created_by,
+            created_by=created_by,
         )
         self.db.add(record)
         await self.db.commit()
@@ -266,7 +271,11 @@ class FormRecordService:
         await self.db.refresh(record)
         return self._parse(record)
 
-    async def amend(self, record_id: str, created_by: str = "system") -> FormRecordResponse:
+    async def amend(
+        self,
+        record_id: str,
+        created_by: str = "system"
+    ) -> FormRecordResponse:
         original = await self.db.get(FormRecord, record_id)
         if not original:
             raise ValueError(f"Record {record_id} not found")
@@ -297,5 +306,17 @@ class FormRecordService:
             raise ValueError(f"Record {record_id} not found")
         if record.status == "Submitted":
             raise ValueError("Submitted records cannot be deleted")
+
+        # FormType lookup
+        form_type = await self.db.get(FormType, record.form_type_id)
+        if not form_type:
+            raise ValueError(f"FormType {record.form_type_id} not found where it should be")
+
+        # Minio delete folder
+        record_path = f"{form_type.stage_id}/{form_type.form_type_id}/{record.record_id}"
+        condition = storage_service.delete_file(record_path)
+        if not condition:
+            raise ValueError(f"Failed to delete record {record_id}")
+            
         await self.db.delete(record)
         await self.db.commit()

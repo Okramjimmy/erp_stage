@@ -2,10 +2,12 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.core.auth import get_current_user
 from src.app.database import get_db
+from src.app.models.user import User
 from src.app.schemas.form_type import (
     FormTypeCreate,
     FormTypeResponse,
@@ -19,10 +21,14 @@ router = APIRouter(prefix="/form-types", tags=["Form Types"])
 
 @router.post("", response_model=FormTypeResponse, status_code=201)
 async def create_form_type(
-    form_data: FormTypeCreate, db: AsyncSession = Depends(get_db)
+    form_data: FormTypeCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Create a new form type.
+
+    The created_by field is automatically set from the authenticated user.
 
     - **form_name**: Name of the form
     - **stage_id**: Parent stage ID
@@ -31,7 +37,7 @@ async def create_form_type(
     """
     service = FormTypeService(db)
     try:
-        return await service.create_form_type(form_data, created_by="system")
+        return await service.create_form_type(form_data, created_by=current_user.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

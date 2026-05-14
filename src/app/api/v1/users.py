@@ -56,14 +56,14 @@ async def list_users(
     """List all users with their assigned roles."""
     service = UserService(db)
     pairs = await service.list_users(skip=skip, limit=limit)
-    
+
     if current_user.is_superadmin:
         return [_user_to_list_item(u, r) for u, r in pairs]
-        
+
     # Non-superadmins can only see users who are not superadmins
     return [
-        _user_to_list_item(u, r) 
-        for u, r in pairs 
+        _user_to_list_item(u, r)
+        for u, r in pairs
         if not u.is_superadmin and "superadmin" not in (r or [])
     ]
 
@@ -72,12 +72,12 @@ async def list_users(
 async def create_user(
     data: UserCreate,
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_superadmin),
+    admin: User = Depends(require_superadmin),
 ):
-    """Create a new user (superadmin only)."""
+    """Create a new user (superadmin only). The created_by field is automatically set from the admin user."""
     service = UserService(db)
     try:
-        user = await service.create_user(data)
+        user = await service.create_user(data, created_by=admin.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return UserResponse(**user.to_dict(), roles=[])
@@ -193,7 +193,7 @@ async def upload_photo(
     logger.info(f"Uploading photo for user {user_id} to MinIO key: {minio_key}")
     logger.info(f"File bytes: {len(file_bytes)}")
     logger.info(f"Content type: {file.content_type}")
-    
+
     success = storage_service.upload_file(
         file_data=file_bytes,
         object_name=minio_key,

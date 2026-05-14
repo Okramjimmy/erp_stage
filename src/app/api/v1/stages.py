@@ -1,10 +1,11 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.core.auth import get_current_user_optional
+from src.app.core.auth import get_current_user, get_current_user_optional
 from src.app.database import get_db
+from src.app.models.user import User
 from src.app.schemas.stage import (
     StageCreate,
     StageMoveRequest,
@@ -19,9 +20,15 @@ router = APIRouter(prefix="/stages", tags=["Stages"])
 
 
 @router.post("", response_model=StageResponse, status_code=201)
-async def create_stage(stage_data: StageCreate, db: AsyncSession = Depends(get_db)):
+async def create_stage(
+    stage_data: StageCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Create a new stage.
+
+    The created_by field is automatically set from the authenticated user.
 
     - **stage_name**: Name of the stage
     - **parent_stage_id**: Optional parent stage ID for nesting
@@ -29,7 +36,7 @@ async def create_stage(stage_data: StageCreate, db: AsyncSession = Depends(get_d
     """
     service = StageService(db)
     try:
-        return await service.create_stage(stage_data, created_by="system")
+        return await service.create_stage(stage_data, created_by=current_user.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -116,19 +123,22 @@ async def update_stage(
 
 @router.post("/{stage_id}/move", response_model=StageMoveResponse)
 async def move_stage(
-    stage_id: str, move_request: StageMoveRequest, db: AsyncSession = Depends(get_db)
+    stage_id: str,
+    move_request: StageMoveRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Move a stage to a new parent.
 
-    Updates all descendants recursively.
+    Updates all descendants recursively. The user_id is automatically set from the authenticated user.
     """
     service = StageService(db)
     try:
         return await service.move_stage(
             stage_id=stage_id,
             target_parent_id=move_request.target_parent_id,
-            user_id="system",
+            user_id=current_user.user_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

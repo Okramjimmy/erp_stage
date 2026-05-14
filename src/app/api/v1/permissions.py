@@ -2,10 +2,12 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.app.core.auth import get_current_user
 from src.app.database import get_db
+from src.app.models.user import User
 from src.app.schemas.permission import (
     FormTypePermissionCreate,
     FormTypePermissionResponse,
@@ -108,17 +110,20 @@ async def assign_user_role(
 @router.post("/roles", response_model=RoleResponse, status_code=201)
 async def create_role(
     role_data: RoleCreate,
-    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Create a new role.
 
     - **role_name**: Unique role name (lowercase letters, numbers, underscores only)
     - **description**: Optional description of the role
+
+    The created_by field is automatically set from the authenticated user.
     """
     service = PermissionService(db)
     try:
-        return await service.create_role(role_data, created_by="system")
+        return await service.create_role(role_data, created_by=current_user.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
