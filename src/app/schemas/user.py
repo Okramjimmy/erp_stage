@@ -52,7 +52,7 @@ class UserPhotoUpdate(BaseModel):
 class UserLoginRequest(BaseModel):
     """Schema for login request."""
 
-    username: str
+    username: str = Field(..., description="Username or email address")
     password: str
 
 

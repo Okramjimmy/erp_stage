@@ -173,9 +173,14 @@ class UserService:
     # Authentication
     # ------------------------------------------------------------------
 
-    async def authenticate(self, username: str, password: str) -> Optional[User]:
+    async def authenticate(self, username_or_email: str, password: str) -> Optional[User]:
         """Return User if credentials are valid and account is active, else None."""
-        user = await self.get_by_username(username)
+        import re
+        if re.search(r"@.*\.", username_or_email):
+            user = await self.get_by_email(username_or_email)
+        else:
+            user = await self.get_by_username(username_or_email)
+
         if not user:
             return None
         if not user.is_active:

@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.app.core.auth import get_current_user, get_current_user_optional
+from src.app.core.auth import get_current_user, get_current_user_optional, _require_auth
 from src.app.database import get_db
 from src.app.services.form_record_service import FormRecordService
 from src.app.services.form_type_service import FormTypeService
@@ -37,26 +37,6 @@ async def logout(request: Request):
     from src.app.core.auth import clear_session
     clear_session(request)
     return RedirectResponse(url="/login", status_code=302)
-
-
-# ---------------------------------------------------------------------------
-# Helper: auth guard for UI routes
-# ---------------------------------------------------------------------------
-
-async def _require_auth(request: Request, db: AsyncSession):
-    """Return (user, roles) or redirect to /login."""
-    from src.app.core.auth import get_session_user_id
-    user_id = get_session_user_id(request)
-    if not user_id:
-        return None, None
-    service = UserService(db)
-    result = await service.get_user_with_roles(user_id)
-    if not result:
-        return None, None
-    user, roles = result
-    if not user.is_active:
-        return None, None
-    return user, roles
 
 
 # ---------------------------------------------------------------------------

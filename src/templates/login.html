@@ -224,12 +224,12 @@
 
         <form id="login-form" novalidate>
             <div class="form-group">
-                <label for="username">Username</label>
+                <label for="username">Username or Email</label>
                 <input
                     type="text"
                     id="username"
                     name="username"
-                    placeholder="Enter your username"
+                    placeholder="Enter your username or email"
                     autocomplete="username"
                     autofocus
                     required
@@ -285,7 +285,7 @@
             const password = document.getElementById('password').value;
 
             if (!username || !password) {
-                showError('Please enter your username and password.');
+                showError('Please enter your username/email and password.');
                 return;
             }
 

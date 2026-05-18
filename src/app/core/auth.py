@@ -66,6 +66,22 @@ async def get_current_user_optional(
     return user
 
 
+async def _require_auth(request: Request, db: AsyncSession):
+    """Return (user, roles) or redirect to /login."""
+    from src.app.services.user_service import UserService
+    user_id = get_session_user_id(request)
+    if not user_id:
+        return None, None
+    service = UserService(db)
+    result = await service.get_user_with_roles(user_id)
+    if not result:
+        return None, None
+    user, roles = result
+    if not user.is_active:
+        return None, None
+    return user, roles
+
+
 def require_superadmin(current_user=Depends(get_current_user)):
     """FastAPI dependency that enforces superadmin-only access."""
     if not current_user.is_superadmin:
