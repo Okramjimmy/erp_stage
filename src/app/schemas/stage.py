@@ -97,7 +97,6 @@ class StageMoveResponse(BaseModel):
     old_path: str
     new_path: str
     affected_stages_count: int
-    affected_formtypes_count: int
     operation_duration_ms: Optional[float] = None
 
 

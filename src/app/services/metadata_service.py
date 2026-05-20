@@ -60,6 +60,18 @@ class MetadataService:
         # Get all form types
         form_types_result = await self.db.execute(select(FormType))
         all_form_types = form_types_result.scalars().all()
+        form_types_by_id = {ft.form_type_id: ft for ft in all_form_types}
+
+        from src.app.models.stage_form_type import StageFormType
+        # Get all links
+        links_result = await self.db.execute(select(StageFormType))
+        all_links = links_result.scalars().all()
+
+        stage_form_types_map = {}
+        for link in all_links:
+            if link.stage_id not in stage_form_types_map:
+                stage_form_types_map[link.stage_id] = []
+            stage_form_types_map[link.stage_id].append(link.form_type_id)
 
         # Build tree structure
         stage_map: Dict[str, Dict] = {}
@@ -68,14 +80,14 @@ class MetadataService:
         # First pass: create all nodes
         for stage in all_stages:
             # Get form types for this stage
+            stage_form_type_ids = stage_form_types_map.get(stage.stage_id, [])
             stage_form_types = [
                 {
-                    "form_type_id": ft.form_type_id,
-                    "form_name": ft.form_name,
-                    "version": ft.version,
+                    "form_type_id": ft_id,
+                    "form_name": form_types_by_id[ft_id].form_name,
+                    "version": form_types_by_id[ft_id].version,
                 }
-                for ft in all_form_types
-                if ft.stage_id == stage.stage_id
+                for ft_id in stage_form_type_ids if ft_id in form_types_by_id
             ]
 
             node = {
@@ -181,8 +193,6 @@ class MetadataService:
         formtypes_registry = {}
         for ft in all_form_types:
             formtypes_registry[ft.form_type_id] = {
-                "path": ft.form_path,
-                "stage_id": ft.stage_id,
                 "form_name": ft.form_name,
                 "version": ft.version,
             }

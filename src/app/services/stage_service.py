@@ -291,9 +291,12 @@ class StageService:
             if visible_stage_ids is not None and stage.stage_id not in visible_stage_ids:
                 continue
 
+            from src.app.models.stage_form_type import StageFormType
             # Get form types for this stage
             form_types_result = await self.db.execute(
-                select(FormType).where(FormType.stage_id == stage.stage_id)
+                select(FormType)
+                .join(StageFormType, StageFormType.form_type_id == FormType.form_type_id)
+                .where(StageFormType.stage_id == stage.stage_id)
             )
             form_types = form_types_result.scalars().all()
 
@@ -448,15 +451,9 @@ class StageService:
             await self._recompute_node_stats(old_parent_id)
         if target_parent_id:
             await self._recompute_node_stats(target_parent_id)
-    
+
         # --- update moved node flags ---
         await self._recompute_node_stats(stage_id)
-    
-        # --- update form paths ---
-        stage_ids = [stage_id] + [d.stage_id for d in descendants]
-        affected_form_types = await self._update_form_type_paths(
-            old_path, new_path, stage_ids
-        )
     
         await self.db.commit()
     
@@ -475,27 +472,8 @@ class StageService:
             old_path=old_path,
             new_path=new_path,
             affected_stages_count=len(descendants) + 1,
-            affected_formtypes_count=affected_form_types,
             operation_duration_ms=duration_ms,
         )
-
-    async def _update_form_type_paths(
-        self, old_path: str, new_path: str, stage_ids: List[str]
-    ) -> int:
-        """Update form type paths for moved stages."""
-        result = await self.db.execute(
-            select(FormType).where(FormType.stage_id.in_(stage_ids))
-        )
-        form_types = result.scalars().all()
-
-        # Use regex to only replace the prefix of form_path, not all occurrences
-        escaped_old_path = re.escape(old_path)
-        pattern = re.compile(f'^{escaped_old_path}')
-
-        for form_type in form_types:
-            form_type.form_path = pattern.sub(new_path, form_type.form_path)
-
-        return len(form_types)
 
     async def delete_stage(
         self, stage_id: str, recursive: bool = True, preview: bool = False
@@ -531,16 +509,6 @@ class StageService:
             stage_ids = [stage_id]
             descendants = []
 
-        # Get form types for preview
-        form_types = []
-        if preview:
-            # Get form types for all stages that would be deleted
-            from src.app.models.form_type import FormType
-            result = await self.db.execute(
-                select(FormType).where(FormType.stage_id.in_(stage_ids))
-            )
-            form_types = result.scalars().all()
-
         if preview:
             # Return preview of what would be deleted
             return {
@@ -560,18 +528,8 @@ class StageService:
                     }
                     for d in descendants
                 ],
-                "form_types": [
-                    {
-                        "form_type_id": f.form_type_id,
-                        "form_name": f.form_name,
-                        "form_path": f.form_path,
-                        "version": f.version,
-                    }
-                    for f in form_types
-                ],
                 "total_stages": len(stage_ids),
-                "total_form_types": len(form_types),
-                "total_items": len(stage_ids) + len(form_types),
+                "total_items": len(stage_ids),
             }
 
         # Delete stages (cascade will handle form types and permissions)
@@ -603,6 +561,5 @@ class StageService:
             "deleted_stage_name": stage.stage_name,
             "deleted_count": len(stage_ids),
             "descendants_count": len(descendants),
-            "deleted_form_types": len(form_types),
             "message": f"Successfully deleted stage '{stage.stage_name}' and {len(descendants)} descendant(s)"
         }

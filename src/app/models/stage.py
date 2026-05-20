@@ -53,7 +53,9 @@ class Stage(Base):
     # Relationships
     parent = relationship("Stage", remote_side=[stage_id], backref="children")
     form_types = relationship(
-        "FormType", back_populates="stage", cascade="all, delete-orphan"
+        "FormType",
+        secondary="stage_form_types",
+        back_populates="stages"
     )
     permissions = relationship(
         "StagePermission", back_populates="stage", cascade="all, delete-orphan"

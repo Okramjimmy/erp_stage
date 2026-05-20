@@ -356,11 +356,12 @@ class PermissionService:
         # Get accessible form types (those in visible stages)
         if visible_stage_ids:
             from src.app.models.form_type import FormType
+            from src.app.models.stage_form_type import StageFormType
 
             form_types_result = await self.db.execute(
-                select(FormType.form_type_id).where(
-                    FormType.stage_id.in_(visible_stage_ids)
-                )
+                select(FormType.form_type_id)
+                .join(StageFormType, StageFormType.form_type_id == FormType.form_type_id)
+                .where(StageFormType.stage_id.in_(visible_stage_ids))
             )
             form_type_ids = [ft[0] for ft in form_types_result.all()]
         else:

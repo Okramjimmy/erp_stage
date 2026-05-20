@@ -415,6 +415,7 @@ endblock %} {% block head %}
             </div>
         </div>
     </div>
+    </div>
 </div>
 
 <!-- Create Stage Modal -->
@@ -473,58 +474,7 @@ endblock %} {% block head %}
     </div>
 </div>
 
-<!-- Create Form Type Modal -->
-<div id="create-formtype-modal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>Create New Form Type</h3>
-            <button
-                class="close-btn"
-                onclick="closeModal('create-formtype-modal')"
-            >
-                &times;
-            </button>
-        </div>
-        <form id="create-formtype-form" onsubmit="createFormType(event)">
-            <div class="form-group">
-                <label for="formtype-name">Form Type Name</label>
-                <input
-                    type="text"
-                    id="formtype-name"
-                    name="form_name"
-                    required
-                />
-            </div>
-            <div class="form-group">
-                <label for="formtype-stage">Stage</label>
-                <select id="formtype-stage" name="stage_id" required>
-                    <option value="">Select a stage</option>
-                </select>
-            </div>
 
-            <!-- Role Assignment in Form Type Creation -->
-            <div class="form-group">
-                <label>Assign Roles to this Form Type (Optional)</label>
-                <div id="formtype-roles-selection" class="role-chips">
-                    <small style="color: #7f8c8d">Loading roles...</small>
-                </div>
-            </div>
-
-            <div class="modal-actions">
-                <button
-                    type="button"
-                    class="btn btn-secondary"
-                    onclick="closeModal('create-formtype-modal')"
-                >
-                    Cancel
-                </button>
-                <button type="submit" class="btn btn-primary">
-                    Create Form Type
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
 {% endblock %} {% block scripts %}
 <script>
     let currentCreatedRole = null;
@@ -834,6 +784,8 @@ endblock %} {% block head %}
         }
     }
 
+
+
     // Load stage tree
     async function loadStageTree() {
         try {
@@ -1026,62 +978,7 @@ endblock %} {% block head %}
         }
     }
 
-    // Create form type with role assignment
-    async function createFormType(event) {
-        event.preventDefault();
-        const formData = new FormData(event.target);
-        const data = Object.fromEntries(formData);
 
-        try {
-            const response = await fetch("/api/v1/form-types", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(data),
-            });
-
-            if (response.ok) {
-                const newFormType = await response.json();
-
-                // Assign roles to the form type
-                const selectedRoles = document.querySelectorAll(
-                    "#formtype-roles-selection .role-chip.selected",
-                );
-                for (const roleChip of selectedRoles) {
-                    const roleName = roleChip.textContent;
-                    await fetch(
-                        `/api/v1/permissions/form-types/${newFormType.form_type_id}`,
-                        {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                role_name: roleName,
-                                can_view: true,
-                                can_create: true,
-                                can_edit: false,
-                                can_delete: false,
-                                can_submit: true,
-                                can_manage_permissions: false,
-                            }),
-                        },
-                    );
-                }
-
-                closeModal("create-formtype-modal");
-                event.target.reset();
-                loadStageTree();
-                loadStats();
-                alert("Form type created successfully with role assignments!");
-            } else {
-                const error = await response.json();
-                alert(`Error: ${error.detail}`);
-            }
-        } catch (error) {
-            console.error("Error creating form type:", error);
-            alert("Error creating form type");
-        }
-    }
 
     async function moveStage(stageId) {
         const newParentId = prompt("Enter new parent stage ID:");

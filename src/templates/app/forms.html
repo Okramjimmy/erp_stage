@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Forms - ERP Stage Builder{% endblock %}
+
+{% block nav_forms %}active{% endblock %}
+
+{% block extra_head %}
+
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">Form Types</div>
+        <div class="page-subtitle">Manage all form types across the application</div>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" onclick="createNewForm()">
+            + Create Form Type
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">All Forms</div>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Form Name</th>
+                    <th>ID</th>
+                    <th>Version</th>
+                    <th style="width: 120px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ft in form_types %}
+                <tr>
+                    <td style="font-weight: 500;">{{ ft.form_name }}</td>
+                    <td><code style="font-size: 11px;">{{ ft.form_type_id }}</code></td>
+                    <td><span class="badge badge-blue">v{{ ft.version or '1.0.0' }}</span></td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="/form-builder/{{ ft.form_type_id }}?return_to=/forms" class="btn btn-xs btn-secondary">Edit Form</a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                        <div style="margin-bottom:12px;font-size:18px">📋</div>
+                        <div style="font-size:14px;font-weight:600;margin-bottom:6px">No form types available</div>
+                        <div style="font-size:13px">Create your first form using the button above</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function createNewForm() {
+        // We will just redirect to the form builder for a new form type with no stage linked
+        window.location.href = '/form-builder/new/standalone?return_to=/forms';
+    }
+</script>
+{% endblock %}

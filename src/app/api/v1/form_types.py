@@ -30,14 +30,50 @@ async def create_form_type(
 
     The created_by field is automatically set from the authenticated user.
 
-    - **form_name**: Name of the form
-    - **stage_id**: Parent stage ID
+    - **form_name**: Name of the form (must be unique)
+    - **description**: Optional description
     - **version**: Form version (e.g., 1.0.0)
     - **schema**: Optional form schema definition
     """
     service = FormTypeService(db)
     try:
         return await service.create_form_type(form_data, created_by=current_user.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{form_type_id}/link-stage/{stage_id}", status_code=200)
+async def link_form_to_stage(
+    form_type_id: str,
+    stage_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Link a form type to a stage."""
+    service = FormTypeService(db)
+    try:
+        return await service.link_form_to_stage(
+            form_type_id=form_type_id, 
+            stage_id=stage_id, 
+            linked_by=current_user.user_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{form_type_id}/link-stage/{stage_id}", status_code=200)
+async def unlink_form_from_stage(
+    form_type_id: str,
+    stage_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Unlink a form type from a stage."""
+    service = FormTypeService(db)
+    try:
+        return await service.unlink_form_from_stage(
+            form_type_id=form_type_id, 
+            stage_id=stage_id
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

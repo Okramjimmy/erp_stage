@@ -59,7 +59,20 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id, user.is_superadmin))
     
     stages = [s for s in await stage_service.get_all_stages(limit=200) if s.stage_id in visible_stage_ids]
-    form_types = [ft for ft in await ft_service.get_all_form_types(limit=200) if ft.stage_id in visible_stage_ids]
+    
+    if user.is_superadmin:
+        form_types = await ft_service.get_all_form_types(limit=200)
+    else:
+        # For regular users, form types are visible if they are linked to a visible stage
+        from src.app.models.stage_form_type import StageFormType
+        from sqlalchemy import select
+        result = await db.execute(
+            select(StageFormType.form_type_id)
+            .where(StageFormType.stage_id.in_(visible_stage_ids))
+        )
+        visible_ft_ids = {r[0] for r in result.all()}
+        all_fts = await ft_service.get_all_form_types(limit=200)
+        form_types = [ft for ft in all_fts if ft.form_type_id in visible_ft_ids]
 
     return templates.TemplateResponse(
         "index.html",
@@ -133,10 +146,12 @@ async def new_form_builder(
     if not user:
         return RedirectResponse(url="/login", status_code=302)
 
-    stage_service = StageService(db)
-    stage = await stage_service.get_stage(stage_id)
-    if not stage:
-        return HTMLResponse("Stage not found", status_code=404)
+    stage = None
+    if stage_id != "standalone":
+        stage_service = StageService(db)
+        stage = await stage_service.get_stage(stage_id)
+        if not stage:
+            return HTMLResponse("Stage not found", status_code=404)
 
     return templates.TemplateResponse(
         "form_builder.html",
@@ -163,8 +178,8 @@ async def form_builder(
     if not form_type:
         return HTMLResponse("Form type not found", status_code=404)
 
-    stage_service = StageService(db)
-    stage = await stage_service.get_stage(form_type.stage_id)
+    # A form type may be linked to multiple stages, pass None or the first one if we need it.
+    stage = None
 
     return templates.TemplateResponse(
         "form_builder.html",
@@ -194,8 +209,8 @@ async def new_form_view(
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
     if not form_type:
         return HTMLResponse("Form type not found", status_code=404)
-    stage_service = StageService(db)
-    stage = await stage_service.get_stage(form_type.stage_id)
+    # A form type may be linked to multiple stages, pass None or the first one if we need it.
+    stage = None
     return templates.TemplateResponse(
         "form_view.html",
         {
@@ -228,8 +243,8 @@ async def edit_form_view(
     record = await svc.get(record_id)
     if not record:
         return HTMLResponse("Record not found", status_code=404)
-    stage_service = StageService(db)
-    stage = await stage_service.get_stage(form_type.stage_id)
+    # A form type may be linked to multiple stages, pass None or the first one if we need it.
+    stage = None
     return templates.TemplateResponse(
         "form_view.html",
         {
@@ -257,8 +272,8 @@ async def list_form_view(
         return HTMLResponse("Form type not found", status_code=404)
     svc = FormRecordService(db)
     items, total = await svc.list_by_form_type(form_type_id, limit=100)
-    stage_service = StageService(db)
-    stage = await stage_service.get_stage(form_type.stage_id)
+    # A form type may be linked to multiple stages, pass None or the first one if we need it.
+    stage = None
     return templates.TemplateResponse(
         "form_list.html",
         {
@@ -270,6 +285,40 @@ async def list_form_view(
             "current_user": user,
             "current_user_roles": roles,
         },
+    )
+
+@router.get("/forms", response_class=HTMLResponse)
+async def forms_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    ft_service = FormTypeService(db)
+    
+    if user.is_superadmin:
+        form_types = await ft_service.get_all_form_types(limit=500)
+    else:
+        # Fetch visible form types based on stages
+        visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id, user.is_superadmin))
+        from src.app.models.stage_form_type import StageFormType
+        from sqlalchemy import select
+        result = await db.execute(
+            select(StageFormType.form_type_id)
+            .where(StageFormType.stage_id.in_(visible_stage_ids))
+        )
+        visible_ft_ids = {r[0] for r in result.all()}
+        all_fts = await ft_service.get_all_form_types(limit=500)
+        form_types = [ft for ft in all_fts if ft.form_type_id in visible_ft_ids]
+        
+    return templates.TemplateResponse(
+        "app/forms.html",
+        {
+            "request": request,
+            "current_user": user,
+            "current_user_roles": roles,
+            "form_types": form_types,
+        }
     )
 
 

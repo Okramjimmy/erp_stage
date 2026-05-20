@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from src.app.database import Base
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 class FormType(Base):
@@ -14,17 +15,12 @@ class FormType(Base):
     form_type_id = Column(String(50), primary_key=True, index=True)
 
     # Basic fields
-    form_name = Column(String(255), nullable=False)
-
-    # Hierarchy
-    stage_id = Column(
-        String(50), ForeignKey("stages.stage_id", ondelete="CASCADE"), nullable=False
-    )
-    form_path = Column(Text, nullable=False, unique=True)
+    form_name = Column(String(255), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
 
     # Versioning
     version = Column(String(20), nullable=False, default="1.0.0")
-    schema_reference = Column(JSON, nullable=True)
+    schema_reference = Column(JSONB, nullable=True)
 
     # Timestamps
     created_by = Column(String(100))
@@ -34,7 +30,11 @@ class FormType(Base):
     )
 
     # Relationships
-    stage = relationship("Stage", back_populates="form_types")
+    stages = relationship(
+        "Stage",
+        secondary="stage_form_types",
+        back_populates="form_types"
+    )
     permissions = relationship(
         "FormTypePermission", back_populates="form_type", cascade="all, delete-orphan"
     )
@@ -43,15 +43,14 @@ class FormType(Base):
     )
 
     def __repr__(self):
-        return f"<FormType(id={self.form_type_id}, name={self.form_name}, stage={self.stage_id})>"
+        return f"<FormType(id={self.form_type_id}, name={self.form_name})>"
 
     def to_dict(self):
         """Convert model to dictionary."""
         return {
             "form_type_id": self.form_type_id,
             "form_name": self.form_name,
-            "stage_id": self.stage_id,
-            "form_path": self.form_path,
+            "description": self.description,
             "version": self.version,
             "schema_reference": self.schema_reference,
             "created_by": self.created_by,

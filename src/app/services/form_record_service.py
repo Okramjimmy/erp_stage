@@ -67,7 +67,7 @@ class FormRecordService:
                 if isinstance(parsed_data, dict):
                     for field_name, field_value in parsed_data.items():
                         if isinstance(field_value, str) and '/' in field_value:
-                            # This looks like a file path (stage_id/form_id/record_id/field_label/filename)
+                            # This looks like a file path (form_type_id/record_id/field_label/filename)
                             # Convert to download URL
                             parsed_data[field_name] = self.get_attachment_download_url(field_value)
             except Exception:
@@ -102,9 +102,9 @@ class FormRecordService:
         return None
 
     def _build_minio_path(self, ft: FormType, field: dict, filename: str, record_id: str) -> str:
-        """Build the canonical MinIO path: stage_id/form_name/record_id/field_label/filename."""
+        """Build the canonical MinIO path: form_type_id/record_id/field_label/filename."""
         field_label = field.get("fieldname")
-        return f"{ft.stage_id}/{ft.form_type_id}/{record_id}/{field_label}/{filename}"
+        return f"{ft.form_type_id}/{record_id}/{field_label}/{filename}"
 
     def _process_attachments(self, ft: FormType, data: dict, record_id: str) -> dict:
         """Relocate any attachment paths that are not already in the canonical location."""
@@ -313,7 +313,7 @@ class FormRecordService:
             raise ValueError(f"FormType {record.form_type_id} not found where it should be")
 
         # Minio delete folder
-        record_path = f"{form_type.stage_id}/{form_type.form_type_id}/{record.record_id}"
+        record_path = f"{form_type.form_type_id}/{record.record_id}"
         condition = storage_service.delete_file(record_path)
         if not condition:
             raise ValueError(f"Failed to delete record {record_id}")

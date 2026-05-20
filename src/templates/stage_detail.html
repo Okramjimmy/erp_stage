@@ -794,14 +794,24 @@ Builder{% endblock %} {% block content %}
             >
                 Cancel
             </button>
-            <button
-                class="btn btn-primary"
-                id="use-template-btn"
-                onclick="useSelectedTemplate()"
-                disabled
-            >
-                Use Selected Template
-            </button>
+            <div style="display: flex; gap: 8px;">
+                <button
+                    class="btn btn-primary"
+                    id="link-template-btn"
+                    onclick="linkSelectedTemplate()"
+                    disabled
+                >
+                    Link to Stage (Use it)
+                </button>
+                <button
+                    class="btn btn-secondary"
+                    id="duplicate-template-btn"
+                    onclick="duplicateSelectedTemplate()"
+                    disabled
+                >
+                    Duplicate & Modify
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -1535,7 +1545,7 @@ Builder{% endblock %} {% block content %}
                     <button
                         class="btn btn-primary btn-sm select-template-btn"
                         data-id="${ft.form_type_id}"
-                        onclick="event.stopPropagation(); selectTemplateAndProceed('${ft.form_type_id}')"
+                        onclick="event.stopPropagation(); selectTemplate('${ft.form_type_id}')"
                         style="font-size: 11px; padding: 4px 10px;"
                     >
                         ✓ Select
@@ -1594,16 +1604,34 @@ Builder{% endblock %} {% block content %}
         );
         console.log("Template schema_data:", selectedTemplateData?.schema_data);
 
-        document.getElementById("use-template-btn").disabled = false;
+        const linkBtn = document.getElementById("link-template-btn");
+        const dupBtn = document.getElementById("duplicate-template-btn");
+        if (linkBtn) linkBtn.disabled = false;
+        if (dupBtn) dupBtn.disabled = false;
     }
 
-    function selectTemplateAndProceed(formTypeId) {
-        selectTemplate(formTypeId);
-        closeModal("template-modal");
-        openCreateFormModal("template");
+
+
+    async function linkSelectedTemplate() {
+        if (!selectedTemplateFormTypeId) {
+            toast("Please select a template first", "error");
+            return;
+        }
+        try {
+            const res = await apiFetch(`${API}/form-types/${selectedTemplateFormTypeId}/link-stage/${STAGE_ID}`, {
+                method: "POST"
+            });
+            toast("Form linked successfully!", "success");
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } catch (e) {
+            console.error("Error linking form:", e);
+            toast("Failed to link form: " + e.message, "error");
+        }
     }
 
-    async function useSelectedTemplate() {
+    async function duplicateSelectedTemplate() {
         if (!selectedTemplateFormTypeId) {
             toast("Please select a template first", "error");
             return;
@@ -1946,22 +1974,15 @@ Builder{% endblock %} {% block content %}
             // console.log("Final schema to send:", schema);
             console.log("Request body will be:", {
                 form_name: name,
-                stage_id: STAGE_ID,
                 version: version,
-                schema: schema,
+                schema_reference: schema,
             });
 
             const requestBody = {
                 form_name: name,
-                stage_id: STAGE_ID,
                 version,
                 schema_reference: schema,
             };
-            // console.log("Actual request body:", requestBody);
-            // console.log(
-            //     "Request schema fields count:",
-            //     requestBody.schema?.fields?.length || 0,
-            // );
 
             const ft = await apiFetch(`${API}/form-types`, {
                 method: "POST",
@@ -1975,12 +1996,17 @@ Builder{% endblock %} {% block content %}
             //     ft.schema_reference?.fields?.length > 0,
             // );
 
-            toast("Form type created", "success");
+            // Link to stage
+            await apiFetch(`${API}/form-types/${ft.form_type_id}/link-stage/${STAGE_ID}`, {
+                method: "POST"
+            });
+
+            toast("Form type created and linked", "success");
             closeModal("create-form-modal");
 
             // Small delay to ensure data is saved before redirecting
             setTimeout(() => {
-                window.location = `/form-builder/${ft.form_type_id}`;
+                window.location = `/form-builder/${ft.form_type_id}?return_to=/stages/${STAGE_ID}`;
             }, 500);
         } catch (e) {
             console.error("Error creating form:", e);

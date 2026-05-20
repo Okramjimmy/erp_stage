@@ -8,7 +8,7 @@ class FormTypeBase(BaseModel):
     """Base schema for Form Type."""
 
     form_name: str = Field(..., min_length=1, max_length=255)
-    stage_id: str = Field(..., min_length=1)
+    description: Optional[str] = None
     version: str = Field(default="1.0.0", pattern=r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
 
@@ -39,8 +39,7 @@ class FormTypeResponse(BaseModel):
 
     form_type_id: str
     form_name: str
-    stage_id: str
-    form_path: str
+    description: Optional[str] = None
     version: str
     schema_reference: Optional[Dict[str, Any]] = None  # JSONB type - accepts dict directly
     created_by: Optional[str] = None

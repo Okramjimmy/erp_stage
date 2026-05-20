@@ -63,19 +63,16 @@ CREATE INDEX idx_stages_name ON stages(stage_name);
 -- =================================================================
 -- 2. FORM_TYPES TABLE
 -- =================================================================
--- Core table for form type definitions within stages
+-- Core table for form type definitions
 -- =================================================================
 CREATE TABLE form_types (
     form_type_id VARCHAR(50) PRIMARY KEY,
-    form_name VARCHAR(255) NOT NULL,
-
-    -- Hierarchy
-    stage_id VARCHAR(50) NOT NULL REFERENCES stages(stage_id) ON DELETE CASCADE,
-    form_path TEXT NOT NULL,
+    form_name VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
 
     -- Versioning
     version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
-    schema_reference TEXT,
+    schema_reference JSONB,
 
     -- Timestamps
     created_by VARCHAR(100),
@@ -83,16 +80,56 @@ CREATE TABLE form_types (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     -- Constraints
-    CONSTRAINT uq_form_path UNIQUE (form_path),
     CONSTRAINT chk_version_format CHECK (version ~ '^\d{1,3}\.\d{1,3}\.\d{1,3}$')
 );
 
 -- Indexes for form_types
-CREATE INDEX idx_form_types_stage ON form_types(stage_id);
-CREATE INDEX idx_form_types_path ON form_types(form_path);
-CREATE INDEX idx_form_types_path_gin ON form_types USING GIN(to_tsvector('english', form_path));
 CREATE INDEX idx_form_types_created_at ON form_types(created_at);
 CREATE INDEX idx_form_types_name ON form_types(form_name);
+
+
+-- =================================================================
+-- 2.5. STAGE_FORM_TYPES TABLE
+-- =================================================================
+-- Many-to-many relationship between stages and form types
+-- =================================================================
+CREATE TABLE stage_form_types (
+    stage_id VARCHAR(50) NOT NULL REFERENCES stages(stage_id) ON DELETE CASCADE,
+    form_type_id VARCHAR(50) NOT NULL REFERENCES form_types(form_type_id) ON DELETE CASCADE,
+    
+    linked_by VARCHAR(100),
+    linked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT pk_stage_form_types PRIMARY KEY (stage_id, form_type_id)
+);
+
+CREATE INDEX idx_stage_form_types_stage ON stage_form_types(stage_id);
+CREATE INDEX idx_stage_form_types_form_type ON stage_form_types(form_type_id);
+
+
+-- =================================================================
+-- 2.6. FORM_RECORDS TABLE
+-- =================================================================
+-- Table for form records/submissions
+-- =================================================================
+CREATE TABLE form_records (
+    record_id VARCHAR(50) PRIMARY KEY,
+    form_type_id VARCHAR(50) NOT NULL REFERENCES form_types(form_type_id) ON DELETE CASCADE,
+    docname VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'Draft',
+    data JSONB,
+    amended_from VARCHAR(50) REFERENCES form_records(record_id),
+    
+    -- Timestamps and Users
+    submitted_by VARCHAR(100),
+    submitted_at TIMESTAMP,
+    created_by VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_form_records_form_type ON form_records(form_type_id);
+CREATE INDEX idx_form_records_docname ON form_records(docname);
 
 
 -- =================================================================
@@ -174,12 +211,33 @@ CREATE TABLE roles (
 );
 
 -- =================================================================
+-- 4.6. USERS TABLE
+-- =================================================================
+CREATE TABLE users (
+    user_id VARCHAR(36) PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    full_name VARCHAR(255) NOT NULL,
+    department VARCHAR(100),
+    phone VARCHAR(50),
+    profile_photo_url TEXT,
+    hashed_password TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_email ON users(email);
+
+-- =================================================================
 -- 5. USER_ROLES TABLE
 -- =================================================================
 -- User to role mapping for permission evaluation
 -- =================================================================
 CREATE TABLE user_roles (
-    user_id VARCHAR(100) NOT NULL,
+    user_id VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     role_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
 
     -- Timestamps
@@ -271,7 +329,7 @@ BEGIN
     -- Count form types
     SELECT COUNT(*)
     INTO v_formtype_count
-    FROM form_types
+    FROM stage_form_types
     WHERE stage_id = p_stage_id;
 
     -- Determine if leaf
@@ -537,12 +595,8 @@ BEGIN
         END;
     END LOOP;
 
-    -- Update affected form types paths
-    UPDATE form_types
-    SET form_path = v_new_path || regexp_replace(form_path, '^' || regexp_replace(v_old_path, '[\.\*\+\?\^\$\(\)\[\]\{\}\|\\]', '\\\\\g&', 'g'), '')
-    WHERE stage_id = p_stage_id OR stage_id = ANY(v_descendants);
-
-    GET DIAGNOSTICS v_affected_formtypes = ROW_COUNT;
+    -- affected formtypes logic removed because form_types are decoupled from stage hierarchy
+    v_affected_formtypes := 0;
 
     -- Update parent child counts
     PERFORM update_stage_hierarchy(v_parent_stage);
@@ -611,7 +665,7 @@ BEFORE DELETE ON stages
 FOR EACH ROW
 EXECUTE FUNCTION trg_stage_delete_update_parent();
 
--- Trigger to update form type count on form type insert
+-- Trigger to update form type count on form type link insert
 CREATE OR REPLACE FUNCTION trg_formtype_insert_update_stage()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -624,11 +678,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER t_formtype_insert
-AFTER INSERT ON form_types
+AFTER INSERT ON stage_form_types
 FOR EACH ROW
 EXECUTE FUNCTION trg_formtype_insert_update_stage();
 
--- Trigger to update form type count on form type delete
+-- Trigger to update form type count on form type link delete
 CREATE OR REPLACE FUNCTION trg_formtype_delete_update_stage()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -641,7 +695,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER t_formtype_delete
-BEFORE DELETE ON form_types
+BEFORE DELETE ON stage_form_types
 FOR EACH ROW
 EXECUTE FUNCTION trg_formtype_delete_update_stage();
 
@@ -661,6 +715,16 @@ EXECUTE FUNCTION trg_update_timestamp();
 
 CREATE TRIGGER t_form_types_update_timestamp
 BEFORE UPDATE ON form_types
+FOR EACH ROW
+EXECUTE FUNCTION trg_update_timestamp();
+
+CREATE TRIGGER t_form_records_update_timestamp
+BEFORE UPDATE ON form_records
+FOR EACH ROW
+EXECUTE FUNCTION trg_update_timestamp();
+
+CREATE TRIGGER t_users_update_timestamp
+BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION trg_update_timestamp();
 

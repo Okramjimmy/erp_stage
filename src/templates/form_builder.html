@@ -101,9 +101,9 @@
 
   <!-- Top bar -->
   <div class="fb-bar">
-    <a href="/stages/{{ stage.stage_id }}" class="btn btn-ghost btn-sm">
+    <a href="#" id="back-button" class="btn btn-ghost btn-sm">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg>
-      {{ stage.stage_name }}
+      {% if stage %}{{ stage.stage_name }}{% else %}Back{% endif %}
     </a>
     <div style="width:1px;height:24px;background:var(--border)"></div>
     <input class="fb-name" id="form-name" value="{% if form_type %}{{ form_type.form_name }}{% else %}Untitled Form{% endif %}">
@@ -887,12 +887,15 @@ async function _doSave(){
     if(window.FORM_META.id){
       await apiFetch(`${API}/form-types/${window.FORM_META.id}`,{method:'PUT',body:{form_name:name,version,schema}});
     } else {
-      const ft=await apiFetch(`${API}/form-types`,{method:'POST',body:{form_name:name,stage_id:window.FORM_META.stage_id,version,schema}});
-      window.FORM_META.id=ft.form_type_id;
-      window.history.replaceState({},'',`/form-builder/${ft.form_type_id}`);
+      const ft=await apiFetch(`${API}/form-types`,{method:'POST',body:{form_name:name,version,schema}});
+      if(window.FORM_META.stage_id && window.FORM_META.stage_id !== 'null' && window.FORM_META.stage_id !== 'None' && window.FORM_META.stage_id !== '') {
+        await apiFetch(`${API}/form-types/${ft.form_type_id}/link-stage/${window.FORM_META.stage_id}`,{method:'POST'});
+      }
+      window.FORM_META.id = ft.form_type_id;
+      window.history.replaceState({}, '', `/form-builder/${ft.form_type_id}`);
     }
-    dirty=false; document.getElementById('dirty-dot').style.display='none';
     toast('Saved successfully','success');
+    dirty=false; document.getElementById('dirty-dot').style.display='none';
   } catch(e){ toast(e.message,'error'); }
   finally{ btn.innerHTML=orig; btn.disabled=false; }
 }
@@ -970,6 +973,18 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 
 async function boot(){
+  // Dynamic Back Routing
+  const urlParams = new URLSearchParams(window.location.search);
+  const returnTo = urlParams.get('return_to');
+  const backBtn = document.getElementById('back-button');
+  if (returnTo) {
+      backBtn.href = returnTo;
+  } else if (window.FORM_META.stage_id && window.FORM_META.stage_id !== 'standalone') {
+      backBtn.href = '/stages/' + window.FORM_META.stage_id;
+  } else {
+      backBtn.href = '/forms';
+  }
+
   await loadAvailableFormTypes();
   const flat=window.FORM_DATA.fields||[];
   if(flat.length){
