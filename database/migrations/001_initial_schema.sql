@@ -32,6 +32,7 @@ CREATE TABLE stages (
     is_root BOOLEAN NOT NULL DEFAULT FALSE,
     is_leaf BOOLEAN NOT NULL DEFAULT TRUE,
     visibility_scope VARCHAR(20) DEFAULT 'private',
+    wbs_prefix VARCHAR(10),
 
     -- Timestamps
     created_by VARCHAR(100),

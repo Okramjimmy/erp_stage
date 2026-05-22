@@ -17,7 +17,7 @@ class StageBase(BaseModel):
 class StageCreate(StageBase):
     """Schema for creating a Stage."""
 
-    pass
+    wbs_prefix: Optional[str] = Field(None, max_length=10, pattern="^[a-zA-Z0-9]*$")
 
 
 class StageUpdate(BaseModel):
@@ -27,6 +27,7 @@ class StageUpdate(BaseModel):
     visibility_scope: Optional[str] = Field(
         None, pattern="^(public|private|restricted)$"
     )
+    wbs_prefix: Optional[str] = Field(None, max_length=10, pattern="^[a-zA-Z0-9]*$")
 
 
 class StageResponse(BaseModel):
@@ -43,6 +44,7 @@ class StageResponse(BaseModel):
     is_root: bool
     is_leaf: bool
     visibility_scope: str
+    wbs_prefix: Optional[str] = None
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -90,6 +92,15 @@ class StageMoveRequest(BaseModel):
     )
 
 
+class StageMovedNode(BaseModel):
+    """Details of a stage affected/renamed during a move operation."""
+    stage_id: str
+    old_name: str
+    new_name: str
+    old_path: str
+    new_path: str
+
+
 class StageMoveResponse(BaseModel):
     """Schema for Stage move response."""
 
@@ -98,6 +109,7 @@ class StageMoveResponse(BaseModel):
     new_path: str
     affected_stages_count: int
     operation_duration_ms: Optional[float] = None
+    moved_stages: List[StageMovedNode] = []
 
 
 class StageTreeResponse(BaseModel):

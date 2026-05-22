@@ -919,6 +919,18 @@ Builder{% endblock %} {% block content %}
                     value="{{ stage.stage_name }}"
                 />
             </div>
+            {% if stage.depth_level == 1 %}
+            <div class="form-group">
+                <label class="form-label">WBS Prefix <span style="font-weight:400;font-size:0.85em;opacity:0.65">(3-char, leave empty to remove)</span></label>
+                <input
+                type="text"
+                class="form-control"
+                id="edit-stage-prefix"
+                maxlength="3"
+                placeholder="e.g. abc"
+                value="{{ stage.wbs_prefix or '' }}"
+                />
+            </div>
             <div class="form-group">
                 <label class="form-label">Visibility</label>
                 <select class="form-control" id="edit-stage-visibility">
@@ -945,6 +957,7 @@ Builder{% endblock %} {% block content %}
                     </option>
                 </select>
             </div>
+            {% endif %}
         </div>
         <div class="modal-footer">
             <button
@@ -1211,10 +1224,16 @@ Builder{% endblock %} {% block content %}
         const visibility = document.getElementById(
             "edit-stage-visibility",
         ).value;
+        const prefixEl = document.getElementById("edit-stage-prefix");
         try {
+            const body = { stage_name: name, visibility_scope: visibility };
+            // Include wbs_prefix only for depth-1 stages (field is rendered conditionally)
+            if (prefixEl !== null) {
+                body.wbs_prefix = prefixEl.value.trim();
+            }
             await apiFetch(`${API}/stages/${STAGE_ID}`, {
                 method: "PUT",
-                body: { stage_name: name, visibility_scope: visibility },
+                body: body,
             });
             toast("Stage updated", "success");
             closeModal("edit-stage-modal");

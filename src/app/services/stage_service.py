@@ -2,6 +2,9 @@ import logging
 import re
 import time
 import uuid
+import random
+import string
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select, text
@@ -15,6 +18,7 @@ from src.app.models.stage import Stage
 from src.app.schemas.stage import (
     FormTypeRef,
     StageCreate,
+    StageMovedNode,
     StageMoveResponse,
     StageResponse,
     StageTreeNode,
@@ -35,6 +39,68 @@ class StageService:
     def generate_stage_id(prefix: str = "stage") -> str:
         """Generate unique stage ID."""
         return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+    @staticmethod
+    def generate_random_prefix() -> str:
+        """Generate a random 3-character alphanumeric WBS prefix (lowercase)."""
+        return "".join(random.choices(string.ascii_lowercase + string.digits, k=3))
+
+    @staticmethod
+    def extract_base_name(stage_name: str, prefix: Optional[str]) -> str:
+        """Extract the raw base name of a stage, removing the WBS prefix and outline formatting if present."""
+        if not stage_name:
+            return ""
+        # Match: optional 3-alphanumeric prefix, then outline digits (dots & numbers), then whitespace, then the rest
+        match = re.match(r'^(?:[a-zA-Z0-9]{3})?(\d+(?:\.\d+)*)\s+(.*)$', stage_name)
+        if match:
+            return match.group(2)
+        return stage_name
+
+    @staticmethod
+    def parse_outline_number(stage_name: str, prefix: Optional[str]) -> Optional[List[int]]:
+        """Extract the WBS outline sequence numbers from a stage name as a list of integers."""
+        if not stage_name:
+            return None
+        match = re.match(r'^(?:[a-zA-Z0-9]{3})?(\d+(?:\.\d+)*)\s+', stage_name)
+        if match:
+            try:
+                return [int(x) for x in match.group(1).split('.')]
+            except ValueError:
+                return None
+        return None
+
+    @classmethod
+    def sort_siblings_key(cls, stage: Stage, prefix: Optional[str]):
+        """Returns a sorting key for siblings. Ordered numerically by outline sequence first, fallback to creation time."""
+        outline = cls.parse_outline_number(stage.stage_name, prefix)
+        if outline is not None:
+            return (0, outline, stage.created_at or datetime.min, stage.stage_id)
+        else:
+            return (1, [], stage.created_at or datetime.min, stage.stage_id)
+
+    async def seed_system_stage(self) -> None:
+        """Seed the unique root 'System' stage if it doesn't exist."""
+        system_stage = await self.db.get(Stage, "stage_system")
+        if not system_stage:
+            result = await self.db.execute(
+                select(Stage).where(Stage.stage_name == "System", Stage.parent_stage_id == None)
+            )
+            existing = result.scalar_one_or_none()
+            if not existing:
+                self.db.add(Stage(
+                    stage_id="stage_system",
+                    stage_name="System",
+                    parent_stage_id=None,
+                    stage_path="/System",
+                    depth_level=0,
+                    lineage_path=[],
+                    is_root=True,
+                    is_leaf=True,
+                    visibility_scope="public",
+                    created_by="system",
+                ))
+                await self.db.commit()
+                logger.info("Seeded unique 'System' root stage.")
 
     async def _recompute_node_stats(self, node_id: Optional[str]) -> None:
         """
@@ -58,75 +124,163 @@ class StageService:
 
         node.children_count = count
         node.is_leaf = (count == 0)
-        # A root node is strictly one that has no parent
-        node.is_root = (count > 0) or (node.parent_stage_id is None)
+        # System (depth 0) is the unique root node
+        node.is_root = (node_id == "stage_system")
+
+    async def reindex_wbs_codes(self) -> List[Dict[str, Any]]:
+        """
+        Reindexes WBS outline codes of the entire stage tree recursively.
+        - "System" (depth 0) is the unique root stage. No prefix, no WBS numbering.
+        - Depth 1 stages (direct children of "System") start the WBS prefixing/numbering:
+          Each depth 1 stage gets a 3-character prefix (random if none). Named: prefix + index (e.g. arg1 Building).
+        - Depth > 1 stages append '.x' to parent's outline code, inheriting prefix from their depth 1 ancestor.
+        """
+        # 1. Fetch all stages
+        result = await self.db.execute(select(Stage))
+        stages = result.scalars().all()
+        
+        # 2. Build parent-child map
+        parent_map: Dict[Optional[str], List[Stage]] = {}
+        for s in stages:
+            parent_map.setdefault(s.parent_stage_id, []).append(s)
+            
+        changes = []
+        
+        # 3. Recursive helper to reindex
+        async def traverse(parent_id: Optional[str], parent_outline: List[int], parent_path: str, depth: int, active_prefix: str):
+            siblings = parent_map.get(parent_id, [])
+            siblings.sort(key=lambda s: self.sort_siblings_key(s, s.wbs_prefix or active_prefix))
+            
+            for idx, stage in enumerate(siblings, start=1):
+                if stage.stage_id == "stage_system" or (depth == 0 and stage.stage_name == "System"):
+                    # System stage at depth 0
+                    current_outline = []
+                    new_name = "System"
+                    current_prefix = ""
+                    stage.wbs_prefix = None
+                elif depth == 1:
+                    # Depth 1 stages: direct children of "System"
+                    # wbs_prefix may be None when the prefix was intentionally removed;
+                    # in that case use just the outline number (no auto-reassignment).
+                    wbs_prefix = stage.wbs_prefix
+
+                    current_outline = [idx]
+                    outline_str = str(idx)
+                    wbs_code = f"{wbs_prefix}{outline_str}" if wbs_prefix else outline_str
+
+                    base_name = self.extract_base_name(stage.stage_name, wbs_prefix or "")
+                    new_name = f"{wbs_code} {base_name}"
+                    current_prefix = wbs_prefix or ""
+                else:
+                    # Depth > 1 stages: inherit prefix from parent
+                    stage.wbs_prefix = None  # stored only on depth 1 stages
+                    current_outline = parent_outline + [idx]
+                    outline_str = ".".join(str(x) for x in current_outline)
+                    wbs_code = f"{active_prefix}{outline_str}"
+                    
+                    base_name = self.extract_base_name(stage.stage_name, active_prefix)
+                    new_name = f"{wbs_code} {base_name}"
+                    current_prefix = active_prefix
+                    
+                # Formulate new path
+                new_path = f"{parent_path}/{new_name}".replace("//", "/")
+                
+                # Check if name, path, depth, or is_root has changed
+                name_changed = (stage.stage_name != new_name)
+                path_changed = (stage.stage_path != new_path)
+                depth_changed = (stage.depth_level != depth)
+                root_changed = (stage.is_root != (depth == 0))
+                
+                if name_changed or path_changed or depth_changed or root_changed:
+                    old_name = stage.stage_name
+                    old_path = stage.stage_path
+                    
+                    # Update attributes
+                    stage.stage_name = new_name
+                    stage.stage_path = new_path
+                    stage.depth_level = depth
+                    stage.is_root = (depth == 0)
+                    
+                    changes.append({
+                        "stage_id": stage.stage_id,
+                        "old_name": old_name,
+                        "new_name": new_name,
+                        "old_path": old_path,
+                        "new_path": new_path,
+                    })
+                    
+                # Traverse descendants
+                await traverse(stage.stage_id, current_outline, new_path, depth + 1, current_prefix)
+                
+        # Start traversal from root (None)
+        await traverse(None, [], "", 0, "")
+        
+        if changes:
+            await self.db.flush()
+            
+        return changes
 
     async def create_stage(
         self, stage_data: StageCreate, created_by: Optional[str] = None
     ) -> StageResponse:
         """Create a new stage with hierarchical metadata."""
-        # Validate parent exists if provided
-        parent_stage = None
-        lineage_path: List[str] = []
-        depth_level = 0
-        stage_path = "/"
+        # Enforce that all user-created stages must have a parent. If omitted, default to 'stage_system'
+        parent_id = stage_data.parent_stage_id
+        if not parent_id:
+            parent_id = "stage_system"
 
-        if stage_data.parent_stage_id:
-            # Fetch parent stage
-            result = await self.db.execute(
-                select(Stage).where(Stage.stage_id == stage_data.parent_stage_id)
-            )
-            parent_stage = result.scalar_one_or_none()
-
-            if not parent_stage:
-                raise ValueError(f"Parent stage {stage_data.parent_stage_id} not found")
-
-            # Calculate hierarchy metadata
-            lineage_path = parent_stage.lineage_path + [parent_stage.stage_id]
-            depth_level = parent_stage.depth_level + 1
-            stage_path = f"{parent_stage.stage_path}/{stage_data.stage_name}"
-
-        # Check for path conflicts - this also handles root stage creation
-        existing = await self.db.execute(
-            select(Stage).where(Stage.stage_path == stage_path)
+        # Fetch parent stage
+        result = await self.db.execute(
+            select(Stage).where(Stage.stage_id == parent_id)
         )
-        if existing.scalar_one_or_none():
-            raise ValueError(f"Stage path '{stage_path}' already exists. A stage with the name '{stage_data.stage_name}' already exists at this location in the hierarchy.")
+        parent_stage = result.scalar_one_or_none()
 
-        # Additional validation: Check if stage_name would conflict at the root level
         if not parent_stage:
-            root_path_conflict = await self.db.execute(
-                select(Stage).where(
-                    Stage.stage_path == f"/{stage_data.stage_name}")
-            )
-            if root_path_conflict.scalar_one_or_none():
-                raise ValueError(f"A root-level stage named '{stage_data.stage_name}' already exists. Root-stage names must be unique.")
+            # If system root stage not seeded, seed it and try again
+            if parent_id == "stage_system":
+                await self.seed_system_stage()
+                result = await self.db.execute(
+                    select(Stage).where(Stage.stage_id == "stage_system")
+                )
+                parent_stage = result.scalar_one_or_none()
+            
+            if not parent_stage:
+                raise ValueError(f"Parent stage {parent_id} not found")
 
-        # Determine root/leaf status
-        is_root = parent_stage is None
-        is_leaf = True  # New stages start as leaf nodes
+        # Determine lineage path and depth level
+        lineage_path = parent_stage.lineage_path + [parent_stage.stage_id]
+        depth_level = parent_stage.depth_level + 1
+
+        # Use temporary unique path to bypass SQL constraints before WBS reindexing
+        temp_path = f"/temp_{uuid.uuid4().hex}"
+
+        # Clean the input stage name
+        clean_name = self.extract_base_name(stage_data.stage_name, stage_data.wbs_prefix)
 
         # Create new stage
         new_stage = Stage(
             stage_id=self.generate_stage_id(),
-            stage_name=stage_data.stage_name,
-            parent_stage_id=stage_data.parent_stage_id,
-            stage_path=stage_path,
+            stage_name=clean_name,
+            parent_stage_id=parent_stage.stage_id,
+            stage_path=temp_path,
             depth_level=depth_level,
             lineage_path=lineage_path,
             visibility_scope=stage_data.visibility_scope,
-            is_root=is_root,
-            is_leaf=is_leaf,
+            is_root=False,  # only System is root
+            is_leaf=True,   # Starts as leaf node
+            wbs_prefix=stage_data.wbs_prefix,
             created_by=created_by,
         )
 
         self.db.add(new_stage)
-        # Flush so the new stage is readable by the recompute function
+        # Flush so the new stage is in the session and readable by reindexing
         await self.db.flush()
 
-        # Update parent's state based strictly on DB count
-        if parent_stage:
-            await self._recompute_node_stats(parent_stage.stage_id)
+        # Run reindexing! This assigns outline numbers, formats names, and builds paths
+        await self.reindex_wbs_codes()
+
+        # Update parent's stats based on DB children count
+        await self._recompute_node_stats(parent_stage.stage_id)
 
         await self.db.commit()
         await self.db.refresh(new_stage)
@@ -183,7 +337,10 @@ class StageService:
     async def update_stage(
         self, stage_id: str, stage_data: StageUpdate
     ) -> StageResponse:
-        """Update stage name and/or visibility."""
+        """Update stage name, prefix, and/or visibility."""
+        if stage_id == "stage_system":
+            raise ValueError("The unique 'System' root stage cannot be updated.")
+
         result = await self.db.execute(
             select(Stage).where(Stage.stage_id == stage_id)
         )
@@ -191,19 +348,60 @@ class StageService:
         if not stage:
             raise ValueError(f"Stage {stage_id} not found")
 
+        # Determine active prefix for name cleaning
+        active_prefix = stage.wbs_prefix
+        if not active_prefix and stage.depth_level > 1:
+            ancestor_id = stage.lineage_path[1] if len(stage.lineage_path) > 1 else None
+            if ancestor_id:
+                ancestor = await self.db.get(Stage, ancestor_id)
+                if ancestor:
+                    active_prefix = ancestor.wbs_prefix
+
+        # Clean and update stage name
         if stage_data.stage_name and stage_data.stage_name != stage.stage_name:
-            parent_path = "/".join(stage.stage_path.split("/")[:-1]) or "/"
-            new_path = f"{parent_path}/{stage_data.stage_name}".replace("//", "/")
-            existing = await self.db.execute(
-                select(Stage).where(Stage.stage_path == new_path)
-            )
-            if existing.scalar_one_or_none():
-                raise ValueError(f"Stage path {new_path} already exists")
-            stage.stage_path = new_path
-            stage.stage_name = stage_data.stage_name
+            clean_name = self.extract_base_name(stage_data.stage_name, active_prefix)
+            stage.stage_name = clean_name
+            # Set a temporary path on self to avoid unique constraint conflict if name changes
+            stage.stage_path = f"/temp_{uuid.uuid4().hex}"
+
+        # Update prefix if target stage is depth 1
+        if stage_data.wbs_prefix is not None:
+            if stage.depth_level != 1:
+                raise ValueError("WBS prefix can only be configured on direct children of System (depth 1).")
+
+            # When removing the prefix (empty string), clean the stored stage name and
+            # verify the resulting name does not already exist in the database.
+            if not stage_data.wbs_prefix:
+                # Strip the leading 3-char prefix (e.g. "abc1 Building" → "1 Building")
+                no_prefix_name = re.sub(r'^[a-zA-Z0-9]{3}(?=\d)', '', stage.stage_name)
+
+                # Reject if the would-be name already exists (anywhere in the DB, excluding self)
+                dup_result = await self.db.execute(
+                    select(Stage).where(
+                        Stage.stage_name == no_prefix_name,
+                        Stage.stage_id != stage_id,
+                    )
+                )
+                if dup_result.scalar_one_or_none():
+                    raise ValueError(
+                        f"Cannot remove prefix: a stage with name '{no_prefix_name}' "
+                        f"already exists in the database."
+                    )
+
+                # Store the cleaned name; reindex will keep it without adding a new prefix
+                stage.stage_name = no_prefix_name
+
+            stage.wbs_prefix = stage_data.wbs_prefix if stage_data.wbs_prefix else None
+            # Assign temporary paths to allow cascade rename updates
+            stage.stage_path = f"/temp_{uuid.uuid4().hex}"
 
         if stage_data.visibility_scope:
             stage.visibility_scope = stage_data.visibility_scope
+
+        await self.db.flush()
+
+        # Run WBS re-indexing!
+        await self.reindex_wbs_codes()
 
         await self.db.commit()
         await self.db.refresh(stage)
@@ -313,6 +511,7 @@ class StageService:
                 is_root=stage.is_root,
                 is_leaf=stage.is_leaf,
                 visibility_scope=stage.visibility_scope,
+                wbs_prefix=stage.wbs_prefix,
                 created_by=stage.created_by,
                 created_at=stage.created_at,
                 updated_at=stage.updated_at,
@@ -346,7 +545,6 @@ class StageService:
         self, ancestor_stage_id: str, max_depth: Optional[int] = None
     ) -> List[StageResponse]:
         """Get all descendant stages using lineage."""
-        # Use PostgreSQL's array containment operator
         query = select(Stage).where(
             text(":ancestor_id = ANY(lineage_path)").bindparams(ancestor_id=ancestor_stage_id)
         )
@@ -367,112 +565,116 @@ class StageService:
         
         start_time = time.time()
         
-        # --- helpers ---
-        def build_path(parent_path: str, name: str) -> str:
-            if not parent_path or parent_path == "/":
-                return f"/{name}"
-            return f"{parent_path}/{name}"
-        
+        if stage_id == "stage_system":
+            raise ValueError("The unique 'System' root stage cannot be moved.")
+            
         # --- fetch nodes ---
         stage = await self.db.get(Stage, stage_id)
         if not stage:
             raise ValueError(f"Stage {stage_id} not found")
-        
-        target_parent = None
-        if target_parent_id:
-            target_parent = await self.db.get(Stage, target_parent_id)
-            if not target_parent:
-                raise ValueError(f"Target parent {target_parent_id} not found")
             
-            if stage_id == target_parent_id:
-                raise ValueError("Cannot move stage to itself")
+        # Default target parent to System stage if omitted
+        if not target_parent_id:
+            target_parent_id = "stage_system"
             
-            # --- prevent circular move ---
-            if stage_id in target_parent.lineage_path:
-                raise ValueError("Cannot move a node into its own descendant")
-                
-            target_lineage = target_parent.lineage_path
-            target_path = target_parent.stage_path
-            target_depth = target_parent.depth_level
+        if target_parent_id == "stage_system":
+            result = await self.db.execute(
+                select(Stage).where(Stage.stage_id == "stage_system")
+            )
+            target_parent = result.scalar_one_or_none()
         else:
-            target_lineage = []
-            target_path = ""
-            target_depth = -1
-    
+            target_parent = await self.db.get(Stage, target_parent_id)
+            
+        if not target_parent:
+            raise ValueError(f"Target parent {target_parent_id} not found")
+            
+        if stage_id == target_parent_id:
+            raise ValueError("Cannot move stage to itself")
+            
+        # --- prevent circular move ---
+        if stage_id in target_parent.lineage_path:
+            raise ValueError("Cannot move a node into its own descendant")
+            
         old_parent_id = stage.parent_stage_id
-    
-        # --- fetch descendants (IMPORTANT: must be actual Stage models) ---
+        
+        # --- fetch descendants ---
         descendants_result = await self.db.execute(
             select(Stage).where(
                 text(":id = ANY(lineage_path)").bindparams(id=stage_id)
             )
         )
         descendants = descendants_result.scalars().all()
-    
-        old_path = stage.stage_path
-        new_path = build_path(target_path, stage.stage_name)
-    
-        # --- update stage ---
-        stage.parent_stage_id = target_parent_id if target_parent_id else None
-        stage.stage_path = new_path
         
-        # Lineage is the path OF ancestors, so we append target_parent_id (not stage.stage_id)
-        if target_parent_id:
-            stage.lineage_path = target_lineage + [target_parent_id]
-        else:
-            stage.lineage_path = []
-            
-        # recalculate depth level
+        # Save old paths and names for final renaming summary reporting
+        old_nodes_info = {
+            s.stage_id: {"name": s.stage_name, "path": s.stage_path}
+            for s in [stage] + list(descendants)
+        }
+        
+        old_path = stage.stage_path
+        
+        # --- update stage parenting details ---
+        stage.parent_stage_id = target_parent.stage_id
+        stage.lineage_path = target_parent.lineage_path + [target_parent.stage_id]
         stage.depth_level = len(stage.lineage_path)
-    
-        # --- update descendants ---
+        
+        # Assign a temp path to avoid duplicate key issues during migration
+        stage.stage_path = f"/temp_{uuid.uuid4().hex}"
+        
+        # --- update descendants parenting details ---
         for d in descendants:
-            # update lineage
             idx = d.lineage_path.index(stage_id)
-            d.lineage_path = (
-                stage.lineage_path
-                + [stage_id]
-                + d.lineage_path[idx + 1 :]
-            )
-    
-            # SAFE path update (prefix replace only)
-            if d.stage_path.startswith(old_path):
-                suffix = d.stage_path[len(old_path):]
-                d.stage_path = new_path + suffix
-    
-            # recalculate depth level
+            d.lineage_path = stage.lineage_path + [stage_id] + d.lineage_path[idx + 1 :]
             d.depth_level = len(d.lineage_path)
-    
-        # Flush the pending parent modifications BEFORE recalculating stats
+            d.stage_path = f"/temp_{uuid.uuid4().hex}"
+            
         await self.db.flush()
-
+        
+        # --- run WBS re-indexing! ---
+        # This will calculate new outline numbers, assign correct target WBS prefixes, 
+        # rename stages, and set final paths!
+        await self.reindex_wbs_codes()
+        
         # --- recompute children counts + flags using centralized helper ---
         if old_parent_id:
             await self._recompute_node_stats(old_parent_id)
-        if target_parent_id:
-            await self._recompute_node_stats(target_parent_id)
-
-        # --- update moved node flags ---
+        await self._recompute_node_stats(target_parent.stage_id)
         await self._recompute_node_stats(stage_id)
-    
+        
         await self.db.commit()
-    
+        
+        # Re-fetch stage from db to get final correct values
+        await self.db.refresh(stage)
+        
+        # --- populate moved_stages list for response ---
+        moved_stages = []
+        for sid, old_info in old_nodes_info.items():
+            updated = await self.db.get(Stage, sid)
+            if updated:
+                moved_stages.append(StageMovedNode(
+                    stage_id=sid,
+                    old_name=old_info["name"],
+                    new_name=updated.stage_name,
+                    old_path=old_info["path"],
+                    new_path=updated.stage_path
+                ))
+                
         # --- cache ---
         await cache.invalidate_master_metadata()
         await cache.invalidate_stage_cache(stage_id)
-        if target_parent_id:
-            await cache.invalidate_stage_cache(target_parent_id)
+        await cache.invalidate_stage_cache(target_parent.stage_id)
         if old_parent_id:
             await cache.invalidate_stage_cache(old_parent_id)
-    
+            
         duration_ms = (time.time() - start_time) * 1000
-    
+        
         return StageMoveResponse(
             stage_id=stage_id,
             old_path=old_path,
-            new_path=new_path,
+            new_path=stage.stage_path,
             affected_stages_count=len(descendants) + 1,
             operation_duration_ms=duration_ms,
+            moved_stages=moved_stages
         )
 
     async def delete_stage(
@@ -488,6 +690,9 @@ class StageService:
         Returns:
             Dictionary with delete results or preview data.
         """
+        if stage_id == "stage_system":
+            raise ValueError("The unique 'System' root stage cannot be deleted.")
+
         # Get stage to delete
         stage_result = await self.db.execute(
             select(Stage).where(Stage.stage_id == stage_id)
@@ -543,6 +748,9 @@ class StageService:
 
         # Explicitly flush pending deletes to the database transaction
         await self.db.flush()
+
+        # Compact WBS outline numbers by running re-indexing!
+        await self.reindex_wbs_codes()
 
         # Update parent's state if stage had a parent based on DB count
         if parent_id:

@@ -45,14 +45,16 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database initialized")
 
-    # Seed superadmin user and role
+    # Seed superadmin user and role, and seed the System root stage
     from src.app.database import async_session_maker
     from src.app.services.user_service import UserService
     from src.app.services.permission_service import PermissionService
+    from src.app.services.stage_service import StageService
     async with async_session_maker() as seed_db:
         await UserService(seed_db).seed_superadmin()
         await PermissionService(seed_db).seed_superadmin_role()
-    logger.info("Superadmin seed check complete")
+        await StageService(seed_db).seed_system_stage()
+    logger.info("Superadmin and System stage seed check complete")
 
     # Connect to Redis
     await cache.connect()

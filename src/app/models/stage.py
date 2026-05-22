@@ -39,6 +39,7 @@ class Stage(Base):
     is_root = Column(Boolean, nullable=False, default=False)
     is_leaf = Column(Boolean, nullable=False, default=True)
     visibility_scope = Column(String(20), default="private")
+    wbs_prefix = Column(String(10), nullable=True)
 
     # Timestamps
     created_by = Column(String(100))
@@ -78,6 +79,7 @@ class Stage(Base):
             "is_root": self.is_root,
             "is_leaf": self.is_leaf,
             "visibility_scope": self.visibility_scope,
+            "wbs_prefix": self.wbs_prefix,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
