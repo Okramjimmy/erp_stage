@@ -453,7 +453,7 @@ class StageService:
                 raise ValueError(f"User {user_id} not found")
             
             perm_service = PermissionService(self.db)
-            visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id, user.is_superadmin))
+            visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id))
 
         query = select(Stage).order_by(Stage.depth_level, Stage.stage_name)
 

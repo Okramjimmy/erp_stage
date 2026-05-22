@@ -40,7 +40,7 @@
                 <tr>
                     <td>
                         <span style="font-weight:600;font-family:monospace">{{ user_data.username }}</span>
-                        {% if user_data.is_superadmin %}
+                        {% if 'superadmin' in user_data.roles %}
                         <span class="badge" style="background:#ffecd1;color:#d97706;margin-left:4px">Superadmin</span>
                         {% endif %}
                     </td>
@@ -85,7 +85,7 @@
 </div>
 
 <!-- Create User Modal -->
-<div class="modal-overlay" id="create-user-modal" style="display: none">
+<div class="modal-overlay" id="create-user-modal">
     <div class="modal" style="max-width:560px; width:100%">
         <div class="modal-header">
             <span class="modal-title">Create User</span>
@@ -119,8 +119,14 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label required">Password</label>
-                    <input type="password" class="form-control" id="newPassword" required
-                        minlength="8" maxlength="128" placeholder="Min. 8 characters" />
+                    <div style="display:flex; gap:8px">
+                        <input type="text" class="form-control" id="newPassword" required
+                            minlength="8" maxlength="128" placeholder="Min. 8 characters" style="flex:1" />
+                        <button type="button" class="btn btn-secondary" onclick="handleGeneratePassword()" style="white-space:nowrap">Generate & Copy</button>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                        Requires: 1 uppercase, 1 number, 1 special char, no spaces (min 8 chars)
+                    </div>
                 </div>
 
                 <!-- Section: Profile -->
@@ -136,17 +142,6 @@
                         <label class="form-label">Phone</label>
                         <input type="tel" class="form-control" id="newPhone"
                             maxlength="50" placeholder="e.g. +91 98765 43210" />
-                    </div>
-                </div>
-
-                <!-- Section: Permissions -->
-                <div style="border-top:1px solid var(--border-light); margin:18px 0 12px"></div>
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:12px">Access</div>
-                <div style="display:flex; align-items:center; gap:12px; padding:10px 14px; background:var(--bg-light); border-radius:6px; border:1px solid var(--border-light); margin-bottom:4px">
-                    <input type="checkbox" id="newIsSuperadmin" style="width:16px;height:16px;cursor:pointer;accent-color:var(--primary)" />
-                    <div>
-                        <label for="newIsSuperadmin" style="font-size:13px;font-weight:600;cursor:pointer">Grant Superadmin</label>
-                        <div style="font-size:11px;color:var(--text-muted);margin-top:1px">Superadmin has full access to all resources and can manage all users</div>
                     </div>
                 </div>
 
@@ -177,7 +172,7 @@
 </div>
 
 <!-- Manage Roles Modal -->
-<div class="modal-overlay" id="roles-modal" style="display: none">
+<div class="modal-overlay" id="roles-modal">
     <div class="modal">
         <div class="modal-header">
             <span class="modal-title">Manage Roles for <span id="rolesUsernameDisplay" style="font-weight:700"></span></span>
@@ -215,12 +210,12 @@
 {% block extra_js %}
 <script>
     function openCreateUserModal() {
-        document.getElementById("create-user-modal").style.display = "flex";
+        document.getElementById("create-user-modal").classList.add("open");
         setTimeout(() => document.getElementById("newUsername").focus(), 100);
     }
 
     function closeCreateUserModal() {
-        document.getElementById("create-user-modal").style.display = "none";
+        document.getElementById("create-user-modal").classList.remove("open");
         document.getElementById("createUserForm").reset();
     }
 
@@ -233,12 +228,16 @@
         const password = document.getElementById("newPassword").value;
         const department = document.getElementById("newDepartment").value.trim() || null;
         const phone = document.getElementById("newPhone").value.trim() || null;
-        const is_superadmin = document.getElementById("newIsSuperadmin").checked;
 
         // Client-side validation matching UserCreate schema
         if (username.length < 3) { toast("Username must be at least 3 characters", "error"); return; }
         if (!/^[a-z0-9_]+$/.test(username)) { toast("Username may only contain lowercase letters, numbers, and underscores", "error"); return; }
-        if (password.length < 8) { toast("Password must be at least 8 characters", "error"); return; }
+        
+        const pwdRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/\\|`~-])[^\s]{8,}$/;
+        if (!pwdRegex.test(password)) {
+            toast("Password does not meet requirements", "error");
+            return;
+        }
 
         // Collect selected roles
         const checkedRoles = Array.from(
@@ -252,19 +251,10 @@
         try {
             const newUser = await apiFetch("/api/v1/users", {
                 method: "POST",
-                body: { username, email, full_name: fullName, password, department, phone, is_superadmin }
+                body: { username, email, full_name: fullName, password, department, phone, roles: checkedRoles }
             });
 
-            // Assign roles if any were selected
-            if (checkedRoles.length > 0) {
-                await apiFetch(`/api/v1/users/${newUser.user_id}/roles`, {
-                    method: "POST",
-                    body: checkedRoles
-                });
-                toast(`User created and assigned ${checkedRoles.length} role(s)`, "success");
-            } else {
-                toast("User created successfully", "success");
-            }
+            toast(checkedRoles.length > 0 ? `User created and assigned ${checkedRoles.length} role(s)` : "User created successfully", "success");
 
             closeCreateUserModal();
             setTimeout(() => window.location.reload(), 800);
@@ -283,7 +273,7 @@
         document.getElementById("rolesUsernameDisplay").textContent = username;
         
         renderCurrentRoles();
-        document.getElementById("roles-modal").style.display = "flex";
+        document.getElementById("roles-modal").classList.add("open");
     }
 
     function renderCurrentRoles() {
@@ -303,8 +293,43 @@
         `).join("");
     }
 
+    function generatePassword() {
+        const caps = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const nums = "0123456789";
+        const specials = "!@#$%^&*()_+=-[]{};:<>/?";
+        const lowers = "abcdefghijklmnopqrstuvwxyz";
+        let pwd = "";
+        pwd += caps[Math.floor(Math.random() * caps.length)];
+        pwd += nums[Math.floor(Math.random() * nums.length)];
+        pwd += specials[Math.floor(Math.random() * specials.length)];
+        for(let i=0; i<9; i++) {
+            const all = caps + nums + specials + lowers;
+            pwd += all[Math.floor(Math.random() * all.length)];
+        }
+        return pwd.split('').sort(() => 0.5 - Math.random()).join('');
+    }
+
+    function handleGeneratePassword() {
+        const pwd = generatePassword();
+        const input = document.getElementById("newPassword");
+        input.value = pwd;
+        
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(pwd).then(() => {
+                toast("Password generated and copied to clipboard!", "success");
+            });
+        } else {
+            // fallback
+            input.select();
+            document.execCommand('copy');
+            toast("Password generated and copied to clipboard!", "success");
+            // clear selection
+            window.getSelection().removeAllRanges();
+        }
+    }
+
     function closeRolesModal() {
-        document.getElementById("roles-modal").style.display = "none";
+        document.getElementById("roles-modal").classList.remove("open");
         window.location.reload(); // reload to show updated roles in table
     }
 

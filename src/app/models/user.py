@@ -34,7 +34,6 @@ class User(Base):
 
     # Flags
     is_active = Column(Boolean, nullable=False, default=True)
-    is_superadmin = Column(Boolean, nullable=False, default=False)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -50,7 +49,7 @@ class User(Base):
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan", uselist=False)
 
     def __repr__(self):
-        return f"<User(id={self.user_id}, username={self.username}, superadmin={self.is_superadmin})>"
+        return f"<User(id={self.user_id}, username={self.username})>"
 
     def to_dict(self):
         """Convert model to dictionary (excludes hashed_password)."""
@@ -63,7 +62,6 @@ class User(Base):
             "phone": self.phone,
             "profile_photo_url": self.profile_photo_url,
             "is_active": self.is_active,
-            "is_superadmin": self.is_superadmin,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

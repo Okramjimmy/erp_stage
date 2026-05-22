@@ -107,11 +107,13 @@ class UserService:
             phone=data.phone,
             hashed_password=hash_password(data.password),
             is_active=True,
-            is_superadmin=data.is_superadmin,
         )
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
+        
+        if data.roles:
+            await self.assign_roles(user.user_id, data.roles, created_by)
         logger.info(f"Created user {user.username} (id={user.user_id})")
         return user
 
@@ -292,7 +294,6 @@ class UserService:
             department="IT",
             hashed_password=hash_password("changeme123"),
             is_active=True,
-            is_superadmin=True,
         )
         self.db.add(admin)
         self.db.add(UserRole(

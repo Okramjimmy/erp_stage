@@ -56,11 +56,12 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
-    visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id, user.is_superadmin))
+    is_superadmin = "superadmin" in (roles or [])
+    visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id))
     
     stages = [s for s in await stage_service.get_all_stages(limit=200) if s.stage_id in visible_stage_ids]
     
-    if user.is_superadmin:
+    if is_superadmin:
         form_types = await ft_service.get_all_form_types(limit=200)
     else:
         # For regular users, form types are visible if they are linked to a visible stage
@@ -74,7 +75,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         all_fts = await ft_service.get_all_form_types(limit=200)
         form_types = [ft for ft in all_fts if ft.form_type_id in visible_ft_ids]
 
-    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
 
     return templates.TemplateResponse(
         "index.html",
@@ -124,7 +125,7 @@ async def stage_detail(
 
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
-    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
 
     return templates.TemplateResponse(
         "stage_detail.html",
@@ -204,7 +205,7 @@ async def form_builder(
     stage = await _get_stage_for_form_type(db, form_type_id)
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
-    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
 
     return templates.TemplateResponse(
         "form_builder.html",
@@ -238,7 +239,7 @@ async def new_form_view(
     stage = await _get_stage_for_form_type(db, form_type_id)
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
-    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
     return templates.TemplateResponse(
         "form_view.html",
         {
@@ -275,7 +276,7 @@ async def edit_form_view(
     stage = await _get_stage_for_form_type(db, form_type_id)
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
-    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
     return templates.TemplateResponse(
         "form_view.html",
         {
@@ -307,7 +308,7 @@ async def list_form_view(
     stage = await _get_stage_for_form_type(db, form_type_id)
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
-    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
     return templates.TemplateResponse(
         "form_list.html",
         {
@@ -331,11 +332,12 @@ async def forms_page(request: Request, db: AsyncSession = Depends(get_db)):
     perm_service = PermissionService(db)
     ft_service = FormTypeService(db)
     
-    if user.is_superadmin:
+    is_superadmin = "superadmin" in (roles or [])
+    if is_superadmin:
         form_types = await ft_service.get_all_form_types(limit=500)
     else:
         # Fetch visible form types based on stages
-        visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id, user.is_superadmin))
+        visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id))
         from src.app.models.stage_form_type import StageFormType
         from sqlalchemy import select
         result = await db.execute(
@@ -346,10 +348,10 @@ async def forms_page(request: Request, db: AsyncSession = Depends(get_db)):
         all_fts = await ft_service.get_all_form_types(limit=500)
         form_types = [ft for ft in all_fts if ft.form_type_id in visible_ft_ids]
         
-    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
         
     return templates.TemplateResponse(
-        "app/forms.html",
+        "forms.html",
         {
             "request": request,
             "current_user": user,
@@ -369,7 +371,8 @@ async def permissions_page(request: Request, db: AsyncSession = Depends(get_db))
     user, roles = await _require_auth(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
-    if not user.is_superadmin:
+    is_superadmin = "superadmin" in (roles or [])
+    if not is_superadmin:
         return HTMLResponse("Access denied — superadmin only", status_code=403)
 
     stage_service = StageService(db)
@@ -398,7 +401,8 @@ async def roles_page(request: Request, db: AsyncSession = Depends(get_db)):
     user, roles = await _require_auth(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
-    if not user.is_superadmin:
+    is_superadmin = "superadmin" in (roles or [])
+    if not is_superadmin:
         return HTMLResponse("Access denied — superadmin only", status_code=403)
 
     stage_service = StageService(db)
@@ -459,7 +463,8 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
     user, roles = await _require_auth(request, db)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
-    if not user.is_superadmin:
+    is_superadmin = "superadmin" in (roles or [])
+    if not is_superadmin:
         return HTMLResponse("Access denied — superadmin only", status_code=403)
 
     user_service = UserService(db)

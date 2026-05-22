@@ -34,6 +34,17 @@ async def create_stage(
     - **parent_stage_id**: Optional parent stage ID for nesting
     - **visibility_scope**: Visibility level (public, private, restricted)
     """
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    
+    if stage_data.parent_stage_id:
+        has_perm = await perm_service.check_stage_permission(current_user.user_id, stage_data.parent_stage_id, "can_create")
+        if not has_perm:
+            raise HTTPException(status_code=403, detail="Permission denied to create a child stage here.")
+    else:
+        if not await perm_service.is_superadmin(current_user.user_id):
+            raise HTTPException(status_code=403, detail="Only superadmins can create root stages.")
+
     service = StageService(db)
     try:
         return await service.create_stage(stage_data, created_by=current_user.user_id)
@@ -85,7 +96,7 @@ async def get_stage_tree(
             from src.app.services.permission_service import PermissionService
             perm_service = PermissionService(db)
             user_perms = await perm_service.get_user_permissions(
-                current_user.user_id, current_user.is_superadmin
+                current_user.user_id
             )
 
             def populate_tree_perms(node):
@@ -145,7 +156,7 @@ async def get_stage(
         from src.app.services.permission_service import PermissionService
         perm_service = PermissionService(db)
         user_perms = await perm_service.get_user_permissions(
-            current_user.user_id, current_user.is_superadmin
+            current_user.user_id
         )
         response_data.allowed_permissions = user_perms["stages"].get(stage_id, {
             "view": False,
@@ -160,9 +171,19 @@ async def get_stage(
 
 @router.put("/{stage_id}", response_model=StageResponse)
 async def update_stage(
-    stage_id: str, stage_data: StageUpdate, db: AsyncSession = Depends(get_db)
+    stage_id: str, 
+    stage_data: StageUpdate, 
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Update a stage."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    
+    has_perm = await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_edit")
+    if not has_perm:
+        raise HTTPException(status_code=403, detail="Permission denied to edit this stage.")
+
     service = StageService(db)
     stage = await service.get_stage(stage_id)
     if not stage:
@@ -185,6 +206,20 @@ async def move_stage(
 
     Updates all descendants recursively. The user_id is automatically set from the authenticated user.
     """
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    has_edit = await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_edit")
+    if not has_edit:
+        raise HTTPException(status_code=403, detail="Permission denied to move this stage.")
+        
+    if move_request.target_parent_id:
+        has_create = await perm_service.check_stage_permission(current_user.user_id, move_request.target_parent_id, "can_create")
+        if not has_create:
+            raise HTTPException(status_code=403, detail="Permission denied to create a child in the target stage.")
+    else:
+        if not await perm_service.is_superadmin(current_user.user_id):
+            raise HTTPException(status_code=403, detail="Only superadmins can move a stage to the root level.")
+
     service = StageService(db)
     try:
         return await service.move_stage(
@@ -218,8 +253,7 @@ async def delete_stage(
     has_permission = await permission_service.check_stage_permission(
         user_id=current_user.user_id,
         stage_id=stage_id,
-        permission_type="can_delete",
-        is_superadmin=current_user.is_superadmin
+        permission_type="can_delete"
     )
     if not has_permission:
         raise HTTPException(
@@ -252,7 +286,7 @@ async def get_stage_permissions(
 
     # 1. Resolve permissions for the user
     user_perms = await perm_service.get_user_permissions(
-        current_user.user_id, current_user.is_superadmin
+        current_user.user_id
     )
 
     # 2. Get this stage's permissions

@@ -133,6 +133,8 @@ class FormTypeService:
             perm.can_edit = True
             perm.can_delete = True
             perm.can_submit = True
+            perm.can_cancel = True
+            perm.can_amend = True
             perm.can_manage_permissions = True
         else:
             self.db.add(FormTypePermission(
@@ -143,6 +145,8 @@ class FormTypeService:
                 can_edit=True,
                 can_delete=True,
                 can_submit=True,
+                can_cancel=True,
+                can_amend=True,
                 can_manage_permissions=True,
                 granted_by="system",
             ))

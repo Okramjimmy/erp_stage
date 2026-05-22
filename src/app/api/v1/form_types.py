@@ -35,6 +35,11 @@ async def create_form_type(
     - **version**: Form version (e.g., 1.0.0)
     - **schema**: Optional form schema definition
     """
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    if not await perm_service.is_superadmin(current_user.user_id):
+        raise HTTPException(status_code=403, detail="Only superadmins can create Form Types.")
+
     service = FormTypeService(db)
     try:
         return await service.create_form_type(form_data, created_by=current_user.user_id)
@@ -50,6 +55,11 @@ async def link_form_to_stage(
     db: AsyncSession = Depends(get_db)
 ):
     """Link a form type to a stage."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    if not await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_edit"):
+        raise HTTPException(status_code=403, detail="Permission denied to link form types to this stage.")
+
     service = FormTypeService(db)
     try:
         return await service.link_form_to_stage(
@@ -65,9 +75,15 @@ async def link_form_to_stage(
 async def unlink_form_from_stage(
     form_type_id: str,
     stage_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Unlink a form type from a stage."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    if not await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_edit"):
+        raise HTTPException(status_code=403, detail="Permission denied to unlink form types from this stage.")
+
     service = FormTypeService(db)
     try:
         return await service.unlink_form_from_stage(
@@ -153,9 +169,15 @@ async def get_form_type_with_schema(
 async def update_form_type(
     form_type_id: str,
     form_data: FormTypeUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a form type."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    if not await perm_service.check_form_type_permission(current_user.user_id, form_type_id, "can_edit"):
+        raise HTTPException(status_code=403, detail="Permission denied to edit this form type.")
+
     service = FormTypeService(db)
     try:
         return await service.update_form_type(form_type_id, form_data)
@@ -175,8 +197,7 @@ async def delete_form_type(
     has_permission = await permission_service.check_form_type_permission(
         user_id=current_user.user_id,
         form_type_id=form_type_id,
-        permission_type="can_delete",
-        is_superadmin=current_user.is_superadmin
+        permission_type="can_delete"
     )
     if not has_permission:
         raise HTTPException(

@@ -82,9 +82,14 @@ async def _require_auth(request: Request, db: AsyncSession):
     return user, roles
 
 
-def require_superadmin(current_user=Depends(get_current_user)):
+async def require_superadmin(
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """FastAPI dependency that enforces superadmin-only access."""
-    if not current_user.is_superadmin:
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    if not await perm_service.is_superadmin(current_user.user_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Superadmin access required",

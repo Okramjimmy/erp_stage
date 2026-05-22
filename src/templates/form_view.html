@@ -233,12 +233,14 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
 <div class="fv-bar">
     <div>
         <div class="page-subtitle" style="margin-bottom: 2px">
+            {% if stage %}
             <a
                 href="/stages/{{ stage.stage_id }}"
                 style="color: var(--text-muted); text-decoration: none"
                 >{{ stage.stage_name }}</a
             >
             <span style="color: var(--text-light)"> / </span>
+            {% endif %}
             <a
                 href="/forms/{{ form_type.form_type_id }}"
                 style="color: var(--text-muted); text-decoration: none"

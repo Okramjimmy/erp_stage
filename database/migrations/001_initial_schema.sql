@@ -184,6 +184,8 @@ CREATE TABLE form_type_permissions (
     can_edit BOOLEAN NOT NULL DEFAULT FALSE,
     can_delete BOOLEAN NOT NULL DEFAULT FALSE,
     can_submit BOOLEAN NOT NULL DEFAULT FALSE,
+    can_cancel BOOLEAN NOT NULL DEFAULT FALSE,
+    can_amend BOOLEAN NOT NULL DEFAULT FALSE,
     can_manage_permissions BOOLEAN NOT NULL DEFAULT FALSE,
 
     -- Timestamps
@@ -225,7 +227,6 @@ CREATE TABLE users (
     profile_photo_url TEXT,
     hashed_password TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    is_superadmin BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -24,6 +24,21 @@ async def create_record(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new form record. The created_by field is automatically set from the authenticated user."""
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+
+    has_permission = await permission_service.check_form_type_permission(
+        user_id=current_user.user_id,
+        form_type_id=payload.form_type_id,
+        permission_type="can_create"
+    )
+
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to create records of this form type"
+        )
+        
     svc = FormRecordService(db)
     try:
         return await svc.create(payload, created_by=current_user.user_id)
@@ -54,8 +69,22 @@ async def get_record(record_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.put("/{record_id}", response_model=FormRecordResponse)
 async def update_record(
-    record_id: str, payload: FormRecordUpdate, db: AsyncSession = Depends(get_db)
+    record_id: str, payload: FormRecordUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+
+    has_permission = await permission_service.check_form_type_permission(
+        user_id=current_user.user_id,
+        form_type_id=payload.form_type_id,
+        permission_type="can_edit"
+    )
+
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to edit records of this form type"
+        )
     svc = FormRecordService(db)
     try:
         return await svc.update(record_id, payload)
@@ -70,7 +99,26 @@ async def submit_record(
     db: AsyncSession = Depends(get_db)
 ):
     """Submit a form record. The submitted_by field is automatically set from the authenticated user."""
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+
     svc = FormRecordService(db)
+    rec = await svc.get(record_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    has_permission = await permission_service.check_form_type_permission(
+        user_id=current_user.user_id,
+        form_type_id=rec.form_type_id,
+        permission_type="can_submit"
+    )
+
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to submit records of this form type"
+        )
+
     try:
         return await svc.submit(record_id, submitted_by=current_user.user_id)
     except ValueError as e:
@@ -78,8 +126,31 @@ async def submit_record(
 
 
 @router.post("/{record_id}/cancel", response_model=FormRecordResponse)
-async def cancel_record(record_id: str, db: AsyncSession = Depends(get_db)):
+async def cancel_record(
+    record_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+
     svc = FormRecordService(db)
+    rec = await svc.get(record_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    has_permission = await permission_service.check_form_type_permission(
+        user_id=current_user.user_id,
+        form_type_id=rec.form_type_id,
+        permission_type="can_cancel"
+    )
+
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to cancel records of this form type"
+        )
+        
     try:
         return await svc.cancel(record_id)
     except ValueError as e:
@@ -93,7 +164,26 @@ async def amend_record(
     db: AsyncSession = Depends(get_db)
 ):
     """Amend a submitted form record. The created_by field is automatically set from the authenticated user."""
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+
     svc = FormRecordService(db)
+    rec = await svc.get(record_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    has_permission = await permission_service.check_form_type_permission(
+        user_id=current_user.user_id,
+        form_type_id=rec.form_type_id,
+        permission_type="can_amend"
+    )
+
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to amend records of this form type"
+        )
+    
     try:
         return await svc.amend(record_id, created_by=current_user.user_id)
     except ValueError as e:
@@ -150,8 +240,7 @@ async def delete_record(
     has_permission = await permission_service.check_form_type_permission(
         user_id=current_user.user_id,
         form_type_id=rec.form_type_id,
-        permission_type="can_delete",
-        is_superadmin=current_user.is_superadmin
+        permission_type="can_delete"
     )
     if not has_permission:
         raise HTTPException(

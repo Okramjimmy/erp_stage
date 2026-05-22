@@ -57,14 +57,18 @@ async def list_users(
     service = UserService(db)
     pairs = await service.list_users(skip=skip, limit=limit)
 
-    if current_user.is_superadmin:
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    is_superadmin = await perm_service.is_superadmin(current_user.user_id)
+
+    if is_superadmin:
         return [_user_to_list_item(u, r) for u, r in pairs]
 
     # Non-superadmins can only see users who are not superadmins
     return [
         _user_to_list_item(u, r)
         for u, r in pairs
-        if not u.is_superadmin and "superadmin" not in (r or [])
+        if "superadmin" not in (r or [])
     ]
 
 
@@ -94,7 +98,10 @@ async def get_user(
     current_user: User = Depends(get_current_user),
 ):
     """Get a user by ID. Users can only fetch themselves; superadmins can fetch any."""
-    if not current_user.is_superadmin and current_user.user_id != user_id:
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    is_superadmin = await perm_service.is_superadmin(current_user.user_id)
+    if not is_superadmin and current_user.user_id != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     service = UserService(db)
     result = await service.get_user_with_roles(user_id)
@@ -112,7 +119,10 @@ async def update_user(
     current_user: User = Depends(get_current_user),
 ):
     """Update profile fields. Self or superadmin only."""
-    if not current_user.is_superadmin and current_user.user_id != user_id:
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    is_superadmin = await perm_service.is_superadmin(current_user.user_id)
+    if not is_superadmin and current_user.user_id != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
     service = UserService(db)
     try:
@@ -175,7 +185,10 @@ async def upload_photo(
     Stored under key: users/{user_id}_{department}/photo.{ext}
     Sets users.profile_photo_url to this key.
     """
-    if not current_user.is_superadmin and current_user.user_id != user_id:
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    is_superadmin = await perm_service.is_superadmin(current_user.user_id)
+    if not (is_superadmin or current_user.user_id == user_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     service = UserService(db)

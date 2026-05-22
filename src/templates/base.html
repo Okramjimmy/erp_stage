@@ -137,15 +137,19 @@
                 ></div>
             </div>
             <div class="navbar-actions">
-                <a href="/">
+                <div style="display:flex; align-items:center; gap:8px">
                     {% if current_user %}
+                        <script>window.CURRENT_USER_ID = "{{ current_user.user_id }}";</script>
+                        <button class="navbar-link" style="cursor: pointer;color: gray;border: 1px solid gray;background-color: white;" onclick="openChangePasswordModal()" >
+                            Change Password
+                        </button>
                         <button class="navbar-link" style="cursor: pointer;color: gray;border: 1px solid gray;background-color: white;" onclick="logout()" >
                             Logout
                         </button>
                     {% else %}
                         <a href="/login" class="navbar-link">Login</a>
                     {% endif %} 
-                </a>
+                </div>
                 <a
                     href="/"
                     class="navbar-link {% block nav_home %}{% endblock %}"
@@ -255,7 +259,7 @@
                         </svg>
                         <span class="sidebar-item-label">Dashboard</span>
                     </a>
-                    {% if current_user and current_user.is_superadmin %}
+                    {% if current_user and 'superadmin' in current_user_roles %}
                     <a
                         href="/users"
                         class="sidebar-item {% block nav_users %}{% endblock %}"
@@ -410,6 +414,39 @@
 
             <!-- Main -->
             <main class="main-content">{% block content %}{% endblock %}</main>
+        </div>
+
+        <!-- Change Password Modal -->
+        <div class="modal-overlay" id="change-password-modal">
+            <div class="modal" style="max-width:400px; width:100%">
+                <div class="modal-header">
+                    <span class="modal-title">Change Password</span>
+                    <button class="btn btn-ghost btn-icon" onclick="closeChangePasswordModal()">✕</button>
+                </div>
+                <form id="changePasswordForm" onsubmit="submitChangePassword(event)">
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="form-label required">Current Password</label>
+                            <input type="password" class="form-control" id="cpCurrentPassword" required />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label required">New Password</label>
+                            <input type="password" class="form-control" id="cpNewPassword" required />
+                            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                                Requires uppercase, number, special char, no spaces (min 8 chars)
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label required">Confirm New Password</label>
+                            <input type="password" class="form-control" id="cpConfirmPassword" required />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="cpSubmitBtn">Update Password</button>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Toast container -->
@@ -765,6 +802,58 @@
                     window.location.href = "/login";
                 } else {
                     alert("Logout failed");
+                }
+            }
+
+            function openChangePasswordModal() {
+                if (document.getElementById("change-password-modal")) {
+                    document.getElementById("change-password-modal").classList.add("open");
+                }
+            }
+
+            function closeChangePasswordModal() {
+                if (document.getElementById("change-password-modal")) {
+                    document.getElementById("change-password-modal").classList.remove("open");
+                    const form = document.getElementById("changePasswordForm");
+                    if (form) form.reset();
+                }
+            }
+
+            async function submitChangePassword(e) {
+                e.preventDefault();
+                if (!window.CURRENT_USER_ID) return;
+
+                const current_password = document.getElementById("cpCurrentPassword").value;
+                const new_password = document.getElementById("cpNewPassword").value;
+                const confirm_password = document.getElementById("cpConfirmPassword").value;
+
+                if (new_password !== confirm_password) {
+                    toast("New passwords do not match", "error");
+                    return;
+                }
+
+                const pwdRegex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/\\|`~-])[^\s]{8,}$/;
+                if (!pwdRegex.test(new_password)) {
+                    toast("New password does not meet requirements", "error");
+                    return;
+                }
+
+                const btn = document.getElementById("cpSubmitBtn");
+                btn.disabled = true;
+                btn.textContent = "Updating...";
+
+                try {
+                    await apiFetch(`/api/v1/users/${window.CURRENT_USER_ID}/password`, {
+                        method: "PUT",
+                        body: { current_password, new_password, confirm_password }
+                    });
+                    toast("Password updated successfully", "success");
+                    closeChangePasswordModal();
+                } catch (error) {
+                    toast(error.message || "Failed to update password", "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = "Update Password";
                 }
             }
 

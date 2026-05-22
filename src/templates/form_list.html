@@ -7,11 +7,13 @@
 
 <div class="page-header">
   <div>
-    <div class="page-subtitle">
+    <!-- <div class="page-subtitle">
+      {% if stage %}
       <a href="/stages/{{ stage.stage_id }}" style="color:var(--text-muted);text-decoration:none">{{ stage.stage_name }}</a>
       <span style="color:var(--text-light)"> / </span>
+      {% endif %}
       {{ form_type.form_name }}
-    </div>
+    </div> -->
     <div class="page-title">{{ form_type.form_name }}</div>
   </div>
   <div class="page-actions">

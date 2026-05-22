@@ -1213,9 +1213,7 @@ Builder{% endblock %} {% block content %}
     function openMoveModal() {
         openModal("move-modal");
     }
-    function openGrantModal() {
-        openModal("grant-modal");
-    }
+
 
     // createForm is now defined below with template support
 
@@ -1455,7 +1453,7 @@ Builder{% endblock %} {% block content %}
         document.getElementById('perm-delete').checked = false;
         document.getElementById('perm-manage').checked = false;
         document.getElementById('perm-submit').checked = false;
-        document.getElementById('grant-modal').classList.add('active');
+        openModal('grant-modal');
     }
 
     let formTypesLoaded = false;

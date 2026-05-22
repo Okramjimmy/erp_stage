@@ -228,6 +228,11 @@ class PermissionService:
         logger.info(f"Created role: {role_data.role_name} by {created_by}")
         return RoleResponse.model_validate(new_role)
 
+    async def is_superadmin(self, user_id: str) -> bool:
+        """Check if user has the 'superadmin' role."""
+        roles = await self.get_user_roles(user_id)
+        return "superadmin" in roles
+
     async def get_user_roles(self, user_id: str) -> List[str]:
         """Get all role names for a user by resolving their role_ids JSONB array."""
         result = await self.db.execute(
@@ -274,7 +279,7 @@ class PermissionService:
         await cache.delete(f"user:{role_data.user_id}:visible_stages")
         return {"status": "assigned", "role": role_data.role_name}
 
-    async def get_visible_stages(self, user_id: str, is_superadmin: bool = False) -> List[str]:
+    async def get_visible_stages(self, user_id: str) -> List[str]:
         """
         Get all visible stage IDs for a user using lineage-based visibility.
 
@@ -282,7 +287,7 @@ class PermissionService:
         Regular users see stages where they have direct permission and all descendants.
         """
         # Superadmins can see everything
-        if is_superadmin:
+        if await self.is_superadmin(user_id):
             result = await self.db.execute(select(Stage.stage_id))
             return [r[0] for r in result.all()]
 
@@ -333,8 +338,7 @@ class PermissionService:
         return visible_stages
 
     async def check_stage_permission(
-        self, user_id: str, stage_id: str, permission_type: str = "can_view",
-        is_superadmin: bool = False
+        self, user_id: str, stage_id: str, permission_type: str = "can_view"
     ) -> bool:
         """
         Check if user has specific permission on a stage.
@@ -343,7 +347,7 @@ class PermissionService:
         Regular users: uses lineage-based visibility.
         """
         # Superadmins have all permissions
-        if is_superadmin:
+        if await self.is_superadmin(user_id):
             return True
 
         # Get user roles
@@ -633,8 +637,7 @@ class PermissionService:
         }
 
     async def check_form_type_permission(
-        self, user_id: str, form_type_id: str, permission_type: str = "can_view",
-        is_superadmin: bool = False
+        self, user_id: str, form_type_id: str, permission_type: str = "can_view"
     ) -> bool:
         """
         Check if user has specific permission on a form type.
@@ -642,7 +645,7 @@ class PermissionService:
         Checks direct FormTypePermission and mapped StagePermissions.
         If a user is a superadmin, they bypass all checks.
         """
-        if is_superadmin:
+        if await self.is_superadmin(user_id):
             return True
 
         roles = await self.get_user_roles(user_id)
@@ -672,12 +675,12 @@ class PermissionService:
             stage_perm = "can_edit"
 
         for stage_id in mapped_stage_ids:
-            if await self.check_stage_permission(user_id, stage_id, stage_perm, is_superadmin=False):
+            if await self.check_stage_permission(user_id, stage_id, stage_perm):
                 return True
 
         return False
 
-    async def get_user_permissions(self, user_id: str, is_superadmin: bool = False) -> Dict:
+    async def get_user_permissions(self, user_id: str) -> Dict:
         """
         Get resolved permissions for stages and form types for the user.
         """
@@ -691,7 +694,7 @@ class PermissionService:
         ft_res = await self.db.execute(select(FormType))
         all_fts = ft_res.scalars().all()
 
-        if is_superadmin:
+        if await self.is_superadmin(user_id):
             stages_perms = {
                 s.stage_id: {
                     "view": True,
