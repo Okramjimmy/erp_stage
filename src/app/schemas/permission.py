@@ -13,6 +13,7 @@ class StagePermissionCreate(BaseModel):
     can_edit: bool = False
     can_delete: bool = False
     can_manage_permissions: bool = False
+    can_submit: bool = False
 
 
 class StagePermissionUpdate(BaseModel):
@@ -23,6 +24,7 @@ class StagePermissionUpdate(BaseModel):
     can_edit: Optional[bool] = None
     can_delete: Optional[bool] = None
     can_manage_permissions: Optional[bool] = None
+    can_submit: Optional[bool] = None
 
 
 class StagePermissionResponse(BaseModel):
@@ -36,6 +38,7 @@ class StagePermissionResponse(BaseModel):
     can_edit: bool
     can_delete: bool
     can_manage_permissions: bool
+    can_submit: bool
     granted_by: Optional[str] = None
     granted_at: datetime
 
@@ -139,3 +142,10 @@ class UserAccessResponse(BaseModel):
     accessible_stage_ids: List[str]
     accessible_form_type_ids: List[str]
     total_count: int
+
+
+class StageAndFormTypePermissionsResponse(BaseModel):
+    """Schema for returning both stage and its linked form types permissions."""
+    
+    stage_permissions: List[StagePermissionResponse]
+    form_type_permissions: List[FormTypePermissionResponse]

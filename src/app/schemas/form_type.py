@@ -15,15 +15,21 @@ class FormTypeBase(BaseModel):
 class FormTypeCreate(FormTypeBase):
     """Schema for creating a Form Type."""
 
-    schema: Optional[Dict[str, Any]] =Field(default=None, alias="schema_reference")
+    schema: Optional[Dict[str, Any]] = Field(default=None, alias="schema_reference")
 
-    @model_validator(mode='after')
-    def map_schema_to_reference(self):
-        """Map schema field to schema_reference for JSONB storage."""
-        if self.schema is not None:
-            # Since schema_reference is not in the base class, we'll handle it in the service
-            pass
-        return self
+    model_config = {
+        "populate_by_name": True
+    }
+
+    @model_validator(mode='before')
+    @classmethod
+    def map_schema_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if 'schema' in data and 'schema_reference' not in data:
+                data['schema_reference'] = data['schema']
+            elif 'schema_reference' in data and 'schema' not in data:
+                data['schema'] = data['schema_reference']
+        return data
 
 
 class FormTypeUpdate(BaseModel):
@@ -31,7 +37,21 @@ class FormTypeUpdate(BaseModel):
 
     form_name: Optional[str] = Field(None, min_length=1, max_length=255)
     version: Optional[str] = Field(None, pattern=r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
-    schema: Optional[Dict[str, Any]] = None  # Alias for schema_reference
+    schema: Optional[Dict[str, Any]] = Field(default=None, alias="schema_reference")
+
+    model_config = {
+        "populate_by_name": True
+    }
+
+    @model_validator(mode='before')
+    @classmethod
+    def map_schema_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if 'schema' in data and 'schema_reference' not in data:
+                data['schema_reference'] = data['schema']
+            elif 'schema_reference' in data and 'schema' not in data:
+                data['schema'] = data['schema_reference']
+        return data
 
 
 class FormTypeResponse(BaseModel):

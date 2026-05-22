@@ -18,7 +18,7 @@
     <a href="/form-builder/{{ form_type.form_type_id }}" class="btn btn-secondary btn-sm">Edit Schema</a>
     <a href="/forms/{{ form_type.form_type_id }}/new" class="btn btn-primary">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-      New {{ form_type.form_name }}
+      New Record
     </a>
   </div>
 </div>
@@ -55,7 +55,12 @@
           <td style="color:var(--text-muted);font-size:12px">{{ rec.created_at.strftime('%d %b %Y') if rec.created_at else '' }}</td>
           {% if is_submittable %}<td style="font-size:12px">{{ rec.submitted_by or '—' }}</td>{% endif %}
           <td>
-            <a href="/forms/{{ form_type.form_type_id }}/{{ rec.record_id }}" class="btn btn-xs btn-secondary">Open</a>
+            <div class="d-flex gap-1">
+              <a href="/forms/{{ form_type.form_type_id }}/{{ rec.record_id }}" class="btn btn-xs btn-secondary">Open</a>
+              {% if user_permissions and user_permissions.form_types.get(form_type.form_type_id) and user_permissions.form_types[form_type.form_type_id].delete %}
+              <button class="btn btn-xs btn-danger" onclick="deleteRecord('{{ rec.record_id }}','{{ rec.docname }}')">Delete</button>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -67,7 +72,7 @@
     <div class="empty-icon">📋</div>
     <h3>No records yet</h3>
     <p>Create the first {{ form_type.form_name }} record.</p>
-    <a href="/forms/{{ form_type.form_type_id }}/new" class="btn btn-primary btn-sm">New {{ form_type.form_name }}</a>
+    <a href="/forms/{{ form_type.form_type_id }}/new" class="btn btn-primary btn-sm">New Record</a>
   </div>
   {% endif %}
 </div>
@@ -80,6 +85,21 @@ function filterRows(q){
   document.querySelectorAll('#records-table tbody tr').forEach(tr=>{
     tr.style.display=tr.dataset.name.includes(q)?'':'none';
   });
+}
+
+async function deleteRecord(recordId, docname) {
+  if (!confirm(`Are you sure you want to delete record "${docname}"?`)) {
+    return;
+  }
+  try {
+    await apiFetch(`/api/v1/form-records/${recordId}`, {
+      method: 'DELETE'
+    });
+    toast('Record deleted successfully', 'success');
+    setTimeout(() => window.location.reload(), 1000);
+  } catch (error) {
+    toast('Error: ' + error.message, 'error');
+  }
 }
 </script>
 {% endblock %}

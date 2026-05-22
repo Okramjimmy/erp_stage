@@ -789,8 +789,7 @@ endblock %} {% block head %}
     // Load stage tree
     async function loadStageTree() {
         try {
-            const response = await fetch("/api/v1/stages/tree");
-            const stages = await response.json();
+            const stages = await apiFetch("/api/v1/stages/tree");
             
             // Calculate total stages and form types from the filtered tree
             let totalStagesCount = 0;
@@ -929,36 +928,29 @@ endblock %} {% block head %}
         const data = Object.fromEntries(formData);
 
         try {
-            const response = await fetch("/api/v1/stages", {
+            const newStage = await apiFetch("/api/v1/stages", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(data),
+                body: data,
             });
 
-            if (response.ok) {
-                const newStage = await response.json();
-
-                // Assign roles to the stage
+            // Assign roles to the stage
                 const selectedRoles = document.querySelectorAll(
                     "#stage-roles-selection .role-chip.selected",
                 );
                 for (const roleChip of selectedRoles) {
                     const roleName = roleChip.textContent;
-                    await fetch(
+                    await apiFetch(
                         `/api/v1/permissions/stages/${newStage.stage_id}`,
                         {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
+                            body: {
                                 role_name: roleName,
                                 can_view: true,
                                 can_create: true,
                                 can_edit: false,
                                 can_delete: false,
                                 can_manage_permissions: false,
-                            }),
+                            },
                         },
                     );
                 }
@@ -968,10 +960,6 @@ endblock %} {% block head %}
                 loadStageTree();
                 loadStats();
                 alert("Stage created successfully with role assignments!");
-            } else {
-                const error = await response.json();
-                alert(`Error: ${error.detail}`);
-            }
         } catch (error) {
             console.error("Error creating stage:", error);
             alert("Error creating stage");
@@ -985,22 +973,14 @@ endblock %} {% block head %}
         if (!newParentId) return;
 
         try {
-            const response = await fetch(`/api/v1/stages/${stageId}/move`, {
+            await apiFetch(`/api/v1/stages/${stageId}/move`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
+                body: {
                     target_parent_id: newParentId,
-                }),
+                },
             });
 
-            if (response.ok) {
-                loadStageTree();
-            } else {
-                const error = await response.json();
-                alert(`Error: ${error.detail}`);
-            }
+            loadStageTree();
         } catch (error) {
             console.error("Error moving stage:", error);
             alert("Error moving stage");
@@ -1015,20 +995,15 @@ endblock %} {% block head %}
         );
 
         try {
-            const response = await fetch(
+            await apiFetch(
                 `/api/v1/stages/${stageId}?recursive=${recursive}`,
                 {
                     method: "DELETE",
                 },
             );
 
-            if (response.ok) {
-                loadStageTree();
-                loadStats();
-            } else {
-                const error = await response.json();
-                alert(`Error: ${error.detail}`);
-            }
+            loadStageTree();
+            loadStats();
         } catch (error) {
             console.error("Error deleting stage:", error);
             alert("Error deleting stage");

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -49,6 +49,7 @@ class StageResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     metadata_reference: Optional[str] = None
+    allowed_permissions: Optional[Dict[str, bool]] = Field(default=None, serialization_alias="permissions")
 
     class Config:
         from_attributes = True
@@ -60,6 +61,7 @@ class FormTypeRef(BaseModel):
     form_type_id: str
     form_name: str
     version: Optional[str] = None
+    allowed_permissions: Optional[Dict[str, bool]] = Field(default=None, serialization_alias="permissions")
 
     class Config:
         from_attributes = True

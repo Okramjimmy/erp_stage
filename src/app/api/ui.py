@@ -74,6 +74,8 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         all_fts = await ft_service.get_all_form_types(limit=200)
         form_types = [ft for ft in all_fts if ft.form_type_id in visible_ft_ids]
 
+    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+
     return templates.TemplateResponse(
         "index.html",
         {
@@ -85,6 +87,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "total_forms": len(form_types),
             "current_user": user,
             "current_user_roles": roles,
+            "user_permissions": user_permissions,
         },
     )
 
@@ -119,6 +122,10 @@ async def stage_detail(
         if ancestor:
             breadcrumb.append(ancestor)
 
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+
     return templates.TemplateResponse(
         "stage_detail.html",
         {
@@ -130,6 +137,7 @@ async def stage_detail(
             "all_stages": all_stages_for_move,
             "current_user": user,
             "current_user_roles": roles,
+            "user_permissions": user_permissions,
         },
     )
 
@@ -165,6 +173,21 @@ async def new_form_builder(
     )
 
 
+async def _get_stage_for_form_type(db: AsyncSession, form_type_id: str):
+    from sqlalchemy import select
+    from src.app.models.stage_form_type import StageFormType
+    from src.app.services.stage_service import StageService
+
+    # Find the first stage ID this form type is linked to
+    stmt = select(StageFormType.stage_id).where(StageFormType.form_type_id == form_type_id)
+    result = await db.execute(stmt)
+    stage_id = result.scalars().first()
+    if stage_id:
+        stage_service = StageService(db)
+        return await stage_service.get_stage(stage_id)
+    return None
+
+
 @router.get("/form-builder/{form_type_id}", response_class=HTMLResponse)
 async def form_builder(
     request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
@@ -178,8 +201,10 @@ async def form_builder(
     if not form_type:
         return HTMLResponse("Form type not found", status_code=404)
 
-    # A form type may be linked to multiple stages, pass None or the first one if we need it.
-    stage = None
+    stage = await _get_stage_for_form_type(db, form_type_id)
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
 
     return templates.TemplateResponse(
         "form_builder.html",
@@ -189,6 +214,7 @@ async def form_builder(
             "stage": stage,
             "current_user": user,
             "current_user_roles": roles,
+            "user_permissions": user_permissions,
         },
     )
 
@@ -209,8 +235,10 @@ async def new_form_view(
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
     if not form_type:
         return HTMLResponse("Form type not found", status_code=404)
-    # A form type may be linked to multiple stages, pass None or the first one if we need it.
-    stage = None
+    stage = await _get_stage_for_form_type(db, form_type_id)
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
     return templates.TemplateResponse(
         "form_view.html",
         {
@@ -220,6 +248,7 @@ async def new_form_view(
             "record": None,
             "current_user": user,
             "current_user_roles": roles,
+            "user_permissions": user_permissions,
         },
     )
 
@@ -243,8 +272,10 @@ async def edit_form_view(
     record = await svc.get(record_id)
     if not record:
         return HTMLResponse("Record not found", status_code=404)
-    # A form type may be linked to multiple stages, pass None or the first one if we need it.
-    stage = None
+    stage = await _get_stage_for_form_type(db, form_type_id)
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
     return templates.TemplateResponse(
         "form_view.html",
         {
@@ -254,6 +285,7 @@ async def edit_form_view(
             "record": record,
             "current_user": user,
             "current_user_roles": roles,
+            "user_permissions": user_permissions,
         },
     )
 
@@ -272,8 +304,10 @@ async def list_form_view(
         return HTMLResponse("Form type not found", status_code=404)
     svc = FormRecordService(db)
     items, total = await svc.list_by_form_type(form_type_id, limit=100)
-    # A form type may be linked to multiple stages, pass None or the first one if we need it.
-    stage = None
+    stage = await _get_stage_for_form_type(db, form_type_id)
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
     return templates.TemplateResponse(
         "form_list.html",
         {
@@ -284,6 +318,7 @@ async def list_form_view(
             "total": total,
             "current_user": user,
             "current_user_roles": roles,
+            "user_permissions": user_permissions,
         },
     )
 
@@ -311,6 +346,8 @@ async def forms_page(request: Request, db: AsyncSession = Depends(get_db)):
         all_fts = await ft_service.get_all_form_types(limit=500)
         form_types = [ft for ft in all_fts if ft.form_type_id in visible_ft_ids]
         
+    user_permissions = await perm_service.get_user_permissions(user.user_id, user.is_superadmin)
+        
     return templates.TemplateResponse(
         "app/forms.html",
         {
@@ -318,6 +355,7 @@ async def forms_page(request: Request, db: AsyncSession = Depends(get_db)):
             "current_user": user,
             "current_user_roles": roles,
             "form_types": form_types,
+            "user_permissions": user_permissions,
         }
     )
 

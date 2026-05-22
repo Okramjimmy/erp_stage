@@ -26,6 +26,7 @@ class StagePermission(Base):
     can_edit = Column(Boolean, nullable=False, default=False)
     can_delete = Column(Boolean, nullable=False, default=False)
     can_manage_permissions = Column(Boolean, nullable=False, default=False)
+    can_submit = Column(Boolean, nullable=False, default=False)
 
     # Timestamps
     granted_by = Column(String(100))
@@ -48,6 +49,7 @@ class StagePermission(Base):
             "can_edit": self.can_edit,
             "can_delete": self.can_delete,
             "can_manage_permissions": self.can_manage_permissions,
+            "can_submit": self.can_submit,
             "granted_by": self.granted_by,
             "granted_at": self.granted_at.isoformat() if self.granted_at else None,
         }

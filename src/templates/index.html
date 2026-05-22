@@ -150,7 +150,9 @@
           <td>
             <div class="d-flex gap-1">
               <a href="/stages/{{ stage.stage_id }}" class="btn btn-xs btn-secondary">View</a>
-              <button class="btn btn-xs btn-danger" onclick="deleteStage('{{ stage.stage_id }}','{{ stage.stage_name }}')">Delete</button>
+              {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].delete %}
+                <button class="btn btn-xs btn-danger" onclick="deleteStage('{{ stage.stage_id }}','{{ stage.stage_name }}')">Delete</button>
+              {% endif %}
             </div>
           </td>
         </tr>

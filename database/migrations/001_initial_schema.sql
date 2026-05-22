@@ -151,6 +151,7 @@ CREATE TABLE stage_permissions (
     can_edit BOOLEAN NOT NULL DEFAULT FALSE,
     can_delete BOOLEAN NOT NULL DEFAULT FALSE,
     can_manage_permissions BOOLEAN NOT NULL DEFAULT FALSE,
+    can_submit BOOLEAN NOT NULL DEFAULT FALSE,
 
     -- Timestamps
     granted_by VARCHAR(100),

@@ -59,6 +59,7 @@ class PermissionService:
             existing_perm.can_manage_permissions = (
                 permission_data.can_manage_permissions
             )
+            existing_perm.can_submit = permission_data.can_submit
             existing_perm.granted_by = granted_by
 
             await self.db.commit()
@@ -78,6 +79,7 @@ class PermissionService:
             can_edit=permission_data.can_edit,
             can_delete=permission_data.can_delete,
             can_manage_permissions=permission_data.can_manage_permissions,
+            can_submit=permission_data.can_submit,
             granted_by=granted_by,
         )
 
@@ -116,6 +118,33 @@ class PermissionService:
         await cache.delete_pattern(f"permission:{role_name}:*")
 
         return {"revoked": f"{role_name} on {stage_id}"}
+
+    async def revoke_form_type_permission(
+        self, form_type_id: str, role_name: str
+    ) -> Dict[str, str]:
+        """Revoke form type permission from a role."""
+        result = await self.db.execute(
+            select(FormTypePermission).where(
+                and_(
+                    FormTypePermission.form_type_id == form_type_id,
+                    FormTypePermission.role_name == role_name,
+                )
+            )
+        )
+        permission = result.scalar_one_or_none()
+
+        if not permission:
+            raise ValueError(
+                f"Permission for role {role_name} on form type {form_type_id} not found"
+            )
+
+        await self.db.delete(permission)
+        await self.db.commit()
+
+        # Invalidate cache
+        await cache.delete_pattern(f"permission:{role_name}:*")
+
+        return {"revoked": f"{role_name} on {form_type_id}"}
 
     async def grant_form_type_permission(
         self,
@@ -602,6 +631,237 @@ class PermissionService:
             "form_type_permissions_updated": len(ft_perms),
             "user_assignments_updated": 0,  # stored by role_id — no update needed
         }
+
+    async def check_form_type_permission(
+        self, user_id: str, form_type_id: str, permission_type: str = "can_view",
+        is_superadmin: bool = False
+    ) -> bool:
+        """
+        Check if user has specific permission on a form type.
+
+        Checks direct FormTypePermission and mapped StagePermissions.
+        If a user is a superadmin, they bypass all checks.
+        """
+        if is_superadmin:
+            return True
+
+        roles = await self.get_user_roles(user_id)
+        if not roles:
+            return False
+
+        # 1. Check direct form type permission
+        direct_stmt = select(FormTypePermission).where(
+            and_(
+                FormTypePermission.role_name.in_(roles),
+                FormTypePermission.form_type_id == form_type_id,
+                getattr(FormTypePermission, permission_type) == True
+            )
+        )
+        direct_res = await self.db.execute(direct_stmt)
+        if direct_res.scalar_one_or_none() is not None:
+            return True
+
+        # 2. Check permissions on mapped stages (if any)
+        from src.app.models.stage_form_type import StageFormType
+        mapping_stmt = select(StageFormType.stage_id).where(StageFormType.form_type_id == form_type_id)
+        mapping_res = await self.db.execute(mapping_stmt)
+        mapped_stage_ids = [r[0] for r in mapping_res.all()]
+
+        stage_perm = permission_type
+        if permission_type == "can_submit":
+            stage_perm = "can_edit"
+
+        for stage_id in mapped_stage_ids:
+            if await self.check_stage_permission(user_id, stage_id, stage_perm, is_superadmin=False):
+                return True
+
+        return False
+
+    async def get_user_permissions(self, user_id: str, is_superadmin: bool = False) -> Dict:
+        """
+        Get resolved permissions for stages and form types for the user.
+        """
+        from src.app.models.form_type import FormType
+        from src.app.models.stage_form_type import StageFormType
+
+        # 1. Fetch all stages & form types
+        stages_res = await self.db.execute(select(Stage))
+        all_stages = stages_res.scalars().all()
+
+        ft_res = await self.db.execute(select(FormType))
+        all_fts = ft_res.scalars().all()
+
+        if is_superadmin:
+            stages_perms = {
+                s.stage_id: {
+                    "view": True,
+                    "create": True,
+                    "edit": True,
+                    "delete": True,
+                    "manage_permissions": True,
+                    "submit": True,
+                }
+                for s in all_stages
+            }
+            form_types_perms = {
+                ft.form_type_id: {
+                    "view": True,
+                    "create": True,
+                    "edit": True,
+                    "delete": True,
+                    "submit": True,
+                    "manage_permissions": True,
+                }
+                for ft in all_fts
+            }
+            return {"stages": stages_perms, "form_types": form_types_perms}
+
+        roles = await self.get_user_roles(user_id)
+        if not roles:
+            stages_perms = {
+                s.stage_id: {
+                    "view": False,
+                    "create": False,
+                    "edit": False,
+                    "delete": False,
+                    "manage_permissions": False,
+                }
+                for s in all_stages
+            }
+            form_types_perms = {
+                ft.form_type_id: {
+                    "view": False,
+                    "create": False,
+                    "edit": False,
+                    "delete": False,
+                    "submit": False,
+                    "manage_permissions": False,
+                }
+                for ft in all_fts
+            }
+            return {"stages": stages_perms, "form_types": form_types_perms}
+
+        # 2. Get direct Stage permissions
+        stage_perms_res = await self.db.execute(
+            select(StagePermission).where(StagePermission.role_name.in_(roles))
+        )
+        direct_stage_perms = stage_perms_res.scalars().all()
+
+        stage_perm_map = {}
+        for sp in direct_stage_perms:
+            sid = sp.stage_id
+            if sid not in stage_perm_map:
+                stage_perm_map[sid] = {
+                    "view": False,
+                    "create": False,
+                    "edit": False,
+                    "delete": False,
+                    "manage_permissions": False,
+                    "submit": False,
+                }
+            stage_perm_map[sid]["view"] = stage_perm_map[sid]["view"] or sp.can_view
+            stage_perm_map[sid]["create"] = stage_perm_map[sid]["create"] or sp.can_create
+            stage_perm_map[sid]["edit"] = stage_perm_map[sid]["edit"] or sp.can_edit
+            stage_perm_map[sid]["delete"] = stage_perm_map[sid]["delete"] or sp.can_delete
+            stage_perm_map[sid]["manage_permissions"] = stage_perm_map[sid]["manage_permissions"] or sp.can_manage_permissions
+            stage_perm_map[sid]["submit"] = stage_perm_map[sid]["submit"] or sp.can_submit
+
+        # 3. Propagate lineage-based Stage permissions
+        sorted_stages = sorted(all_stages, key=lambda s: s.depth_level)
+        stages_perms = {}
+        for s in sorted_stages:
+            sid = s.stage_id
+            parent_perm = None
+            if s.parent_stage_id and s.parent_stage_id in stages_perms:
+                parent_perm = stages_perms[s.parent_stage_id]
+
+            resolved = {
+                "view": parent_perm["view"] if parent_perm else False,
+                "create": parent_perm["create"] if parent_perm else False,
+                "edit": parent_perm["edit"] if parent_perm else False,
+                "delete": parent_perm["delete"] if parent_perm else False,
+                "manage_permissions": parent_perm["manage_permissions"] if parent_perm else False,
+                "submit": parent_perm["submit"] if parent_perm else False,
+            }
+
+            if sid in stage_perm_map:
+                resolved["view"] = resolved["view"] or stage_perm_map[sid]["view"]
+                resolved["create"] = resolved["create"] or stage_perm_map[sid]["create"]
+                resolved["edit"] = resolved["edit"] or stage_perm_map[sid]["edit"]
+                resolved["delete"] = resolved["delete"] or stage_perm_map[sid]["delete"]
+                resolved["manage_permissions"] = resolved["manage_permissions"] or stage_perm_map[sid]["manage_permissions"]
+                resolved["submit"] = resolved["submit"] or stage_perm_map[sid]["submit"]
+
+            stages_perms[sid] = resolved
+
+        # 4. Get direct FormType permissions
+        ft_perms_res = await self.db.execute(
+            select(FormTypePermission).where(FormTypePermission.role_name.in_(roles))
+        )
+        direct_ft_perms = ft_perms_res.scalars().all()
+
+        ft_perm_map = {}
+        for ftp in direct_ft_perms:
+            ftid = ftp.form_type_id
+            if ftid not in ft_perm_map:
+                ft_perm_map[ftid] = {
+                    "view": False,
+                    "create": False,
+                    "edit": False,
+                    "delete": False,
+                    "submit": False,
+                    "manage_permissions": False,
+                }
+            ft_perm_map[ftid]["view"] = ft_perm_map[ftid]["view"] or ftp.can_view
+            ft_perm_map[ftid]["create"] = ft_perm_map[ftid]["create"] or ftp.can_create
+            ft_perm_map[ftid]["edit"] = ft_perm_map[ftid]["edit"] or ftp.can_edit
+            ft_perm_map[ftid]["delete"] = ft_perm_map[ftid]["delete"] or ftp.can_delete
+            ft_perm_map[ftid]["submit"] = ft_perm_map[ftid]["submit"] or ftp.can_submit
+            ft_perm_map[ftid]["manage_permissions"] = ft_perm_map[ftid]["manage_permissions"] or ftp.can_manage_permissions
+
+        # 5. Fetch StageFormType mapping
+        mapping_res = await self.db.execute(select(StageFormType))
+        mappings = mapping_res.scalars().all()
+
+        ft_to_stages_map = {}
+        for m in mappings:
+            if m.form_type_id not in ft_to_stages_map:
+                ft_to_stages_map[m.form_type_id] = []
+            ft_to_stages_map[m.form_type_id].append(m.stage_id)
+
+        # 6. Resolve FormType permissions
+        form_types_perms = {}
+        for ft in all_fts:
+            ftid = ft.form_type_id
+            resolved = {
+                "view": False,
+                "create": False,
+                "edit": False,
+                "delete": False,
+                "submit": False,
+                "manage_permissions": False,
+            }
+            if ftid in ft_perm_map:
+                resolved["view"] = ft_perm_map[ftid]["view"]
+                resolved["create"] = ft_perm_map[ftid]["create"]
+                resolved["edit"] = ft_perm_map[ftid]["edit"]
+                resolved["delete"] = ft_perm_map[ftid]["delete"]
+                resolved["submit"] = ft_perm_map[ftid]["submit"]
+                resolved["manage_permissions"] = ft_perm_map[ftid]["manage_permissions"]
+
+            mapped_sids = ft_to_stages_map.get(ftid, [])
+            for stage_id in mapped_sids:
+                if stage_id in stages_perms:
+                    resolved["view"] = resolved["view"] or stages_perms[stage_id]["view"]
+                    resolved["create"] = resolved["create"] or stages_perms[stage_id]["create"]
+                    resolved["edit"] = resolved["edit"] or stages_perms[stage_id]["edit"]
+                    resolved["delete"] = resolved["delete"] or stages_perms[stage_id]["delete"]
+                    resolved["submit"] = resolved["submit"] or stages_perms[stage_id]["edit"]
+                    resolved["manage_permissions"] = resolved["manage_permissions"] or stages_perms[stage_id]["manage_permissions"]
+
+            form_types_perms[ftid] = resolved
+
+        return {"stages": stages_perms, "form_types": form_types_perms}
 
     # ------------------------------------------------------------------
     # Superadmin Role Seeding

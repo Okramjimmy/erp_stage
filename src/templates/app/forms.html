@@ -43,7 +43,11 @@
                     <td><span class="badge badge-blue">v{{ ft.version or '1.0.0' }}</span></td>
                     <td>
                         <div class="d-flex gap-1">
+                            <a href="/forms/{{ ft.form_type_id }}" class="btn btn-xs btn-primary">View Records</a>
                             <a href="/form-builder/{{ ft.form_type_id }}?return_to=/forms" class="btn btn-xs btn-secondary">Edit Form</a>
+                            {% if user_permissions and user_permissions.form_types.get(ft.form_type_id) and user_permissions.form_types[ft.form_type_id].delete %}
+                            <button class="btn btn-xs btn-danger" onclick="deleteFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')">Delete</button>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -67,6 +71,21 @@
     function createNewForm() {
         // We will just redirect to the form builder for a new form type with no stage linked
         window.location.href = '/form-builder/new/standalone?return_to=/forms';
+    }
+
+    async function deleteFormType(formTypeId, formName) {
+        if (!confirm(`Are you sure you want to delete form type "${formName}"? This will delete all records of this form as well.`)) {
+            return;
+        }
+        try {
+            await apiFetch(`/api/v1/form-types/${formTypeId}`, {
+                method: 'DELETE'
+            });
+            toast('Form type deleted successfully', 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } catch (error) {
+            toast('Error: ' + error.message, 'error');
+        }
     }
 </script>
 {% endblock %}

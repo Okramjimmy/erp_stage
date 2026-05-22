@@ -167,6 +167,7 @@
                         border-bottom: 1px solid var(--border-light);
                         margin-bottom: 12px;
                     "
+                    title="{% if current_user %}{{ current_user.full_name }}{% else %}User Profile{% endif %}"
                 >
                     <img
                         id="user-avatar"
@@ -238,6 +239,7 @@
                     <a
                         href="/"
                         class="sidebar-item {% block nav_dashboard %}{% endblock %}"
+                        title="Dashboard"
                     >
                         <svg
                             class="icon"
@@ -251,12 +253,13 @@
                             <rect x="3" y="14" width="7" height="7" />
                             <rect x="14" y="14" width="7" height="7" />
                         </svg>
-                        Dashboard
+                        <span class="sidebar-item-label">Dashboard</span>
                     </a>
                     {% if current_user and current_user.is_superadmin %}
                     <a
                         href="/users"
                         class="sidebar-item {% block nav_users %}{% endblock %}"
+                        title="Users"
                     >
                         <svg
                             class="icon"
@@ -270,11 +273,12 @@
                             <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                             <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                         </svg>
-                        Users
+                        <span class="sidebar-item-label">Users</span>
                     </a>
                     <a
                         href="/roles"
                         class="sidebar-item {% block nav_roles %}{% endblock %}"
+                        title="Roles"
                     >
                         <svg
                             class="icon"
@@ -285,12 +289,13 @@
                         >
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                         </svg>
-                        Roles
+                        <span class="sidebar-item-label">Roles</span>
                     </a>
 
                     <a
                         href="/permissions"
                         class="sidebar-item {% block nav_permissions %}{% endblock %}"
+                        title="Permissions"
                     >
                         <svg
                             class="icon"
@@ -309,11 +314,12 @@
                             />
                             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                         </svg>
-                        Permissions
+                        <span class="sidebar-item-label">Permissions</span>
                     </a>
                     <a
                         href="/forms"
                         class="sidebar-item {% block nav_forms %}{% endblock %}"
+                        title="Forms"
                     >
                         <svg
                             class="icon"
@@ -328,7 +334,7 @@
                             <line x1="16" y1="17" x2="8" y2="17" />
                             <polyline points="10 9 9 9 8 9" />
                         </svg>
-                        Forms
+                        <span class="sidebar-item-label">Forms</span>
                     </a>
                     {% endif %}
                 </div>
@@ -422,6 +428,23 @@
             }
 
             async function apiFetch(url, opts = {}) {
+                // Invalidate cache on mutations
+                if (opts.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(opts.method.toUpperCase())) {
+                    if (url.includes('/stages') || url.includes('/form-types') || url.includes('/permissions')) {
+                        sessionStorage.removeItem('stageTreeCache');
+                    }
+                }
+
+                // Return cache for /stages/tree
+                if (url.endsWith('/stages/tree') && (!opts.method || opts.method.toUpperCase() === 'GET')) {
+                    const cached = sessionStorage.getItem('stageTreeCache');
+                    if (cached) {
+                        try {
+                            return JSON.parse(cached);
+                        } catch(e) {}
+                    }
+                }
+
                 const r = await fetch(url, {
                     headers: { "Content-Type": "application/json" },
                     ...opts,
@@ -433,7 +456,15 @@
                         .catch(() => ({ detail: r.statusText }));
                     throw new Error(err.detail || r.statusText);
                 }
-                return r.json();
+                
+                const data = await r.json();
+                
+                // Save cache for /stages/tree
+                if (url.endsWith('/stages/tree') && (!opts.method || opts.method.toUpperCase() === 'GET')) {
+                    sessionStorage.setItem('stageTreeCache', JSON.stringify(data));
+                }
+                
+                return data;
             }
 
             // Sidebar tree loader
@@ -474,14 +505,15 @@
 
                         const shouldOpen = isActive || hasActiveDescendant;
 
+                        row.title = node.stage_name;
                         row.innerHTML = `
         ${
             hasChildren
                 ? `<svg class="stage-node-chevron ${shouldOpen ? "open" : ""}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m9 18 6-6-6-6"/></svg>`
-                : `<span style="width:10px;display:inline-block"></span>`
+                : `<span class="stage-node-chevron-spacer" style="width:10px;display:inline-block"></span>`
         }
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;color:var(--text-muted)"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${node.stage_name}</span>
+        <span class="sidebar-node-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${node.stage_name}</span>
         ${node.formtype_count > 0 ? `<span class="badge" style="font-size:10px;background:var(--border-light);color:var(--text-muted)">${node.formtype_count}</span>` : ""}
       `;
 
@@ -700,6 +732,15 @@
                     "sidebar-collapsed",
                     sidebar.classList.contains("collapsed"),
                 );
+            }
+
+            function collapseSidebar() {
+                const sidebar = document.getElementById("sidebar");
+                if (sidebar && !sidebar.classList.contains("collapsed")) {
+                    sidebar.classList.add("collapsed");
+                    document.body.classList.add("sidebar-collapsed");
+                    localStorage.setItem("sidebar-collapsed", "true");
+                }
             }
 
             // Drive View Toggle

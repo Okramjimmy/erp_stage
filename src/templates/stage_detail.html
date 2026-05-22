@@ -122,12 +122,14 @@ Builder{% endblock %} {% block content %}
                 </a>
             </div>
         </div>
+        {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].delete %}
         <button
             class="btn btn-danger btn-sm"
             onclick="showDeletePreview('{{ stage.stage_id }}','{{ stage.stage_name }}')"
         >
             🗑 Delete
         </button>
+        {% endif %}
     </div>
 </div>
 
@@ -220,12 +222,14 @@ Builder{% endblock %} {% block content %}
                 >
                     Export
                 </button>
+                {% if user_permissions and user_permissions.form_types.get(ft.form_type_id) and user_permissions.form_types[ft.form_type_id].delete %}
                 <button
                     class="btn btn-sm btn-danger"
                     onclick="deleteForm('{{ ft.form_type_id }}','{{ ft.form_name }}')"
                 >
                     Delete
                 </button>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -294,12 +298,14 @@ Builder{% endblock %} {% block content %}
                                 class="btn btn-xs btn-secondary"
                                 >View</a
                             >
+                            {% if user_permissions and user_permissions.stages.get(child.stage_id) and user_permissions.stages[child.stage_id].delete %}
                             <button
                                 class="btn btn-xs btn-danger"
                                 onclick="showDeletePreview('{{ child.stage_id }}','{{ child.stage_name }}')"
                             >
                                 Delete
                             </button>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -328,22 +334,43 @@ Builder{% endblock %} {% block content %}
 </div>
 
 <div class="tab-pane" id="tab-permissions">
-    <div class="card card-sm">
-        <div class="card-header">
-            <div class="card-title">Role Permissions</div>
-            <button class="btn btn-sm btn-primary" onclick="openGrantModal()">
-                + Grant Permission
-            </button>
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <button class="btn btn-sm btn-primary" id="btn-perm-stage" onclick="switchPermView('stage')">Stage</button>
+        <button class="btn btn-sm btn-secondary" id="btn-perm-formtypes" onclick="switchPermView('formtypes')">Formtypes</button>
+    </div>
+
+    <div id="perm-view-stage">
+        <div class="card card-sm">
+            <div class="card-header">
+                <div class="card-title">Stage Role Permissions</div>
+                <button class="btn btn-sm btn-primary" onclick="openGrantModal('stage')">
+                    + Grant Permission
+                </button>
+            </div>
+            <div id="permissions-container-stage">
+                <div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">
+                    Loading permissions…
+                </div>
+            </div>
         </div>
-        <div id="permissions-container">
-            <div
-                style="
-                    color: var(--text-muted);
-                    font-size: 13px;
-                    padding: 8px 0;
-                "
-            >
-                Loading permissions…
+    </div>
+
+    <div id="perm-view-formtypes" style="display: none;">
+        <div class="card card-sm">
+            <div class="card-header" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="card-title">Formtype Role Permissions</div>
+                <select id="formtype-perm-select" class="form-control" style="max-width: 250px;" onchange="loadFormTypePermissions()">
+                    <!-- options populated via JS -->
+                </select>
+                <div style="flex-grow: 1;"></div>
+                <button class="btn btn-sm btn-primary" id="btn-grant-formtype" onclick="openGrantModal('formtype')" disabled>
+                    + Grant Permission
+                </button>
+            </div>
+            <div id="permissions-container-formtype">
+                <div style="color: var(--text-muted); font-size: 13px; padding: 16px; text-align: center;">
+                    Select a form type to view permissions...
+                </div>
             </div>
         </div>
     </div>
@@ -1056,10 +1083,9 @@ Builder{% endblock %} {% block content %}
                     ></label
                 >
                 <label class="form-check"
-                    ><input type="checkbox" id="perm-manage" /><span
-                        >Manage Permissions</span
-                    ></label
-                >
+                    ><input type="checkbox" id="perm-manage" /><span>Manage Permissions</span></label>
+                <label class="form-check"
+                    ><input type="checkbox" id="perm-submit" /><span>Submit</span></label>
             </div>
         </div>
         <div class="modal-footer">
@@ -1401,19 +1427,304 @@ Builder{% endblock %} {% block content %}
         }
     }
 
-    async function loadPermissions() {
-        // Load permissions from API
-        const container = document.getElementById("permissions-container");
+    let currentGrantType = 'stage';
+    let cachedStagePermissions = [];
+    let cachedFormTypePermissions = [];
+
+    function switchPermView(view) {
+        document.getElementById('perm-view-stage').style.display = view === 'stage' ? 'block' : 'none';
+        document.getElementById('perm-view-formtypes').style.display = view === 'formtypes' ? 'block' : 'none';
+        
+        document.getElementById('btn-perm-stage').className = view === 'stage' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        document.getElementById('btn-perm-formtypes').className = view === 'formtypes' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+
+        if (view === 'formtypes') {
+            initFormTypeDropdown();
+        }
+    }
+
+    function openGrantModal(type = 'stage') {
+        currentGrantType = type;
+        const modalTitle = document.querySelector('#grant-modal .modal-title');
+        modalTitle.textContent = type === 'stage' ? 'Grant Stage Permission' : 'Grant Formtype Permission';
+        
+        document.getElementById('grant-role').value = '';
+        document.getElementById('perm-view').checked = true;
+        document.getElementById('perm-create').checked = false;
+        document.getElementById('perm-edit').checked = false;
+        document.getElementById('perm-delete').checked = false;
+        document.getElementById('perm-manage').checked = false;
+        document.getElementById('perm-submit').checked = false;
+        document.getElementById('grant-modal').classList.add('active');
+    }
+
+    let formTypesLoaded = false;
+    async function initFormTypeDropdown() {
+        if (!formTypesLoaded) {
+            const select = document.getElementById('formtype-perm-select');
+            select.innerHTML = '<option value="">-- Select a Form Type --</option>';
+            
+            let stageFormTypes = [];
+            try {
+                const cachedTree = JSON.parse(sessionStorage.getItem('stageTreeCache') || "[]");
+                function findStage(nodes) {
+                    for(const node of nodes) {
+                        if (node.stage_id === STAGE_ID) return node;
+                        if (node.children && node.children.length > 0) {
+                            const found = findStage(node.children);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                }
+                const myStage = findStage(cachedTree);
+                if (myStage && myStage.form_types) {
+                    stageFormTypes = myStage.form_types;
+                }
+            } catch(e) {}
+            
+            if (stageFormTypes.length > 0) {
+                stageFormTypes.forEach(ft => {
+                    const opt = document.createElement('option');
+                    opt.value = ft.form_type_id;
+                    opt.textContent = ft.form_name;
+                    select.appendChild(opt);
+                });
+            } else {
+                select.innerHTML = '<option value="">-- No Form Types Linked --</option>';
+                select.disabled = true;
+            }
+            formTypesLoaded = true;
+        }
+        loadFormTypePermissions();
+    }
+
+    async function loadFormTypePermissions() {
+        const container = document.getElementById("permissions-container-formtype");
+        const select = document.getElementById('formtype-perm-select');
+        const grantBtn = document.getElementById('btn-grant-formtype');
+        const formTypeId = select.value;
+
+        if (!formTypeId) {
+            container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">Please select a form type from the dropdown.</div>`;
+            grantBtn.disabled = true;
+            return;
+        }
+        
+        grantBtn.disabled = false;
+        container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">Loading permissions...</div>`;
+
         try {
-            const data = await apiFetch(
-                `${API}/metadata/stages/${STAGE_ID}`,
-            ).catch(() => null);
+            // Use cached form type permissions
+            const data = cachedFormTypePermissions.filter(p => p.form_type_id === formTypeId);
+
+            if (!data || data.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                        No permissions explicitly configured for this form type.
+                    </div>`;
+                return;
+            }
+
+            const canManage = {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].manage_permissions %}true{% else %}false{% endif %};
+
+            let rows = data.map(p => {
+                const checkBadge = '<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">✓</span>';
+                const crossBadge = '<span style="background: rgba(239, 68, 68, 0.15); color: rgb(239, 68, 68); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">✗</span>';
+
+                const viewVal = p.can_view ? checkBadge : crossBadge;
+                const createVal = p.can_create ? checkBadge : crossBadge;
+                const editVal = p.can_edit ? checkBadge : crossBadge;
+                const deleteVal = p.can_delete ? checkBadge : crossBadge;
+                const manageVal = p.can_manage_permissions ? checkBadge : crossBadge;
+                const submitVal = p.can_submit ? checkBadge : crossBadge;
+
+                const actionButton = canManage 
+                    ? `<button class="btn btn-sm btn-ghost" style="color: var(--danger); padding: 2px 8px; font-size: 12px;" onclick="revokeFormTypePermission('${p.role_name}', '${formTypeId}')">Revoke</button>`
+                    : '';
+
+                return `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text-color);">${p.role_name}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${viewVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${createVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${deleteVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${manageVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${submitVal}</td>
+                        <td style="padding: 12px 10px; text-align: right;">${actionButton}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // get the form name from tree cache
+            let formName = "Unknown Form Type";
+            try {
+                const cachedTree = JSON.parse(sessionStorage.getItem('stageTreeCache') || "[]");
+                function findFormName(nodes) {
+                    for(const node of nodes) {
+                        if (node.form_types) {
+                            for(const ft of node.form_types) {
+                                if (ft.form_type_id === formTypeId) return ft.form_name;
+                            }
+                        }
+                        if (node.children) {
+                            const found = findFormName(node.children);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                }
+                const name = findFormName(cachedTree);
+                if (name) formName = name;
+            } catch(e) {}
+
             container.innerHTML = `
-      <p style="color:var(--text-muted);font-size:13px">
-        Use the Grant Permission button to add roles. Permissions are inherited through stage lineage.
-      </p>`;
+                <div style="margin-bottom: 12px; font-weight: 500; font-size: 14px; color: var(--primary);">
+                    Permissions for: <span style="color: var(--text-color);">${formName}</span>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--background-sidebar); border-radius: 6px;">
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500;">Role</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">View</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Manage</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Submit</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         } catch (e) {
-            container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions.</p>`;
+            container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions: ${e.message}</p>`;
+        }
+    }
+
+    async function loadPermissions() {
+        const container = document.getElementById("permissions-container-stage");
+        try {
+            const responseData = await apiFetch(`${API}/permissions/stages/${STAGE_ID}`);
+            
+            cachedStagePermissions = responseData.stage_permissions || [];
+            cachedFormTypePermissions = responseData.form_type_permissions || [];
+
+            const data = cachedStagePermissions;
+
+            if (!data || data.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                        No permissions explicitly configured for this stage. Permissions are inherited through stage lineage.
+                    </div>`;
+                return;
+            }
+
+            const canManage = {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].manage_permissions %}true{% else %}false{% endif %};
+
+            let rows = data.map(p => {
+                const checkBadge = '<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">✓</span>';
+                const crossBadge = '<span style="background: rgba(239, 68, 68, 0.15); color: rgb(239, 68, 68); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">✗</span>';
+
+                const viewVal = p.can_view ? checkBadge : crossBadge;
+                const createVal = p.can_create ? checkBadge : crossBadge;
+                const editVal = p.can_edit ? checkBadge : crossBadge;
+                const deleteVal = p.can_delete ? checkBadge : crossBadge;
+                const manageVal = p.can_manage_permissions ? checkBadge : crossBadge;
+                const submitVal = p.can_submit ? checkBadge : crossBadge;
+
+                const actionButton = canManage 
+                    ? `<button class="btn btn-sm btn-ghost" style="color: var(--danger); padding: 2px 8px; font-size: 12px;" onclick="revokeStagePermission('${p.role_name}')">Revoke</button>`
+                    : '';
+
+                return `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text-color);">${p.role_name}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${viewVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${createVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${deleteVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${manageVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${submitVal}</td>
+                        <td style="padding: 12px 10px; text-align: right;">${actionButton}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div style="overflow-x: auto; margin-top: 12px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--background-sidebar); border-radius: 6px;">
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500;">Role</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">View</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Manage</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Submit</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+                    <p style="font-style: italic; margin-bottom: 8px;">
+                        Permissions are inherited through stage lineage. Granting explicit permission overrides inherited access for that role on this stage.
+                    </p>
+                    <ul style="padding-left: 16px; margin: 0; line-height: 1.4;">
+                        <li><strong>View:</strong> Only view access.</li>
+                        <li><strong>Create:</strong> Can create child stages and link formtypes.</li>
+                        <li><strong>Edit:</strong> Can edit stage name/prefix and link/unlink formtypes.</li>
+                        <li><strong>Delete:</strong> Can delete this stage and all descendants.</li>
+                        <li><strong>Manage:</strong> Can assign permissions to other roles in this stage or descendants.</li>
+                        <li><strong>Submit:</strong> Can submit records for formtypes in this stage.</li>
+                    </ul>
+                </div>
+            `;
+        } catch (e) {
+            container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions: ${e.message}</p>`;
+        }
+    }
+
+    async function revokeStagePermission(roleName) {
+        if (!confirm(`Are you sure you want to revoke permissions for the role "${roleName}" on this stage?`)) {
+            return;
+        }
+        try {
+            await apiFetch(`${API}/permissions/stages/${STAGE_ID}/roles/${encodeURIComponent(roleName)}`, {
+                method: 'DELETE'
+            });
+            toast("Permission revoked successfully", "success");
+            await loadPermissions();
+            loadFormTypePermissions();
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    async function revokeFormTypePermission(roleName, formTypeId) {
+        if (!confirm(`Are you sure you want to revoke permissions for the role "${roleName}" on this form type?`)) {
+            return;
+        }
+        try {
+            await apiFetch(`${API}/permissions/form-types/${formTypeId}/roles/${encodeURIComponent(roleName)}`, {
+                method: 'DELETE'
+            });
+            toast("Permission revoked successfully", "success");
+            await loadPermissions();
+            loadFormTypePermissions();
+        } catch (e) {
+            toast(e.message, "error");
         }
     }
 
@@ -1431,14 +1742,28 @@ Builder{% endblock %} {% block content %}
             can_delete: document.getElementById("perm-delete").checked,
             can_manage_permissions:
                 document.getElementById("perm-manage").checked,
+            can_submit: document.getElementById("perm-submit").checked,
             granted_by: "system",
         };
         try {
-            await apiFetch(`${API}/permissions/stages/${STAGE_ID}`, {
-                method: "POST",
-                body,
-            });
-            toast("Permission granted", "success");
+            if (currentGrantType === 'stage') {
+                await apiFetch(`${API}/permissions/stages/${STAGE_ID}`, {
+                    method: "POST",
+                    body,
+                });
+                toast("Stage permission granted", "success");
+                await loadPermissions();
+                loadFormTypePermissions();
+            } else {
+                const formTypeId = document.getElementById('formtype-perm-select').value;
+                await apiFetch(`${API}/permissions/form-types/${formTypeId}`, {
+                    method: "POST",
+                    body,
+                });
+                toast("Formtype permission granted", "success");
+                await loadPermissions();
+                loadFormTypePermissions();
+            }
             closeModal("grant-modal");
         } catch (e) {
             toast(e.message, "error");

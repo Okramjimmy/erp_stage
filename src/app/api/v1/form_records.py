@@ -135,8 +135,30 @@ async def upload_attachment(
 
 
 @router.delete("/{record_id}", status_code=204)
-async def delete_record(record_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_record(
+    record_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     svc = FormRecordService(db)
+    rec = await svc.get(record_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+    has_permission = await permission_service.check_form_type_permission(
+        user_id=current_user.user_id,
+        form_type_id=rec.form_type_id,
+        permission_type="can_delete",
+        is_superadmin=current_user.is_superadmin
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to delete records of this form type"
+        )
+
     try:
         await svc.delete(record_id)
     except ValueError as e:

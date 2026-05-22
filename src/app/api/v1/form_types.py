@@ -164,8 +164,26 @@ async def update_form_type(
 
 
 @router.delete("/{form_type_id}")
-async def delete_form_type(form_type_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_form_type(
+    form_type_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Delete a form type."""
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+    has_permission = await permission_service.check_form_type_permission(
+        user_id=current_user.user_id,
+        form_type_id=form_type_id,
+        permission_type="can_delete",
+        is_superadmin=current_user.is_superadmin
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to delete this form type"
+        )
+
     service = FormTypeService(db)
     try:
         result = await service.delete_form_type(form_type_id)

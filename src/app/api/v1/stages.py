@@ -78,9 +78,41 @@ async def get_stage_tree(
 
     service = StageService(db)
     try:
-        return await service.get_stage_tree(
+        tree = await service.get_stage_tree(
             root_stage_id=root_stage_id, max_depth=max_depth, user_id=user_id
         )
+        if current_user:
+            from src.app.services.permission_service import PermissionService
+            perm_service = PermissionService(db)
+            user_perms = await perm_service.get_user_permissions(
+                current_user.user_id, current_user.is_superadmin
+            )
+
+            def populate_tree_perms(node):
+                node.allowed_permissions = user_perms["stages"].get(node.stage_id, {
+                    "view": False,
+                    "create": False,
+                    "edit": False,
+                    "delete": False,
+                    "manage_permissions": False,
+                    "submit": False
+                })
+                for ft in node.form_types:
+                    ft.allowed_permissions = user_perms["form_types"].get(ft.form_type_id, {
+                        "view": False,
+                        "create": False,
+                        "edit": False,
+                        "delete": False,
+                        "submit": False,
+                        "manage_permissions": False
+                    })
+                for child in node.children:
+                    populate_tree_perms(child)
+
+            for node in tree:
+                populate_tree_perms(node)
+
+        return tree
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -97,13 +129,33 @@ async def search_stages(
 
 
 @router.get("/{stage_id}", response_model=StageResponse)
-async def get_stage(stage_id: str, db: AsyncSession = Depends(get_db)):
+async def get_stage(
+    stage_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user_optional)
+):
     """Get a specific stage by ID."""
     service = StageService(db)
     stage = await service.get_stage(stage_id)
     if not stage:
         raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
-    return stage
+
+    response_data = StageResponse.model_validate(stage)
+    if current_user:
+        from src.app.services.permission_service import PermissionService
+        perm_service = PermissionService(db)
+        user_perms = await perm_service.get_user_permissions(
+            current_user.user_id, current_user.is_superadmin
+        )
+        response_data.allowed_permissions = user_perms["stages"].get(stage_id, {
+            "view": False,
+            "create": False,
+            "edit": False,
+            "delete": False,
+            "manage_permissions": False,
+            "submit": False
+        })
+    return response_data
 
 
 @router.put("/{stage_id}", response_model=StageResponse)
@@ -149,6 +201,7 @@ async def delete_stage(
     stage_id: str,
     recursive: bool = Query(True, description="Delete recursively (default: true)"),
     preview: bool = Query(False, description="Return preview of what would be deleted without actually deleting"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -160,9 +213,76 @@ async def delete_stage(
     Set preview=true to see what would be deleted without actually deleting it.
     This returns a detailed list of stages and form types that would be affected.
     """
+    from src.app.services.permission_service import PermissionService
+    permission_service = PermissionService(db)
+    has_permission = await permission_service.check_stage_permission(
+        user_id=current_user.user_id,
+        stage_id=stage_id,
+        permission_type="can_delete",
+        is_superadmin=current_user.is_superadmin
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to delete this stage"
+        )
+
     service = StageService(db)
     try:
         result = await service.delete_stage(stage_id, recursive=recursive, preview=preview)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/{stage_id}/permissions")
+async def get_stage_permissions(
+    stage_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get resolved permissions of the current user for this stage and its linked form types.
+    """
+    from src.app.services.permission_service import PermissionService
+    from src.app.services.form_type_service import FormTypeService
+
+    perm_service = PermissionService(db)
+    ft_service = FormTypeService(db)
+
+    # 1. Resolve permissions for the user
+    user_perms = await perm_service.get_user_permissions(
+        current_user.user_id, current_user.is_superadmin
+    )
+
+    # 2. Get this stage's permissions
+    stage_perms = user_perms["stages"].get(stage_id, {
+        "view": False,
+        "create": False,
+        "edit": False,
+        "delete": False,
+        "manage_permissions": False
+    })
+
+    # 3. Get form types linked to this stage
+    form_types = await ft_service.get_form_types_by_stage(stage_id)
+    form_type_ids = [ft.form_type_id for ft in form_types]
+
+    form_perms = {}
+    for ft_id in form_type_ids:
+        form_perms[ft_id] = user_perms["form_types"].get(ft_id, {
+            "view": False,
+            "create": False,
+            "edit": False,
+            "delete": False,
+            "submit": False,
+            "manage_permissions": False
+        })
+
+    return {
+        "stage_id": stage_id,
+        "permissions": {
+            "stage": stage_perms,
+            "form_types": form_perms
+        }
+    }

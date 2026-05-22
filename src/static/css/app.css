@@ -515,12 +515,14 @@ textarea.form-control { resize: vertical; min-height: 72px; }
 .sidebar.collapsed {
     width: 60px;
 }
-.sidebar.collapsed .sidebar-label span,
+.sidebar.collapsed .sidebar-label,
 .sidebar.collapsed .sidebar-item-label,
 .sidebar.collapsed .profile-text,
 .sidebar.collapsed .badge,
 .sidebar.collapsed .sidebar-node-text,
-.sidebar.collapsed .drive-text {
+.sidebar.collapsed .drive-text,
+.sidebar.collapsed .stage-node-chevron,
+.sidebar.collapsed .stage-node-chevron-spacer {
   display: none !important;
 }
 .sidebar.collapsed .sidebar-profile {
@@ -532,16 +534,16 @@ textarea.form-control { resize: vertical; min-height: 72px; }
   margin-top: 12px;
   transform: rotate(180deg);
 }
-.sidebar.collapsed .sidebar-label {
-  justify-content: center;
-  padding: 8px 4px 4px;
-}
 .sidebar.collapsed .sidebar-item {
   justify-content: center;
   padding: 8px 0;
 }
 .sidebar.collapsed .sidebar-item .icon {
   margin: 0;
+}
+.sidebar.collapsed .stage-node-row {
+  padding-left: 0 !important;
+  justify-content: center;
 }
 body.sidebar-collapsed .main-content {
   margin-left: 60px;

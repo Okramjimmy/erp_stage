@@ -15,6 +15,7 @@ from src.app.schemas.permission import (
     RoleResponse,
     StagePermissionCreate,
     StagePermissionResponse,
+    StageAndFormTypePermissionsResponse,
     UserAccessResponse,
     UserRoleCreate,
 )
@@ -64,6 +65,37 @@ async def revoke_stage_permission(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/stages/{stage_id}", response_model=StageAndFormTypePermissionsResponse)
+async def get_stage_permissions(
+    stage_id: str, db: AsyncSession = Depends(get_db)
+):
+    """Get all permissions configured for a specific stage and its linked form types."""
+    from src.app.models.permission import StagePermission, FormTypePermission
+    from src.app.models.stage_form_type import StageFormType
+    from sqlalchemy import select
+    
+    # Get stage permissions
+    stage_res = await db.execute(
+        select(StagePermission).where(StagePermission.stage_id == stage_id)
+    )
+    stage_permissions = stage_res.scalars().all()
+    
+    # Get form type permissions for form types linked to this stage
+    ft_res = await db.execute(
+        select(FormTypePermission).where(
+            FormTypePermission.form_type_id.in_(
+                select(StageFormType.form_type_id).where(StageFormType.stage_id == stage_id)
+            )
+        )
+    )
+    form_type_permissions = ft_res.scalars().all()
+
+    return StageAndFormTypePermissionsResponse(
+        stage_permissions=[StagePermissionResponse.model_validate(p) for p in stage_permissions],
+        form_type_permissions=[FormTypePermissionResponse.model_validate(p) for p in form_type_permissions]
+    )
+
+
 # Form Type Permissions
 @router.post(
     "/form-types/{form_type_id}",
@@ -93,6 +125,19 @@ async def grant_form_type_permission(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/form-types/{form_type_id}/roles/{role_name}")
+async def revoke_form_type_permission(
+    form_type_id: str, role_name: str, db: AsyncSession = Depends(get_db)
+):
+    """Revoke form type permission from a role."""
+    service = PermissionService(db)
+    try:
+        result = await service.revoke_form_type_permission(form_type_id, role_name)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # User Roles
