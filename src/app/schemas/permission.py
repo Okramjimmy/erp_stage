@@ -52,6 +52,7 @@ class FormTypePermissionCreate(BaseModel):
     can_edit: bool = False
     can_delete: bool = False
     can_submit: bool = False
+    can_verify: bool = False
     can_cancel: bool = False
     can_amend: bool = False
     can_manage_permissions: bool = False
@@ -65,6 +66,7 @@ class FormTypePermissionUpdate(BaseModel):
     can_edit: Optional[bool] = None
     can_delete: Optional[bool] = None
     can_submit: Optional[bool] = None
+    can_verify: Optional[bool] = None
     can_cancel: Optional[bool] = None
     can_amend: Optional[bool] = None
     can_manage_permissions: Optional[bool] = None
@@ -81,6 +83,7 @@ class FormTypePermissionResponse(BaseModel):
     can_edit: bool
     can_delete: bool
     can_submit: bool
+    can_verify: bool
     can_cancel: bool
     can_amend: bool
     can_manage_permissions: bool

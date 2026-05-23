@@ -44,6 +44,16 @@
         color: #7c3aed;
         border-color: #c4b5fd;
     }
+    .fv-status.Verified {
+        background: #e0f2fe;
+        color: #0369a1;
+        border-color: #7dd3fc;
+    }
+    .fv-status.Completed {
+        background: #dcfce7;
+        color: #15803d;
+        border-color: #86efac;
+    }
 
     .fv-body {
         display: flex;
@@ -225,9 +235,9 @@
 </style>
 {% endblock %} {% block content %} {% set schema = form_type.schema_data or
 {"fields":[],"settings":{}} %} {% set settings = schema.get("settings", {}) %}
-{% set is_submittable = settings.get("is_submittable", false) %} {% set status =
-record.status if record else "Draft" %} {% set is_readonly = (status in
-["Submitted", "Cancelled", "Amended"]) %}
+{% set is_submittable = settings.get("is_submittable", false) %}
+{% set status = record.status if record else "Draft" %}
+{% set is_readonly = (status != "Draft") %}
 
 <!-- Top bar -->
 <div class="fv-bar">
@@ -252,6 +262,13 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
         </div>
     </div>
 
+    <div id="fv-return-back-container" style="display: none; margin-left: 10px;">
+        <button class="btn btn-secondary btn-sm" onclick="goBackToReturnUrl()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+            Cancel & Return
+        </button>
+    </div>
+
     <span class="fv-status {{ status }}" id="fv-status-badge">
         <svg width="6" height="6" viewBox="0 0 8 8">
             <circle cx="4" cy="4" r="4" fill="currentColor" />
@@ -264,72 +281,60 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
     >
 
     <div class="ml-auto" style="display: flex; gap: 6px; align-items: center">
+        {% set ft_perms = user_permissions.form_types.get(form_type.form_type_id, {}) if user_permissions else {} %}
+
+        <!-- Save and Discard for Draft records -->
         {% if not is_readonly %}
-        <button class="btn btn-secondary btn-sm" onclick="discardChanges()">
-            Discard
-        </button>
-        <button
-            class="btn btn-primary btn-sm"
-            id="save-btn"
-            onclick="saveRecord()"
-        >
-            <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
+            {% if (not record and ft_perms.create) or (record and ft_perms.edit) %}
+            <button class="btn btn-secondary btn-sm" onclick="discardChanges()">
+                Discard
+            </button>
+            <button
+                class="btn btn-primary btn-sm"
+                id="save-btn"
+                onclick="saveRecord()"
             >
-                <path
-                    d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
-                />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-            </svg>
-            Save
-        </button>
-        {% if is_submittable and record %}
-        <button
-            class="btn btn-sm"
-            style="background: #16a34a; color: #fff; border: none"
-            onclick="submitRecord()"
-        >
-            <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-            >
-                <polyline points="20 6 9 17 4 12" />
-            </svg>
-            Submit
-        </button>
-        {% endif %} {% endif %} {% if is_readonly and status == "Submitted" %}
-        <button class="btn btn-secondary btn-sm" onclick="cancelRecord()">
-            Cancel
-        </button>
-        {% if is_submittable %}
-        <button class="btn btn-primary btn-sm" onclick="amendRecord()">
-            Amend
-        </button>
-        {% endif %} {% endif %} {% if record %}
-        <button
-            class="btn btn-secondary btn-sm"
-            onclick="window.location.href='/forms/{{ form_type.form_type_id }}/new'"
-        >
-            + New
-        </button>
-        {% if user_permissions and user_permissions.form_types.get(form_type.form_type_id) and user_permissions.form_types[form_type.form_type_id].delete %}
-        <button
-            class="btn btn-danger btn-sm"
-            onclick="deleteThisRecord()"
-        >
-            🗑 Delete
-        </button>
+                <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <path
+                        d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
+                    />
+                    <polyline points="17 21 17 13 7 13 7 21" />
+                    <polyline points="7 3 7 8 15 8" />
+                </svg>
+                Save
+            </button>
+            {% endif %}
+
         {% endif %}
+
+        <!-- Dynamic Workflow Actions Container -->
+        <div id="workflow-actions-container" style="display:flex;gap:6px;"></div>
+
+        <!-- + New and Delete buttons -->
+        {% if record %}
+            {% if ft_perms.create %}
+            <button
+                class="btn btn-secondary btn-sm"
+                onclick="window.location.href='/forms/{{ form_type.form_type_id }}/new'"
+            >
+                + New
+            </button>
+            {% endif %}
+            {% if ft_perms.delete %}
+            <button
+                class="btn btn-danger btn-sm"
+                onclick="deleteThisRecord()"
+            >
+                🗑 Delete
+            </button>
+            {% endif %}
         {% endif %}
     </div>
 </div>
@@ -449,6 +454,24 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
     // fieldname -> File object for pending (not-yet-uploaded) attachments
     const pendingFiles = {};
 
+    function checkReturnUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnTo = urlParams.get('return_to');
+        if (returnTo) {
+            document.getElementById('fv-return-back-container').style.display = 'block';
+        }
+    }
+    
+    function goBackToReturnUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const returnTo = urlParams.get('return_to');
+        if (returnTo) {
+            window.location.href = returnTo;
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', checkReturnUrl);
+
     function toast(msg, type=''){
       const el=document.createElement('div'); el.className='toast '+type; el.textContent=msg;
       document.getElementById('toast-container').appendChild(el); setTimeout(()=>el.remove(),3200);
@@ -469,6 +492,25 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
     }
     function esc(s){if(!s&&s!==0)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
     function markDirty(){dirty=true;document.getElementById('dirty-dot').style.display='';}
+
+    async function addNewLinkedRecord(formTypeName) {
+      if (dirty || !RECORD_ID) {
+        toast('Please save this record first before adding a new linked record.', 'error');
+        return;
+      }
+      try {
+        const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(formTypeName)}&limit=5`);
+        const ft = fts.find(f => f.form_name === formTypeName);
+        if (!ft) {
+            toast(`Form type "${formTypeName}" not found`, 'error');
+            return;
+        }
+        const returnUrl = encodeURIComponent(window.location.pathname);
+        window.location.href = `/forms/${ft.form_type_id}/new?return_to=${returnUrl}`;
+      } catch (e) {
+        toast('Failed to load form type', 'error');
+      }
+    }
 
     // ── render form from schema ──────────────────────────────────────────────────
     const LAYOUT = new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
@@ -559,10 +601,20 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
           const reqAttr = f.required ? 'required' : '';
           // Render a placeholder select; populate asynchronously
           setTimeout(() => loadLinkOptions(f.fieldname, f.options, cur), 0);
-          return `<select id="${selId}" class="form-control" onchange="setVal('${f.fieldname}',this.value)" ${roAttr} ${reqAttr}>
-            <option value="">⏳ Loading…</option>
-            ${cur ? `<option value="${curVal}" selected>${curVal}</option>` : ''}
-          </select>`;
+          
+          let addBtnHtml = '';
+          if (!IS_READONLY && f.options && f.options !== 'Users' && f.options !== 'Empty Table') {
+            const addBtnId = `link-add-${f.fieldname}`;
+            addBtnHtml = `<button type="button" class="btn btn-ghost btn-xs" style="padding:6px 10px;font-size:12px;font-weight:600;color:var(--primary);border:1px dashed var(--border);border-left:none;border-radius:0 4px 4px 0;background:var(--bg);margin:0" onclick="addNewLinkedRecord('${f.options}')" id="${addBtnId}" title="Create a new ${esc(f.options)}">+ New</button>`;
+          }
+
+          return `<div style="display:flex;align-items:stretch;width:100%">
+            <select id="${selId}" class="form-control" style="${addBtnHtml ? 'border-radius:4px 0 0 4px' : ''}" onchange="setVal('${f.fieldname}',this.value)" ${roAttr} ${reqAttr}>
+              <option value="">⏳ Loading…</option>
+              ${cur ? `<option value="${curVal}" selected>${curVal}</option>` : ''}
+            </select>
+            ${addBtnHtml}
+          </div>`;
         }
         default:
           return `<input type="text" class="form-control" value="${esc(cur)}" placeholder="${ph}" oninput="setVal('${f.fieldname}',this.value)" ${ro} ${req}>`;
@@ -836,6 +888,12 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
           if (typeof collapseSidebar === 'function') {
             collapseSidebar();
           }
+          const urlParams = new URLSearchParams(window.location.search);
+          const returnTo = urlParams.get('return_to');
+          if (returnTo) {
+             window.location.replace(returnTo);
+             return;
+          }
           window.location.replace(`/forms/${FORM_TYPE_ID}/${currentRecordId}`);
           return;
         }
@@ -846,32 +904,49 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
       finally { btn.disabled = false; btn.innerHTML = saveSvg; }
     }
 
-    async function submitRecord() {
-      if(!RECORD_ID){ toast('Save the record first','error'); return; }
-      if(!confirm('Submit this record? You cannot edit it after submission.')) return;
+    async function executeTransition(trigger) {
+      if(!RECORD_ID) return;
+      if(dirty) { toast('Save the record first before transitioning','error'); return; }
+      if(!confirm(`Are you sure you want to execute '${trigger}'?`)) return;
+      
       try {
-        await apiFetch(`${API}/form-records/${RECORD_ID}/submit`, {method:'POST'});
-        toast('Submitted', 'success');
+        await apiFetch(`${API}/form-records/${RECORD_ID}/transition`, {
+            method:'POST',
+            body: { trigger }
+        });
+        toast(`Transition '${trigger}' successful`, 'success');
         setTimeout(()=>location.reload(), 600);
       } catch(e) { toast(e.message,'error'); }
     }
 
-    async function cancelRecord() {
-      if(!confirm('Cancel this record?')) return;
-      try {
-        await apiFetch(`${API}/form-records/${RECORD_ID}/cancel`, {method:'POST'});
-        toast('Cancelled','success');
-        setTimeout(()=>location.reload(), 600);
-      } catch(e) { toast(e.message,'error'); }
-    }
-
-    async function amendRecord() {
-      if(!confirm('Create an amendment of this record?')) return;
-      try {
-        const rec = await apiFetch(`${API}/form-records/${RECORD_ID}/amend`, {method:'POST'});
-        toast('Amendment created','success');
-        setTimeout(()=>window.location.href=`/forms/${FORM_TYPE_ID}/${rec.record_id}`, 600);
-      } catch(e) { toast(e.message,'error'); }
+    async function fetchAvailableActions() {
+        if(!RECORD_ID) return;
+        try {
+            const triggers = await apiFetch(`${API}/form-records/${RECORD_ID}/available-actions`);
+            const container = document.getElementById('workflow-actions-container');
+            if(!container) return;
+            
+            container.innerHTML = '';
+            triggers.forEach(trigger => {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-sm btn-primary';
+                
+                // Styling heuristics
+                if(trigger === 'cancel' || trigger === 'reject') {
+                     btn.className = 'btn btn-sm btn-danger';
+                } else if(trigger === 'verify') {
+                     btn.style.background = '#0284c7';
+                     btn.style.border = 'none';
+                } else if(trigger === 'submit') {
+                     btn.style.background = '#16a34a';
+                     btn.style.border = 'none';
+                }
+                
+                btn.textContent = trigger.charAt(0).toUpperCase() + trigger.slice(1);
+                btn.onclick = () => executeTransition(trigger);
+                container.appendChild(btn);
+            });
+        } catch(e) { console.error('Failed to fetch actions:', e); }
     }
 
     function discardChanges() {
@@ -897,5 +972,6 @@ record.status if record else "Draft" %} {% set is_readonly = (status in
     });
 
     renderForm();
+    if(RECORD_ID) fetchAvailableActions();
 </script>
 {% endblock %}

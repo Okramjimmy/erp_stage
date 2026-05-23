@@ -74,6 +74,7 @@ CREATE TABLE form_types (
     -- Versioning
     version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
     schema_reference JSONB,
+    workflow_data JSONB,
 
     -- Timestamps
     created_by VARCHAR(100),
@@ -119,6 +120,12 @@ CREATE TABLE form_records (
     docname VARCHAR(255) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'Draft',
     data JSONB,
+    assigned_role VARCHAR(50),
+    assigned_department VARCHAR(100),
+    assigned_to VARCHAR(50),
+    workflow_snapshot JSONB,
+    schema_snapshot JSONB,
+    form_version VARCHAR(10) NOT NULL,
     amended_from VARCHAR(50) REFERENCES form_records(record_id),
     
     -- Timestamps and Users
@@ -131,6 +138,7 @@ CREATE TABLE form_records (
 
 CREATE INDEX idx_form_records_form_type ON form_records(form_type_id);
 CREATE INDEX idx_form_records_docname ON form_records(docname);
+CREATE INDEX idx_form_records_assigned_to ON form_records(assigned_to);
 
 
 -- =================================================================
@@ -184,6 +192,7 @@ CREATE TABLE form_type_permissions (
     can_edit BOOLEAN NOT NULL DEFAULT FALSE,
     can_delete BOOLEAN NOT NULL DEFAULT FALSE,
     can_submit BOOLEAN NOT NULL DEFAULT FALSE,
+    can_verify BOOLEAN NOT NULL DEFAULT FALSE,
     can_cancel BOOLEAN NOT NULL DEFAULT FALSE,
     can_amend BOOLEAN NOT NULL DEFAULT FALSE,
     can_manage_permissions BOOLEAN NOT NULL DEFAULT FALSE,
@@ -222,6 +231,7 @@ CREATE TABLE users (
     username VARCHAR(100) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     full_name VARCHAR(255) NOT NULL,
+    manager_id VARCHAR(36) REFERENCES users(user_id),
     department VARCHAR(100),
     phone VARCHAR(50),
     profile_photo_url TEXT,
@@ -254,6 +264,23 @@ CREATE TABLE user_roles (
 -- Indexes for user_roles
 CREATE INDEX idx_user_roles_user ON user_roles(user_id);
 CREATE INDEX idx_user_roles_role_ids ON user_roles USING GIN(role_ids);
+
+
+-- =================================================================
+-- 5.5. FORM_ACTIONS TABLE
+-- =================================================================
+CREATE TABLE form_actions (
+    action_id SERIAL PRIMARY KEY,
+    record_id VARCHAR(50) NOT NULL REFERENCES form_records(record_id) ON DELETE CASCADE,
+    from_state VARCHAR(100) NOT NULL,
+    to_state VARCHAR(100) NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    performed_by VARCHAR(36) NOT NULL REFERENCES users(user_id),
+    remarks TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_form_actions_record ON form_actions(record_id);
 
 
 -- =================================================================
@@ -730,6 +757,11 @@ CREATE TRIGGER t_users_update_timestamp
 BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION trg_update_timestamp();
+
+-- Add foreign key for form_records assigned_to after users table is created
+ALTER TABLE form_records
+ADD CONSTRAINT fk_form_records_assigned_to
+FOREIGN KEY (assigned_to) REFERENCES users(user_id);
 
 
 COMMIT;

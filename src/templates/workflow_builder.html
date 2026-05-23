@@ -1,0 +1,380 @@
+{% extends "base.html" %}
+
+{% block title %}Workflow Builder - {{ form_type.form_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .wb-container {
+        display: flex;
+        gap: 24px;
+        margin-top: 20px;
+        align-items: flex-start;
+    }
+    .wb-card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 20px;
+        flex: 1;
+    }
+    .wb-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--border-light);
+        padding-bottom: 10px;
+    }
+    .wb-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+    }
+    .state-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--primary-light);
+        color: var(--primary);
+        border: 1px solid rgba(36,144,239,0.2);
+        padding: 4px 10px;
+        border-radius: 99px;
+        font-size: 13px;
+        font-weight: 500;
+        margin: 4px;
+    }
+    .state-tag button {
+        background: none;
+        border: none;
+        color: var(--primary);
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        opacity: 0.7;
+    }
+    .state-tag button:hover {
+        opacity: 1;
+        color: var(--danger);
+    }
+    .add-state-form {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .transition-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr 1fr 40px;
+        gap: 12px;
+        align-items: end;
+        padding: 12px;
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius);
+        margin-bottom: 8px;
+        background: var(--bg);
+    }
+    .transition-row label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        margin-bottom: 4px;
+        display: block;
+    }
+    .transition-row input, .transition-row select {
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <div class="page-title">⚙ Workflow Builder</div>
+        <div class="page-subtitle">Configure state machine transitions for <strong>{{ form_type.form_name }}</strong></div>
+    </div>
+    <div class="page-actions">
+        {% if stage %}
+        <a href="/stages/{{ stage.stage_id }}" class="btn btn-secondary">Back to Stage</a>
+        {% else %}
+        <a href="/forms" class="btn btn-secondary">Back to Forms</a>
+        {% endif %}
+        
+        {% if can_edit %}
+        <button class="btn btn-primary" onclick="saveWorkflow()">
+            💾 Save Workflow
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+{% if not can_edit %}
+<div class="alert alert-warning mb-4">
+    You do not have permission to edit this workflow. You are viewing it in read-only mode.
+</div>
+{% endif %}
+
+<div class="wb-container">
+    <!-- States Config -->
+    <div class="wb-card" style="flex: 0.4;">
+        <div class="wb-header">
+            <h3 class="wb-title">States</h3>
+        </div>
+        
+        <div class="form-group mb-4">
+            <label>Initial State</label>
+            <select id="initial-state" class="form-control" {% if not can_edit %}disabled{% endif %} onchange="updateData()">
+                <!-- Populated via JS -->
+            </select>
+            <small class="text-muted">The state a record is in when newly created.</small>
+        </div>
+
+        <label style="font-weight: 600; font-size: 13px; margin-bottom: 8px; display: block;">Defined States</label>
+        <div id="states-list">
+            <!-- Populated via JS -->
+        </div>
+
+        {% if can_edit %}
+        <div class="add-state-form">
+            <input type="text" id="new-state-input" class="form-control" placeholder="e.g. Approved">
+            <button class="btn btn-secondary" onclick="addState()">Add State</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Transitions Config -->
+    <div class="wb-card" style="flex: 1;">
+        <div class="wb-header">
+            <h3 class="wb-title">Transitions</h3>
+            {% if can_edit %}
+            <button class="btn btn-sm btn-secondary" onclick="addTransition()">+ Add Transition</button>
+            {% endif %}
+        </div>
+        
+        <div id="transitions-list">
+            <!-- Populated via JS -->
+        </div>
+        
+        <div id="empty-transitions" style="display: none; padding: 40px; text-align: center; color: var(--text-muted);">
+            No transitions defined. Add one to enable workflows.
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const formTypeId = "{{ form_type.form_type_id }}";
+    const canEdit = {{ 'true' if can_edit else 'false' }};
+    const allRoles = {{ all_roles | tojson }};
+    
+    // Parse existing workflow_data
+    let workflowData = {{ (form_type.workflow_data or {}) | tojson }};
+    
+    // Default structure if empty
+    if (!workflowData.states || !Array.isArray(workflowData.states)) {
+        workflowData.states = ["Draft"];
+    }
+    if (!workflowData.initial) {
+        workflowData.initial = "Draft";
+    }
+    if (!workflowData.transitions || !Array.isArray(workflowData.transitions)) {
+        workflowData.transitions = [];
+    }
+
+    function renderUI() {
+        renderStates();
+        renderInitialStateOptions();
+        renderTransitions();
+    }
+
+    function renderStates() {
+        const container = document.getElementById('states-list');
+        container.innerHTML = '';
+        workflowData.states.forEach((state, idx) => {
+            const tag = document.createElement('div');
+            tag.className = 'state-tag';
+            
+            let html = `<span>${state}</span>`;
+            if (canEdit && state !== workflowData.initial) {
+                html += `<button onclick="removeState('${state}')">&times;</button>`;
+            }
+            tag.innerHTML = html;
+            container.appendChild(tag);
+        });
+    }
+
+    function renderInitialStateOptions() {
+        const select = document.getElementById('initial-state');
+        select.innerHTML = '';
+        workflowData.states.forEach(state => {
+            const opt = document.createElement('option');
+            opt.value = state;
+            opt.textContent = state;
+            if (state === workflowData.initial) {
+                opt.selected = true;
+            }
+            select.appendChild(opt);
+        });
+    }
+
+    function renderTransitions() {
+        const container = document.getElementById('transitions-list');
+        const emptyState = document.getElementById('empty-transitions');
+        container.innerHTML = '';
+        
+        if (workflowData.transitions.length === 0) {
+            emptyState.style.display = 'block';
+        } else {
+            emptyState.style.display = 'none';
+            workflowData.transitions.forEach((t, idx) => {
+                const row = document.createElement('div');
+                row.className = 'transition-row';
+                
+                // Construct role options
+                let roleOptions = `<option value="">-- None --</option>`;
+                allRoles.forEach(r => {
+                    roleOptions += `<option value="${r.role_name}" ${t.assignment?.role === r.role_name ? 'selected' : ''}>${r.role_name}</option>`;
+                });
+                
+                // Construct state options
+                let stateOptionsSource = `<option value="*">Any State (*)</option>`;
+                let stateOptionsDest = ``;
+                workflowData.states.forEach(s => {
+                    stateOptionsSource += `<option value="${s}" ${t.source === s ? 'selected' : ''}>${s}</option>`;
+                    stateOptionsDest += `<option value="${s}" ${t.dest === s ? 'selected' : ''}>${s}</option>`;
+                });
+
+                row.innerHTML = `
+                    <div>
+                        <label>Trigger (Action)</label>
+                        <input type="text" class="form-control" value="${t.trigger || ''}" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'trigger', this.value)" placeholder="e.g. submit">
+                    </div>
+                    <div>
+                        <label>From State</label>
+                        <select class="form-control" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'source', this.value)">
+                            ${stateOptionsSource}
+                        </select>
+                    </div>
+                    <div>
+                        <label>To State</label>
+                        <select class="form-control" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'dest', this.value)">
+                            ${stateOptionsDest}
+                        </select>
+                    </div>
+                    <div>
+                        <label>Assign Role</label>
+                        <select class="form-control" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'assignment.role', this.value)">
+                            ${roleOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label>Assign Dept</label>
+                        <input type="text" class="form-control" value="${t.assignment?.department || ''}" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'assignment.department', this.value)" placeholder="SAME_AS_CREATOR">
+                    </div>
+                    <div style="text-align: right;">
+                        ${canEdit ? `<button class="btn btn-sm btn-danger" style="padding: 6px 10px;" onclick="removeTransition(${idx})">🗑</button>` : ''}
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+    }
+
+    function addState() {
+        const input = document.getElementById('new-state-input');
+        const val = input.value.trim();
+        if (val && !workflowData.states.includes(val)) {
+            workflowData.states.push(val);
+            input.value = '';
+            renderUI();
+        }
+    }
+
+    function removeState(state) {
+        if (workflowData.initial === state) {
+            toast("Cannot remove initial state.", "error");
+            return;
+        }
+        workflowData.states = workflowData.states.filter(s => s !== state);
+        
+        // Remove transitions involving this state
+        workflowData.transitions = workflowData.transitions.filter(t => t.source !== state && t.dest !== state);
+        renderUI();
+    }
+
+    function addTransition() {
+        workflowData.transitions.push({
+            trigger: '',
+            source: workflowData.initial,
+            dest: workflowData.initial,
+            assignment: {
+                role: '',
+                department: ''
+            }
+        });
+        renderUI();
+    }
+
+    function removeTransition(idx) {
+        workflowData.transitions.splice(idx, 1);
+        renderUI();
+    }
+
+    function updateTransition(idx, field, value) {
+        if (field.startsWith('assignment.')) {
+            const sub = field.split('.')[1];
+            if (!workflowData.transitions[idx].assignment) {
+                workflowData.transitions[idx].assignment = {};
+            }
+            workflowData.transitions[idx].assignment[sub] = value;
+            
+            // Clean up empty assignments
+            if (!workflowData.transitions[idx].assignment.role && !workflowData.transitions[idx].assignment.department) {
+                delete workflowData.transitions[idx].assignment;
+            }
+        } else {
+            workflowData.transitions[idx][field] = value;
+        }
+    }
+
+    function updateData() {
+        workflowData.initial = document.getElementById('initial-state').value;
+        renderUI();
+    }
+
+    async function saveWorkflow() {
+        if (!canEdit) return;
+        
+        // Validation
+        for (let i = 0; i < workflowData.transitions.length; i++) {
+            const t = workflowData.transitions[i];
+            if (!t.trigger) {
+                toast(`Transition ${i+1} is missing a trigger name.`, "error");
+                return;
+            }
+        }
+
+        try {
+            const res = await apiFetch(`/api/v1/form-types/${formTypeId}`, {
+                method: 'PUT',
+                body: {
+                    workflow_data: workflowData
+                }
+            });
+            console.log(res)
+            toast('Workflow saved successfully', 'success');
+        } catch (error) {
+            toast('Failed to save workflow: ' + error.message, 'error');
+        }
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', renderUI);
+</script>
+{% endblock %}

@@ -16,6 +16,7 @@ class FormTypeCreate(FormTypeBase):
     """Schema for creating a Form Type."""
 
     schema: Optional[Dict[str, Any]] = Field(default=None, alias="schema_reference")
+    workflow_data: Optional[Dict[str, Any]] = None
 
     model_config = {
         "populate_by_name": True
@@ -38,6 +39,7 @@ class FormTypeUpdate(BaseModel):
     form_name: Optional[str] = Field(None, min_length=1, max_length=255)
     version: Optional[str] = Field(None, pattern=r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
     schema: Optional[Dict[str, Any]] = Field(default=None, alias="schema_reference")
+    workflow_data: Optional[Dict[str, Any]] = None
 
     model_config = {
         "populate_by_name": True
@@ -62,6 +64,7 @@ class FormTypeResponse(BaseModel):
     description: Optional[str] = None
     version: str
     schema_reference: Optional[Dict[str, Any]] = None  # JSONB type - accepts dict directly
+    workflow_data: Optional[Dict[str, Any]] = None
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime

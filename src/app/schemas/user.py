@@ -18,6 +18,7 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     department: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=50)
+    manager_id: Optional[str] = None
     roles: Optional[List[str]] = None
 
     @field_validator("password")
@@ -112,6 +113,7 @@ class UserResponse(BaseModel):
     full_name: str
     department: Optional[str] = None
     phone: Optional[str] = None
+    manager_id: Optional[str] = None
     profile_photo_url: Optional[str] = None
     is_active: bool
     created_at: datetime
@@ -132,6 +134,7 @@ class UserListItem(BaseModel):
     full_name: str
     department: Optional[str] = None
     phone: Optional[str] = None
+    manager_id: Optional[str] = None
     profile_photo_url: Optional[str] = None
     is_active: bool
     roles: List[str] = []

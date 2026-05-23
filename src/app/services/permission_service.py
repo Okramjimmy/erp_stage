@@ -171,6 +171,9 @@ class PermissionService:
             existing_perm.can_edit = permission_data.can_edit
             existing_perm.can_delete = permission_data.can_delete
             existing_perm.can_submit = permission_data.can_submit
+            existing_perm.can_verify = permission_data.can_verify
+            existing_perm.can_cancel = permission_data.can_cancel
+            existing_perm.can_amend = permission_data.can_amend
             existing_perm.can_manage_permissions = (
                 permission_data.can_manage_permissions
             )
@@ -193,6 +196,9 @@ class PermissionService:
             can_edit=permission_data.can_edit,
             can_delete=permission_data.can_delete,
             can_submit=permission_data.can_submit,
+            can_verify=permission_data.can_verify,
+            can_cancel=permission_data.can_cancel,
+            can_amend=permission_data.can_amend,
             can_manage_permissions=permission_data.can_manage_permissions,
             granted_by=granted_by,
         )
@@ -668,11 +674,10 @@ class PermissionService:
         from src.app.models.stage_form_type import StageFormType
         mapping_stmt = select(StageFormType.stage_id).where(StageFormType.form_type_id == form_type_id)
         mapping_res = await self.db.execute(mapping_stmt)
+        # Now relying entirely on the workflow engine for workflow transitions
         mapped_stage_ids = [r[0] for r in mapping_res.all()]
 
         stage_perm = permission_type
-        if permission_type == "can_submit":
-            stage_perm = "can_edit"
 
         for stage_id in mapped_stage_ids:
             if await self.check_stage_permission(user_id, stage_id, stage_perm):
@@ -702,7 +707,6 @@ class PermissionService:
                     "edit": True,
                     "delete": True,
                     "manage_permissions": True,
-                    "submit": True,
                 }
                 for s in all_stages
             }
@@ -713,6 +717,9 @@ class PermissionService:
                     "edit": True,
                     "delete": True,
                     "submit": True,
+                    "verify": True,
+                    "cancel": True,
+                    "amend": True,
                     "manage_permissions": True,
                 }
                 for ft in all_fts
@@ -738,6 +745,9 @@ class PermissionService:
                     "edit": False,
                     "delete": False,
                     "submit": False,
+                    "verify": False,
+                    "cancel": False,
+                    "amend": False,
                     "manage_permissions": False,
                 }
                 for ft in all_fts
@@ -813,6 +823,9 @@ class PermissionService:
                     "edit": False,
                     "delete": False,
                     "submit": False,
+                    "verify": False,
+                    "cancel": False,
+                    "amend": False,
                     "manage_permissions": False,
                 }
             ft_perm_map[ftid]["view"] = ft_perm_map[ftid]["view"] or ftp.can_view
@@ -820,6 +833,9 @@ class PermissionService:
             ft_perm_map[ftid]["edit"] = ft_perm_map[ftid]["edit"] or ftp.can_edit
             ft_perm_map[ftid]["delete"] = ft_perm_map[ftid]["delete"] or ftp.can_delete
             ft_perm_map[ftid]["submit"] = ft_perm_map[ftid]["submit"] or ftp.can_submit
+            ft_perm_map[ftid]["verify"] = ft_perm_map[ftid]["verify"] or ftp.can_verify
+            ft_perm_map[ftid]["cancel"] = ft_perm_map[ftid]["cancel"] or ftp.can_cancel
+            ft_perm_map[ftid]["amend"] = ft_perm_map[ftid]["amend"] or ftp.can_amend
             ft_perm_map[ftid]["manage_permissions"] = ft_perm_map[ftid]["manage_permissions"] or ftp.can_manage_permissions
 
         # 5. Fetch StageFormType mapping
@@ -842,6 +858,9 @@ class PermissionService:
                 "edit": False,
                 "delete": False,
                 "submit": False,
+                "verify": False,
+                "cancel": False,
+                "amend": False,
                 "manage_permissions": False,
             }
             if ftid in ft_perm_map:
@@ -850,6 +869,9 @@ class PermissionService:
                 resolved["edit"] = ft_perm_map[ftid]["edit"]
                 resolved["delete"] = ft_perm_map[ftid]["delete"]
                 resolved["submit"] = ft_perm_map[ftid]["submit"]
+                resolved["verify"] = ft_perm_map[ftid]["verify"]
+                resolved["cancel"] = ft_perm_map[ftid]["cancel"]
+                resolved["amend"] = ft_perm_map[ftid]["amend"]
                 resolved["manage_permissions"] = ft_perm_map[ftid]["manage_permissions"]
 
             mapped_sids = ft_to_stages_map.get(ftid, [])
@@ -859,7 +881,7 @@ class PermissionService:
                     resolved["create"] = resolved["create"] or stages_perms[stage_id]["create"]
                     resolved["edit"] = resolved["edit"] or stages_perms[stage_id]["edit"]
                     resolved["delete"] = resolved["delete"] or stages_perms[stage_id]["delete"]
-                    resolved["submit"] = resolved["submit"] or stages_perms[stage_id]["edit"]
+                    resolved["submit"] = resolved["submit"] or stages_perms[stage_id]["submit"]
                     resolved["manage_permissions"] = resolved["manage_permissions"] or stages_perms[stage_id]["manage_permissions"]
 
             form_types_perms[ftid] = resolved
@@ -938,6 +960,9 @@ class PermissionService:
                 perm.can_edit = True
                 perm.can_delete = True
                 perm.can_submit = True
+                perm.can_verify = True
+                perm.can_cancel = True
+                perm.can_amend = True
                 perm.can_manage_permissions = True
             else:
                 self.db.add(FormTypePermission(
@@ -947,7 +972,6 @@ class PermissionService:
                     can_create=True,
                     can_edit=True,
                     can_delete=True,
-                    can_submit=True,
                     can_manage_permissions=True,
                     granted_by="system",
                 ))

@@ -105,6 +105,7 @@ class UserService:
             full_name=data.full_name,
             department=data.department,
             phone=data.phone,
+            manager_id=data.manager_id,
             hashed_password=hash_password(data.password),
             is_active=True,
         )

@@ -9,12 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.models.form_record import FormRecord
 from src.app.models.form_type import FormType
+from src.app.models.form_action import FormAction
 from src.app.schemas.form_record import (
     FormRecordCreate,
     FormRecordResponse,
     FormRecordUpdate,
 )
 from src.app.storage.minio_storage import storage_service
+from transitions import Machine
+
+class RecordContext:
+    def __init__(self, state):
+        self.state = state
+
 
 logger = logging.getLogger(__name__)
 
@@ -150,8 +157,8 @@ class FormRecordService:
         record = await self.db.get(FormRecord, record_id)
         if not record:
             raise ValueError(f"Record {record_id} not found")
-        if record.status not in ("Draft", "Amended"):
-            raise ValueError("Attachments can only be uploaded for Draft or Amended records")
+        if record.status != "Draft":
+            raise ValueError("Attachments can only be uploaded for Draft records")
 
         ft = await self.db.get(FormType, record.form_type_id)
         if not ft:
@@ -206,6 +213,9 @@ class FormRecordService:
             status="Draft",
             data=processed_data,
             created_by=created_by,
+            form_version=ft.version,
+            workflow_snapshot=ft.workflow_data,
+            schema_snapshot=ft.schema_reference,
         )
         self.db.add(record)
         await self.db.commit()
@@ -236,8 +246,8 @@ class FormRecordService:
         record = await self.db.get(FormRecord, record_id)
         if not record:
             raise ValueError(f"Record {record_id} not found")
-        if record.status not in ("Draft", "Amended"):
-            raise ValueError("Only Draft or Amended records can be edited")
+        if record.status != "Draft":
+            raise ValueError("Only Draft records can be edited")
 
         ft = await self.db.get(FormType, record.form_type_id)
         processed_data = self._process_attachments(ft, payload.data, record_id)
@@ -247,65 +257,128 @@ class FormRecordService:
         await self.db.refresh(record)
         return self._parse(record)
 
-    async def submit(self, record_id: str, submitted_by: str = "system") -> FormRecordResponse:
+    def _build_machine(self, workflow_data: dict, current_state: str) -> tuple[Machine, RecordContext]:
+        if not workflow_data:
+            # Fallback default workflow
+            workflow_data = {
+                "states": ["Draft", "Submitted", "Verified", "Completed", "Cancelled"],
+                "initial": "Draft",
+                "transitions": [
+                    {"trigger": "submit", "source": "Draft", "dest": "Submitted"},
+                    {"trigger": "verify", "source": "Submitted", "dest": "Verified"},
+                    {"trigger": "amend", "source": "Verified", "dest": "Completed"},
+                    {"trigger": "cancel", "source": ["Submitted", "Verified"], "dest": "Draft"}
+                ]
+            }
+
+        states = workflow_data.get("states", [])
+        transitions = workflow_data.get("transitions", [])
+        
+        ctx = RecordContext(current_state)
+        machine = Machine(model=ctx, states=states, transitions=transitions, initial=current_state)
+        return machine, ctx
+
+    def _is_assigned(self, record: FormRecord, user_data: dict) -> bool:
+        user_roles = user_data.get("roles", [])
+        user_dept = user_data.get("department")
+        
+        if "superadmin" in user_roles:
+            return True
+            
+        if record.assigned_role and record.assigned_role not in user_roles:
+             return False
+             
+        if record.assigned_department and record.assigned_department != user_dept:
+             return False
+             
+        return True
+
+    def _get_assignment_for_transition(self, workflow_data: dict, trigger: str, new_state: str):
+         if not workflow_data: return None
+         transitions = workflow_data.get("transitions", [])
+         for t in transitions:
+              if t.get("trigger") == trigger and t.get("dest") == new_state:
+                   return t.get("assignment")
+         return None
+
+    async def get_available_actions(self, record_id: str, user_data: dict) -> list[str]:
+         record = await self.db.get(FormRecord, record_id)
+         if not record: return []
+         
+         # If not draft and not assigned (and not superadmin), no actions
+         if record.assigned_role and not self._is_assigned(record, user_data):
+             return []
+             
+         machine, ctx = self._build_machine(record.workflow_snapshot, record.status)
+         
+         # transitions adds 'to_<state>' triggers automatically, we filter those out
+         triggers = machine.get_triggers(ctx.state)
+         return [t for t in triggers if not t.startswith('to_')]
+
+    async def process_transition(self, record_id: str, trigger: str, user_data: dict, remarks: str | None = None) -> FormRecordResponse:
         record = await self.db.get(FormRecord, record_id)
         if not record:
             raise ValueError(f"Record {record_id} not found")
-        if record.status != "Draft":
-            raise ValueError("Only Draft records can be submitted")
-        record.status = "Submitted"
-        record.submitted_by = submitted_by
-        record.submitted_at = datetime.now(timezone.utc)
-        await self.db.commit()
-        await self.db.refresh(record)
-        return self._parse(record)
-
-    async def cancel(self, record_id: str) -> FormRecordResponse:
-        record = await self.db.get(FormRecord, record_id)
-        if not record:
-            raise ValueError(f"Record {record_id} not found")
-        if record.status != "Submitted":
-            raise ValueError("Only Submitted records can be cancelled")
-        record.status = "Cancelled"
-        await self.db.commit()
-        await self.db.refresh(record)
-        return self._parse(record)
-
-    async def amend(
-        self,
-        record_id: str,
-        created_by: str = "system"
-    ) -> FormRecordResponse:
-        original = await self.db.get(FormRecord, record_id)
-        if not original:
-            raise ValueError(f"Record {record_id} not found")
-        if original.status != "Submitted":
-            raise ValueError("Only Submitted records can be amended")
-
-        ft = await self.db.get(FormType, original.form_type_id)
-        docname = await self._next_docname(original.form_type_id, ft.form_name)
-
-        amended = FormRecord(
-            record_id=self._new_id(),
-            form_type_id=original.form_type_id,
-            docname=docname,
-            status="Draft",
-            data=original.data,
-            amended_from=original.record_id,
-            created_by=created_by,
+            
+        # Security check: Can user execute this?
+        if record.assigned_role and not self._is_assigned(record, user_data):
+             raise ValueError("You are not assigned to process this record")
+        
+        old_state = record.status
+             
+        machine, ctx = self._build_machine(record.workflow_snapshot, old_state)
+        
+        valid_triggers = machine.get_triggers(ctx.state)
+        if trigger not in valid_triggers:
+             raise ValueError(f"Invalid transition '{trigger}' from state '{ctx.state}'")
+             
+        try:
+             getattr(ctx, trigger)()
+        except Exception as e:
+             raise ValueError(f"Transition failed: {e}")
+             
+        new_state = ctx.state
+        record.status = new_state
+        
+        assignment = self._get_assignment_for_transition(record.workflow_snapshot, trigger, new_state)
+        if assignment:
+             record.assigned_role = assignment.get("role")
+             dept = assignment.get("department")
+             if dept == "SAME_AS_CREATOR":
+                  record.assigned_department = user_data.get("department")
+             elif dept == "ANY":
+                  record.assigned_department = None
+             else:
+                  record.assigned_department = dept
+        else:
+             record.assigned_role = None
+             record.assigned_department = None
+             
+        if trigger == "submit" and not record.submitted_by:
+             record.submitted_by = user_data.get("user_id")
+             record.submitted_at = datetime.now(timezone.utc)
+        
+        action = FormAction(
+            record_id=record.record_id,
+            action_type=trigger,
+            from_state=old_state,
+            to_state=new_state,
+            performed_by=user_data.get("user_id"),
+            remarks=remarks,
         )
-        self.db.add(amended)
-        original.status = "Amended"
+
+        self.db.add(action)
+             
         await self.db.commit()
-        await self.db.refresh(amended)
-        return self._parse(amended)
+        await self.db.refresh(record)
+        return self._parse(record)
 
     async def delete(self, record_id: str) -> None:
         record = await self.db.get(FormRecord, record_id)
         if not record:
             raise ValueError(f"Record {record_id} not found")
-        if record.status == "Submitted":
-            raise ValueError("Submitted records cannot be deleted")
+        if record.status != "Draft":
+            raise ValueError("Only Draft records can be deleted")
 
         # FormType lookup
         form_type = await self.db.get(FormType, record.form_type_id)

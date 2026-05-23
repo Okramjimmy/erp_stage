@@ -21,6 +21,7 @@ class FormType(Base):
     # Versioning
     version = Column(String(20), nullable=False, default="1.0.0")
     schema_reference = Column(JSONB, nullable=True)
+    workflow_data = Column(JSONB, nullable=True)
 
     # Timestamps
     created_by = Column(String(100))

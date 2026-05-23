@@ -45,6 +45,7 @@
                         <div class="d-flex gap-1">
                             <a href="/forms/{{ ft.form_type_id }}" class="btn btn-xs btn-primary">View Records</a>
                             <a href="/form-builder/{{ ft.form_type_id }}?return_to=/forms" class="btn btn-xs btn-secondary">Edit Form</a>
+                            <a href="/workflow-builder/{{ ft.form_type_id }}" class="btn btn-xs btn-secondary">⚙ Workflow</a>
                             {% if user_permissions and user_permissions.form_types.get(ft.form_type_id) and user_permissions.form_types[ft.form_type_id].delete %}
                             <button class="btn btn-xs btn-danger" onclick="deleteFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')">Delete</button>
                             {% endif %}

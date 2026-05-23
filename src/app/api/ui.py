@@ -220,6 +220,48 @@ async def form_builder(
     )
 
 
+@router.get("/workflow-builder/{form_type_id}", response_class=HTMLResponse)
+async def workflow_builder(
+    request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
+):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    ft_service = FormTypeService(db)
+    form_type = await ft_service.get_form_type_with_schema(form_type_id)
+    if not form_type:
+        return HTMLResponse("Form type not found", status_code=404)
+
+    stage = await _get_stage_for_form_type(db, form_type_id)
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    user_permissions = await perm_service.get_user_permissions(user.user_id)
+    
+    can_edit = False
+    if "superadmin" in (roles or []):
+        can_edit = True
+    elif user_permissions and form_type_id in user_permissions.form_types:
+        can_edit = user_permissions.form_types[form_type_id].edit
+        
+    # We will fetch all roles to populate the assignee dropdown
+    all_roles_raw = await perm_service.list_all_roles()
+    # all_roles = [{"role_name": r.role_name} for r in all_roles_raw]
+
+    return templates.TemplateResponse(
+        "workflow_builder.html",
+        {
+            "request": request,
+            "form_type": form_type,
+            "stage": stage,
+            "current_user": user,
+            "current_user_roles": roles,
+            "user_permissions": user_permissions,
+            "can_edit": can_edit,
+            "all_roles": all_roles_raw,
+        },
+    )
+
 # ---------------------------------------------------------------------------
 # Form views
 # ---------------------------------------------------------------------------

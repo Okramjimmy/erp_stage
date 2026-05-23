@@ -1,7 +1,7 @@
 """SQLAlchemy model for Users."""
 
 import uuid
-from sqlalchemy import Boolean, Column, DateTime, String, Text
+from sqlalchemy import Boolean, Column, DateTime, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -20,6 +20,9 @@ class User(Base):
     username = Column(String(100), nullable=False, unique=True, index=True)
     email = Column(String(255), nullable=False, unique=True, index=True)
     full_name = Column(String(255), nullable=False)
+
+    # Assignments
+    manager_id = Column(String(36), ForeignKey("users.user_id"), nullable=True)
 
     # Profile fields
     department = Column(String(100), nullable=True)

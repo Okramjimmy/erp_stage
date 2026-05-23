@@ -250,6 +250,9 @@ class FormTypeService:
 
         if form_data.schema is not None:
             form_type.schema_reference = form_data.schema  # JSONB accepts dict directly
+        
+        if form_data.workflow_data is not None:
+            form_type.workflow_data = form_data.workflow_data  # JSONB accepts dict directly
 
         # Also support updating description if it's in the payload
         if hasattr(form_data, "description") and form_data.description is not None:

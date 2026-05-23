@@ -48,7 +48,6 @@ class StagePermission(Base):
             "can_edit": self.can_edit,
             "can_delete": self.can_delete,
             "can_manage_permissions": self.can_manage_permissions,
-            "can_submit": self.can_submit,
             "granted_by": self.granted_by,
             "granted_at": self.granted_at.isoformat() if self.granted_at else None,
         }
@@ -76,6 +75,7 @@ class FormTypePermission(Base):
     can_edit = Column(Boolean, nullable=False, default=False)
     can_delete = Column(Boolean, nullable=False, default=False)
     can_submit = Column(Boolean, nullable=False, default=False)
+    can_verify = Column(Boolean, nullable=False, default=False)
     can_cancel = Column(Boolean, nullable=False, default=False)
     can_amend = Column(Boolean, nullable=False, default=False)
     can_manage_permissions = Column(Boolean, nullable=False, default=False)
@@ -101,6 +101,7 @@ class FormTypePermission(Base):
             "can_edit": self.can_edit,
             "can_delete": self.can_delete,
             "can_submit": self.can_submit,
+            "can_verify": self.can_verify,
             "can_cancel": self.can_cancel,
             "can_amend": self.can_amend,
             "can_manage_permissions": self.can_manage_permissions,

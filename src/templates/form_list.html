@@ -50,6 +50,8 @@
           </td>
           <td>
             {% if rec.status == 'Submitted' %}<span class="badge badge-green">{{ rec.status }}</span>
+            {% elif rec.status == 'Verified' %}<span class="badge" style="background:#e0f2fe;color:#0369a1">{{ rec.status }}</span>
+            {% elif rec.status == 'Completed' %}<span class="badge badge-green">{{ rec.status }}</span>
             {% elif rec.status == 'Cancelled' %}<span class="badge" style="background:#fee2e2;color:#dc2626">{{ rec.status }}</span>
             {% elif rec.status == 'Amended' %}<span class="badge" style="background:#f3e8ff;color:#7c3aed">{{ rec.status }}</span>
             {% else %}<span class="badge badge-orange">{{ rec.status }}</span>{% endif %}

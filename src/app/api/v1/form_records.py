@@ -13,6 +13,11 @@ from src.app.schemas.form_record import (
     FormRecordUpdate,
 )
 from src.app.services.form_record_service import FormRecordService
+from src.app.services.user_service import UserService
+from pydantic import BaseModel
+
+class TransitionPayload(BaseModel):
+    trigger: str
 
 router = APIRouter(prefix="/form-records", tags=["Form Records"])
 
@@ -92,100 +97,52 @@ async def update_record(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{record_id}/submit", response_model=FormRecordResponse)
-async def submit_record(
+@router.get("/{record_id}/available-actions", response_model=List[str])
+async def get_available_actions(
     record_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Submit a form record. The submitted_by field is automatically set from the authenticated user."""
-    from src.app.services.permission_service import PermissionService
-    permission_service = PermissionService(db)
-
-    svc = FormRecordService(db)
-    rec = await svc.get(record_id)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Record not found")
-
-    has_permission = await permission_service.check_form_type_permission(
-        user_id=current_user.user_id,
-        form_type_id=rec.form_type_id,
-        permission_type="can_submit"
-    )
-
-    if not has_permission:
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to submit records of this form type"
-        )
-
-    try:
-        return await svc.submit(record_id, submitted_by=current_user.user_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/{record_id}/cancel", response_model=FormRecordResponse)
-async def cancel_record(
-    record_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    from src.app.services.permission_service import PermissionService
-    permission_service = PermissionService(db)
-
-    svc = FormRecordService(db)
-    rec = await svc.get(record_id)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Record not found")
-
-    has_permission = await permission_service.check_form_type_permission(
-        user_id=current_user.user_id,
-        form_type_id=rec.form_type_id,
-        permission_type="can_cancel"
-    )
-
-    if not has_permission:
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to cancel records of this form type"
-        )
-        
-    try:
-        return await svc.cancel(record_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.post("/{record_id}/amend", response_model=FormRecordResponse)
-async def amend_record(
-    record_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Amend a submitted form record. The created_by field is automatically set from the authenticated user."""
-    from src.app.services.permission_service import PermissionService
-    permission_service = PermissionService(db)
-
-    svc = FormRecordService(db)
-    rec = await svc.get(record_id)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Record not found")
-
-    has_permission = await permission_service.check_form_type_permission(
-        user_id=current_user.user_id,
-        form_type_id=rec.form_type_id,
-        permission_type="can_amend"
-    )
-
-    if not has_permission:
-        raise HTTPException(
-            status_code=403,
-            detail="You do not have permission to amend records of this form type"
-        )
+    """Get list of valid transition triggers for the current record and user."""
+    user_service = UserService(db)
+    result = await user_service.get_user_with_roles(current_user.user_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_obj, roles = result
     
+    user_data = {
+        "user_id": user_obj.user_id,
+        "department": user_obj.department,
+        "roles": roles
+    }
+    
+    svc = FormRecordService(db)
+    return await svc.get_available_actions(record_id, user_data)
+
+
+@router.post("/{record_id}/transition", response_model=FormRecordResponse)
+async def transition_record(
+    record_id: str,
+    payload: TransitionPayload,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Execute a state machine transition on a form record."""
+    user_service = UserService(db)
+    result = await user_service.get_user_with_roles(current_user.user_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_obj, roles = result
+    
+    user_data = {
+        "user_id": user_obj.user_id,
+        "department": user_obj.department,
+        "roles": roles
+    }
+
+    svc = FormRecordService(db)
     try:
-        return await svc.amend(record_id, created_by=current_user.user_id)
+        return await svc.process_transition(record_id, payload.trigger, user_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
