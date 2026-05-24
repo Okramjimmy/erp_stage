@@ -314,9 +314,6 @@
 
         {% endif %}
 
-        <!-- Dynamic Workflow Actions Container -->
-        <div id="workflow-actions-container" style="display:flex;gap:6px;"></div>
-
         <!-- + New and Delete buttons -->
         {% if record %}
             {% if ft_perms.create %}
@@ -348,6 +345,12 @@
     </div>
 
     <div class="fv-sidebar">
+        <!-- Workflow Actions Card (dynamically populated) -->
+        <div class="sidebar-card" id="workflow-actions-card" style="display: none; background: #f8fafc; border-color: #e2e8f0;">
+            <div class="sidebar-card-title" style="color: #334155; margin-bottom: 12px;">Workflow Actions</div>
+            <div id="workflow-actions-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+
         {% if record %}
         <div class="sidebar-card">
             <div class="sidebar-card-title">Details</div>
@@ -424,6 +427,29 @@
 </div>
 
 <div id="toast-container"></div>
+
+<!-- Transition Modal -->
+<div class="modal" id="transition-modal" tabindex="-1" style="display:none; position:fixed; top: 25%; left: 30%; width: 50%; height: 50%; align-items:center; justify-content:center; z-index:9999; opacity:0; transition:opacity 0.2s;">
+    <div class="modal-dialog" style="background:#fff; border-radius:var(--radius-lg); width:100%; max-width:400px; box-shadow:0 10px 25px rgba(0,0,0,0.1); transform:translateY(-20px); transition:transform 0.2s;">
+        <div class="modal-content">
+            <div class="modal-header" style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <h5 class="modal-title" id="transition-modal-title" style="margin:0; font-weight:700; font-size:16px;">Action</h5>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="closeTransitionModal()" style="padding:4px 8px; font-size:16px;">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:20px;">
+                <p id="transition-modal-msg" style="margin-top:0; margin-bottom:12px; font-size:14px; color:var(--text-muted);">Are you sure you want to perform this action?</p>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label for="transition-remarks" class="form-label">Remarks (Optional)</label>
+                    <textarea class="form-control" id="transition-remarks" rows="3" placeholder="Add a note..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding:16px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; background:var(--bg); border-bottom-left-radius:var(--radius-lg); border-bottom-right-radius:var(--radius-lg);">
+                <button type="button" class="btn btn-secondary" onclick="closeTransitionModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="transition-confirm-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
     const API = '/api/v1';
@@ -904,19 +930,85 @@
       finally { btn.disabled = false; btn.innerHTML = saveSvg; }
     }
 
+    let currentTransitionTrigger = null;
+
+    function openTransitionModal(trigger) {
+        if(!RECORD_ID) return;
+        if(dirty) { toast('Save the record first before transitioning','error'); return; }
+        
+        currentTransitionTrigger = trigger;
+        const triggerLabel = trigger.charAt(0).toUpperCase() + trigger.slice(1);
+        
+        document.getElementById('transition-modal-title').textContent = triggerLabel + ' Record';
+        document.getElementById('transition-modal-msg').textContent = `You are about to execute '${trigger}' on this record.`;
+        document.getElementById('transition-remarks').value = '';
+        
+        const confirmBtn = document.getElementById('transition-confirm-btn');
+        confirmBtn.textContent = triggerLabel;
+        confirmBtn.onclick = () => executeTransition(trigger);
+        
+        // styling heuristics for modal confirm btn
+        if(trigger === 'cancel' || trigger === 'reject') {
+            confirmBtn.className = 'btn btn-danger';
+            confirmBtn.style.background = '';
+            confirmBtn.style.color = '';
+            confirmBtn.style.border = '';
+        } else if(trigger === 'verify') {
+            confirmBtn.className = 'btn';
+            confirmBtn.style.background = '#0284c7';
+            confirmBtn.style.color = '#fff';
+            confirmBtn.style.border = 'none';
+        } else if(trigger === 'submit') {
+            confirmBtn.className = 'btn';
+            confirmBtn.style.background = '#16a34a';
+            confirmBtn.style.color = '#fff';
+            confirmBtn.style.border = 'none';
+        } else {
+            confirmBtn.className = 'btn btn-primary';
+            confirmBtn.style.background = '';
+            confirmBtn.style.color = '';
+            confirmBtn.style.border = '';
+        }
+        
+        const modal = document.getElementById('transition-modal');
+        modal.style.display = 'flex';
+        // Trigger reflow to apply transition
+        modal.offsetHeight;
+        modal.style.opacity = '1';
+        modal.querySelector('.modal-dialog').style.transform = 'translateY(0)';
+    }
+
+    function closeTransitionModal() {
+        const modal = document.getElementById('transition-modal');
+        modal.style.opacity = '0';
+        modal.querySelector('.modal-dialog').style.transform = 'translateY(-20px)';
+        setTimeout(() => { modal.style.display = 'none'; }, 200);
+        currentTransitionTrigger = null;
+    }
+
     async function executeTransition(trigger) {
       if(!RECORD_ID) return;
       if(dirty) { toast('Save the record first before transitioning','error'); return; }
-      if(!confirm(`Are you sure you want to execute '${trigger}'?`)) return;
+      
+      const remarks = document.getElementById('transition-remarks').value.trim();
+      const confirmBtn = document.getElementById('transition-confirm-btn');
+      const originalText = confirmBtn.textContent;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Processing...';
       
       try {
         await apiFetch(`${API}/form-records/${RECORD_ID}/transition`, {
             method:'POST',
-            body: { trigger }
+            body: { trigger, remarks: remarks || null }
         });
         toast(`Transition '${trigger}' successful`, 'success');
+        closeTransitionModal();
         setTimeout(()=>location.reload(), 600);
-      } catch(e) { toast(e.message,'error'); }
+      } catch(e) { 
+        toast(e.message,'error'); 
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = originalText;
+      }
     }
 
     async function fetchAvailableActions() {
@@ -924,12 +1016,23 @@
         try {
             const triggers = await apiFetch(`${API}/form-records/${RECORD_ID}/available-actions`);
             const container = document.getElementById('workflow-actions-container');
-            if(!container) return;
+            const card = document.getElementById('workflow-actions-card');
+            if(!container || !card) return;
             
+            if (triggers.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+            
+            card.style.display = 'block';
             container.innerHTML = '';
             triggers.forEach(trigger => {
                 const btn = document.createElement('button');
                 btn.className = 'btn btn-sm btn-primary';
+                btn.style.width = '100%';
+                btn.style.justifyContent = 'center';
+                btn.style.padding = '8px';
+                btn.style.fontSize = '13px';
                 
                 // Styling heuristics
                 if(trigger === 'cancel' || trigger === 'reject') {
@@ -943,7 +1046,7 @@
                 }
                 
                 btn.textContent = trigger.charAt(0).toUpperCase() + trigger.slice(1);
-                btn.onclick = () => executeTransition(trigger);
+                btn.onclick = () => openTransitionModal(trigger);
                 container.appendChild(btn);
             });
         } catch(e) { console.error('Failed to fetch actions:', e); }

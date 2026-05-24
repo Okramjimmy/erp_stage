@@ -23,7 +23,6 @@ class FormRecord(Base):
     assigned_to = Column(String(50), ForeignKey("users.user_id"), nullable=True, index=True)
 
     data = Column(JSONB, nullable=True)
-    workflow_snapshot = Column(JSONB, nullable=True)
     schema_snapshot = Column(JSONB, nullable=True)
     form_version = Column(String(10), nullable=False)
     amended_from = Column(

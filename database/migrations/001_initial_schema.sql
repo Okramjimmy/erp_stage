@@ -123,7 +123,6 @@ CREATE TABLE form_records (
     assigned_role VARCHAR(50),
     assigned_department VARCHAR(100),
     assigned_to VARCHAR(50),
-    workflow_snapshot JSONB,
     schema_snapshot JSONB,
     form_version VARCHAR(10) NOT NULL,
     amended_from VARCHAR(50) REFERENCES form_records(record_id),

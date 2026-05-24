@@ -59,7 +59,6 @@ class PermissionService:
             existing_perm.can_manage_permissions = (
                 permission_data.can_manage_permissions
             )
-            existing_perm.can_submit = permission_data.can_submit
             existing_perm.granted_by = granted_by
 
             await self.db.commit()
@@ -79,7 +78,6 @@ class PermissionService:
             can_edit=permission_data.can_edit,
             can_delete=permission_data.can_delete,
             can_manage_permissions=permission_data.can_manage_permissions,
-            can_submit=permission_data.can_submit,
             granted_by=granted_by,
         )
 
@@ -770,14 +768,12 @@ class PermissionService:
                     "edit": False,
                     "delete": False,
                     "manage_permissions": False,
-                    "submit": False,
                 }
             stage_perm_map[sid]["view"] = stage_perm_map[sid]["view"] or sp.can_view
             stage_perm_map[sid]["create"] = stage_perm_map[sid]["create"] or sp.can_create
             stage_perm_map[sid]["edit"] = stage_perm_map[sid]["edit"] or sp.can_edit
             stage_perm_map[sid]["delete"] = stage_perm_map[sid]["delete"] or sp.can_delete
             stage_perm_map[sid]["manage_permissions"] = stage_perm_map[sid]["manage_permissions"] or sp.can_manage_permissions
-            stage_perm_map[sid]["submit"] = stage_perm_map[sid]["submit"] or sp.can_submit
 
         # 3. Propagate lineage-based Stage permissions
         sorted_stages = sorted(all_stages, key=lambda s: s.depth_level)
@@ -794,7 +790,6 @@ class PermissionService:
                 "edit": parent_perm["edit"] if parent_perm else False,
                 "delete": parent_perm["delete"] if parent_perm else False,
                 "manage_permissions": parent_perm["manage_permissions"] if parent_perm else False,
-                "submit": parent_perm["submit"] if parent_perm else False,
             }
 
             if sid in stage_perm_map:
@@ -803,7 +798,6 @@ class PermissionService:
                 resolved["edit"] = resolved["edit"] or stage_perm_map[sid]["edit"]
                 resolved["delete"] = resolved["delete"] or stage_perm_map[sid]["delete"]
                 resolved["manage_permissions"] = resolved["manage_permissions"] or stage_perm_map[sid]["manage_permissions"]
-                resolved["submit"] = resolved["submit"] or stage_perm_map[sid]["submit"]
 
             stages_perms[sid] = resolved
 
@@ -881,7 +875,6 @@ class PermissionService:
                     resolved["create"] = resolved["create"] or stages_perms[stage_id]["create"]
                     resolved["edit"] = resolved["edit"] or stages_perms[stage_id]["edit"]
                     resolved["delete"] = resolved["delete"] or stages_perms[stage_id]["delete"]
-                    resolved["submit"] = resolved["submit"] or stages_perms[stage_id]["submit"]
                     resolved["manage_permissions"] = resolved["manage_permissions"] or stages_perms[stage_id]["manage_permissions"]
 
             form_types_perms[ftid] = resolved

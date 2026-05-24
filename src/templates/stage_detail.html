@@ -1084,8 +1084,8 @@ Builder{% endblock %} {% block content %}
                 >
                 <label class="form-check"
                     ><input type="checkbox" id="perm-manage" /><span>Manage Permissions</span></label>
-                <label class="form-check"
-                    ><input type="checkbox" id="perm-submit" /><span>Submit</span></label>
+                <!-- <label class="form-check"
+                    ><input type="checkbox" id="perm-submit" /><span>Submit</span></label> -->
             </div>
         </div>
         <div class="modal-footer">
@@ -1452,7 +1452,7 @@ Builder{% endblock %} {% block content %}
         document.getElementById('perm-edit').checked = false;
         document.getElementById('perm-delete').checked = false;
         document.getElementById('perm-manage').checked = false;
-        document.getElementById('perm-submit').checked = false;
+        // document.getElementById('perm-submit').checked = false;
         openModal('grant-modal');
     }
 
@@ -1740,7 +1740,7 @@ Builder{% endblock %} {% block content %}
             can_delete: document.getElementById("perm-delete").checked,
             can_manage_permissions:
                 document.getElementById("perm-manage").checked,
-            can_submit: document.getElementById("perm-submit").checked,
+            // can_submit: document.getElementById("perm-submit").checked,
             granted_by: "system",
         };
         try {

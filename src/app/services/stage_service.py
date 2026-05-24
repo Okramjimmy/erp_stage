@@ -453,7 +453,26 @@ class StageService:
                 raise ValueError(f"User {user_id} not found")
             
             perm_service = PermissionService(self.db)
-            visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id))
+            user_perms = await perm_service.get_user_permissions(user.user_id)
+            
+            visible_stage_ids = set()
+            for sid, perms in user_perms["stages"].items():
+                if any(v for k, v in perms.items() if v):
+                    visible_stage_ids.add(sid)
+            
+            visible_form_type_ids = set()
+            for ftid, perms in user_perms["form_types"].items():
+                if any(v for k, v in perms.items() if v):
+                    visible_form_type_ids.add(ftid)
+            
+            if visible_form_type_ids:
+                from src.app.models.stage_form_type import StageFormType
+                mapping_res = await self.db.execute(
+                    select(StageFormType.stage_id)
+                    .where(StageFormType.form_type_id.in_(visible_form_type_ids))
+                )
+                for row in mapping_res.all():
+                    visible_stage_ids.add(row[0])
 
         query = select(Stage).order_by(Stage.depth_level, Stage.stage_name)
 
@@ -484,6 +503,14 @@ class StageService:
         # Build tree structure
         stage_map: Dict[str, StageTreeNode] = {}
         root_nodes: List[StageTreeNode] = []
+
+        if visible_stage_ids is not None:
+            # Ensure ancestors are included so tree connectivity isn't broken
+            ancestors = set()
+            for stage in stages:
+                if stage.stage_id in visible_stage_ids and stage.lineage_path:
+                    ancestors.update(stage.lineage_path)
+            visible_stage_ids.update(ancestors)
 
         for stage in stages:
             if visible_stage_ids is not None and stage.stage_id not in visible_stage_ids:
@@ -537,6 +564,8 @@ class StageService:
 
         # If root_id specified, return only that subtree
         if root_stage_id:
+            if root_stage_id not in stage_map:
+                return []
             return [stage_map[root_stage_id]]
 
         return root_nodes

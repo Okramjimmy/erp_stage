@@ -15,9 +15,11 @@ from src.app.schemas.form_record import (
 from src.app.services.form_record_service import FormRecordService
 from src.app.services.user_service import UserService
 from pydantic import BaseModel
+from typing import Optional, List
 
 class TransitionPayload(BaseModel):
     trigger: str
+    remarks: Optional[str] = None
 
 router = APIRouter(prefix="/form-records", tags=["Form Records"])
 
@@ -142,7 +144,12 @@ async def transition_record(
 
     svc = FormRecordService(db)
     try:
-        return await svc.process_transition(record_id, payload.trigger, user_data)
+        return await svc.process_transition(
+            record_id=record_id,
+            trigger=payload.trigger,
+            user_data=user_data,
+            remarks=payload.remarks
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

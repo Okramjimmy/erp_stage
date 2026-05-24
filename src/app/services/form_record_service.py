@@ -98,7 +98,7 @@ class FormRecordService:
         if not ft.schema_reference:
             logger.error(f"FormType {ft.form_type_id} has no schema_reference")
             return None
-        schema_reference = json.loads(ft.schema_reference)
+        schema_reference = ft.schema_reference
         for field in schema_reference.get("fields", []):
             logger.info(f"Field {field}")
             if field.get("fieldname") == field_name:
@@ -214,7 +214,6 @@ class FormRecordService:
             data=processed_data,
             created_by=created_by,
             form_version=ft.version,
-            workflow_snapshot=ft.workflow_data,
             schema_snapshot=ft.schema_reference,
         )
         self.db.add(record)
@@ -274,59 +273,105 @@ class FormRecordService:
         states = workflow_data.get("states", [])
         transitions = workflow_data.get("transitions", [])
         
+        # Filter out custom keys like 'assignment' to prevent TypeError in transitions library
+        clean_transitions = []
+        valid_keys = {"trigger", "source", "dest", "conditions", "unless", "before", "after", "prepare"}
+        for t in transitions:
+            clean_t = {k: v for k, v in t.items() if k in valid_keys}
+            clean_transitions.append(clean_t)
+        
         ctx = RecordContext(current_state)
-        machine = Machine(model=ctx, states=states, transitions=transitions, initial=current_state)
+        machine = Machine(model=ctx, states=states, transitions=clean_transitions, initial=current_state)
         return machine, ctx
 
-    def _is_assigned(self, record: FormRecord, user_data: dict) -> bool:
+    async def _can_execute_trigger(self, record: FormRecord, trigger: str, user_data: dict, workflow_data: dict) -> bool:
         user_roles = user_data.get("roles", [])
-        user_dept = user_data.get("department")
-        
         if "superadmin" in user_roles:
             return True
             
-        if record.assigned_role and record.assigned_role not in user_roles:
-             return False
-             
-        if record.assigned_department and record.assigned_department != user_dept:
-             return False
-             
+        # 1. Must satisfy explicit workflow assignment FOR THIS TRANSITION (if set)
+        if workflow_data:
+            transitions = workflow_data.get("transitions", [])
+            for t in transitions:
+                sources = t.get("source", [])
+                if isinstance(sources, str):
+                    sources = [sources]
+                    
+                if t.get("trigger") == trigger and record.status in sources:
+                    assignment = t.get("assignment")
+                    if assignment:
+                        req_role = assignment.get("role")
+                        if req_role and req_role not in user_roles:
+                            return False
+                        
+                        req_dept = assignment.get("department")
+                        if req_dept and req_dept not in ("", "ANY", "SAME_AS_CREATOR"):
+                            user_dept = user_data.get("department")
+                            if req_dept != user_dept:
+                                return False
+                    break
+            
+        # 2. Must satisfy explicit RBAC form type permissions (if mapped)
+        t = trigger.lower()
+        perm_type = None
+        if t in ("submit",):
+            perm_type = "can_submit"
+        elif t in ("verify", "approve"):
+            perm_type = "can_verify"
+        elif t in ("cancel", "reject"):
+            perm_type = "can_cancel"
+        elif t in ("amend",):
+            perm_type = "can_amend"
+            
+        if perm_type:
+            from src.app.services.permission_service import PermissionService
+            perm_service = PermissionService(self.db)
+            has_perm = await perm_service.check_form_type_permission(
+                user_data.get("user_id"), 
+                record.form_type_id, 
+                perm_type
+            )
+            if not has_perm:
+                return False
+                
         return True
 
-    def _get_assignment_for_transition(self, workflow_data: dict, trigger: str, new_state: str):
-         if not workflow_data: return None
-         transitions = workflow_data.get("transitions", [])
-         for t in transitions:
-              if t.get("trigger") == trigger and t.get("dest") == new_state:
-                   return t.get("assignment")
-         return None
-
     async def get_available_actions(self, record_id: str, user_data: dict) -> list[str]:
-         record = await self.db.get(FormRecord, record_id)
-         if not record: return []
-         
-         # If not draft and not assigned (and not superadmin), no actions
-         if record.assigned_role and not self._is_assigned(record, user_data):
-             return []
-             
-         machine, ctx = self._build_machine(record.workflow_snapshot, record.status)
-         
-         # transitions adds 'to_<state>' triggers automatically, we filter those out
-         triggers = machine.get_triggers(ctx.state)
-         return [t for t in triggers if not t.startswith('to_')]
+        record = await self.db.get(FormRecord, record_id)
+        if not record: return []
+
+        ft = await self.db.get(FormType, record.form_type_id)
+        if ft.workflow_data is None:
+            raise ValueError(f"FormType {record.form_type_id} has no workflow")
+        
+        # Get all potential machine triggers
+        machine, ctx = self._build_machine(ft.workflow_data, record.status)
+        triggers = machine.get_triggers(ctx.state)
+        
+        valid_triggers = []
+        for t in triggers:
+            if not t.startswith('to_'):
+                if await self._can_execute_trigger(record, t, user_data, ft.workflow_data):
+                    valid_triggers.append(t)
+                    
+        return valid_triggers
 
     async def process_transition(self, record_id: str, trigger: str, user_data: dict, remarks: str | None = None) -> FormRecordResponse:
         record = await self.db.get(FormRecord, record_id)
         if not record:
             raise ValueError(f"Record {record_id} not found")
+        
+        ft = await self.db.get(FormType, record.form_type_id)
+        if ft.workflow_data is None:
+            raise ValueError(f"FormType {record.form_type_id} has no workflow")
             
-        # Security check: Can user execute this?
-        if record.assigned_role and not self._is_assigned(record, user_data):
-             raise ValueError("You are not assigned to process this record")
+        # Security check: Does user have RBAC and workflow assignment rights for this trigger?
+        if not await self._can_execute_trigger(record, trigger, user_data, ft.workflow_data):
+             raise ValueError("You do not have permission to execute this transition")
         
         old_state = record.status
              
-        machine, ctx = self._build_machine(record.workflow_snapshot, old_state)
+        machine, ctx = self._build_machine(ft.workflow_data, old_state)
         
         valid_triggers = machine.get_triggers(ctx.state)
         if trigger not in valid_triggers:
@@ -340,19 +385,10 @@ class FormRecordService:
         new_state = ctx.state
         record.status = new_state
         
-        assignment = self._get_assignment_for_transition(record.workflow_snapshot, trigger, new_state)
-        if assignment:
-             record.assigned_role = assignment.get("role")
-             dept = assignment.get("department")
-             if dept == "SAME_AS_CREATOR":
-                  record.assigned_department = user_data.get("department")
-             elif dept == "ANY":
-                  record.assigned_department = None
-             else:
-                  record.assigned_department = dept
-        else:
-             record.assigned_role = None
-             record.assigned_department = None
+        # Since assignment applies to the trigger execution (not persistent state),
+        # we no longer populate assigned_role / assigned_department persistently.
+        record.assigned_role = None
+        record.assigned_department = None
              
         if trigger == "submit" and not record.submitted_by:
              record.submitted_by = user_data.get("user_id")
