@@ -30,9 +30,9 @@
         border-color: #fbbf24;
     }
     .fv-status.Submitted {
-        background: #dcfce7;
-        color: #15803d;
-        border-color: #86efac;
+        background: #f3e8ff;
+        color: #7c3aed;
+        border-color: #c4b5fd;
     }
     .fv-status.Cancelled {
         background: #fee2e2;
@@ -40,9 +40,9 @@
         border-color: #fca5a5;
     }
     .fv-status.Amended {
-        background: #f3e8ff;
-        color: #7c3aed;
-        border-color: #c4b5fd;
+        background: #f3f4f6;
+        color: #4b5563;
+        border-color: #d1d5db;
     }
     .fv-status.Verified {
         background: #e0f2fe;
@@ -226,7 +226,6 @@
 
     .fv-readonly .form-control {
         background: var(--bg);
-        pointer-events: none;
     }
     .dirty-dot {
         font-size: 11px;
@@ -456,6 +455,10 @@
     const FORM_TYPE_ID = '{{ form_type.form_type_id }}';
     const RECORD_ID = {% if record %}"{{ record.record_id }}"{% else %}null{% endif %};
     const IS_READONLY = {% if is_readonly %}true{% else %}false{% endif %};
+    
+    {% set js_perms = user_permissions.form_types.get(form_type.form_type_id, {}) if user_permissions else {} %}
+    const HAS_EDIT_PERMISSION = (!RECORD_ID && {% if js_perms.create %}true{% else %}false{% endif %}) || (RECORD_ID && {% if js_perms.edit %}true{% else %}false{% endif %});
+
     const SCHEMA = {% if form_type.schema_data %}{{ form_type.schema_data | tojson | safe }}{% else %}{"fields":[],"settings":{}}{% endif %};
     const SAVED_DATA = {% if record and record.data %}{{ record.data | tojson | safe }}{% else %}{}{% endif %};
 
@@ -466,13 +469,27 @@
      * real URL separators — required by FastAPI's {file_name:path} route.
      * e.g. "stage/My Form/record_id/field/file.pdf" → "/api/v1/storage/download/stage/My%20Form/field/file.pdf"
      */
-    function attachUrl(objectPath) {
-      // If it's already a full URL (starts with http or /api/v1), return as-is
+    function attachUrl(objectPath, fieldname, download=0) {
+      if (!objectPath) return '';
+      let url = '';
       if (objectPath.startsWith('http') || objectPath.startsWith('/api/v1')) {
-        return objectPath;
+        url = objectPath;
+      } else if (objectPath.includes('/')) {
+        const encoded = objectPath.split('/').map(s => encodeURIComponent(s)).join('/');
+        url = `${API}/download/${encoded}`;
+      } else {
+        // It's just a filename
+        const ft = encodeURIComponent(FORM_TYPE_ID);
+        const rec = encodeURIComponent(RECORD_ID);
+        const fn = encodeURIComponent(fieldname);
+        const file = encodeURIComponent(objectPath);
+        url = `${API}/download/${ft}/${rec}/${fn}/${file}`;
       }
-      const encoded = objectPath.split('/').map(s => encodeURIComponent(s)).join('/');
-      return `${API}/download/${encoded}`;
+      
+      if (download === 1) {
+        url += (url.includes('?') ? '&' : '?') + 'download=1';
+      }
+      return url;
     }
 
     let formData = Object.assign({}, SAVED_DATA);
@@ -546,14 +563,16 @@
         if ((f.fieldtype === 'Attach' || f.fieldtype === 'Attach Image') && val) {
           const filename = String(val).split('/').pop();
           if (f.fieldtype === 'Attach Image') {
-            return `<div class="form-control" style="background:var(--bg);min-height:34px;padding:6px">
-              <a href="${attachUrl(val)}" target="_blank">
-                <img src="${attachUrl(val)}" style="max-height:100px;border-radius:4px;border:1px solid var(--border)" alt="${esc(filename)}">
-              </a>
+            return `<div class="form-control" style="background:var(--bg);min-height:34px;padding:6px;display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <a href="${attachUrl(val, f.fieldname, 0)}" target="_blank" style="font-size:13px;word-break:break-all;">🖼️ ${esc(filename)}</a>
+                <a href="${attachUrl(val, f.fieldname, 1)}" target="_blank" title="Download" style="color:var(--text-muted);font-size:12px;text-decoration:none;">⬇️ Download</a>
+              </div>
             </div>`;
           }
-          return `<div class="form-control" style="background:var(--bg);min-height:34px;padding-top:7px">
-            <a href="${attachUrl(val)}" target="_blank">📎 ${esc(filename)}</a>
+          return `<div class="form-control" style="background:var(--bg);min-height:34px;padding-top:7px;display:flex;align-items:center;gap:10px;">
+            <a href="${attachUrl(val, f.fieldname, 0)}" target="_blank" style="font-size:13px;word-break:break-all;">📎 ${esc(filename)}</a>
+            <a href="${attachUrl(val, f.fieldname, 1)}" target="_blank" title="Download" style="color:var(--text-muted);font-size:12px;text-decoration:none;">⬇️ Download</a>
           </div>`;
         }
         const v = val!==undefined&&val!==null&&val!=='' ? val : '—';
@@ -598,23 +617,49 @@
           const pending = pendingFiles[f.fieldname];
           // Show current stored path or pending filename
           let previewHtml = '';
+          let hasFile = false;
           if (pending) {
+            hasFile = true;
             const objectUrl = URL.createObjectURL(pending);
             if (isImage) {
-              previewHtml = `<div style="margin-top:6px"><img src="${objectUrl}" style="max-height:80px;border-radius:4px;border:1px solid var(--border)" alt="preview"></div>`;
+              previewHtml = `<div style="margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <a href="${objectUrl}" target="_blank" style="word-break:break-all;font-size:13px;">🖼️ ${esc(pending.name)} (Pending)</a>
+                  ${HAS_EDIT_PERMISSION ? `<button type="button" class="btn btn-ghost btn-xs" style="color:var(--danger);padding:0 4px;" onclick="removeFile('${f.fieldname}')">✕ Remove</button>` : ''}
+                </div>
+              </div>`;
             } else {
-              previewHtml = `<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">📎 ${esc(pending.name)} — pending upload</div>`;
+              previewHtml = `<div style="margin-top:4px;font-size:12px;display:flex;align-items:center;gap:10px;">
+                <a href="${objectUrl}" target="_blank" style="word-break:break-all;font-size:13px;">📎 ${esc(pending.name)} (Pending)</a>
+                ${HAS_EDIT_PERMISSION ? `<button type="button" class="btn btn-ghost btn-xs" style="color:var(--danger);padding:0 4px;" onclick="removeFile('${f.fieldname}')">✕ Remove</button>` : ''}
+              </div>`;
             }
           } else if (cur) {
+            hasFile = true;
             const filename = cur.split('/').pop();
             if (isImage) {
-              previewHtml = `<div style="margin-top:6px"><a href="${attachUrl(cur)}" ><img src="${attachUrl(cur)}" style="max-height:80px;border-radius:4px;border:1px solid var(--border)" alt="${esc(filename)}"></a></div>`;
+              previewHtml = `<div style="margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <a href="${attachUrl(cur, f.fieldname, 0)}" target="_blank" style="word-break:break-all;font-size:13px;">🖼️ ${esc(filename)}</a>
+                  <a href="${attachUrl(cur, f.fieldname, 1)}" title="Download" style="color:var(--text-muted);font-size:12px;text-decoration:none;" target="_blank">⬇️ Download</a>
+                  ${HAS_EDIT_PERMISSION ? `<button type="button" class="btn btn-ghost btn-xs" style="color:var(--danger);padding:0 4px;" onclick="removeFile('${f.fieldname}')">✕ Remove</button>` : ''}
+                </div>
+              </div>`;
             } else {
-              previewHtml = `<div style="margin-top:4px;font-size:11px"><a href="${attachUrl(cur)}" >📎 ${esc(filename)}</a></div>`;
+              previewHtml = `<div style="margin-top:4px;font-size:12px;display:flex;align-items:center;gap:10px;">
+                <a href="${attachUrl(cur, f.fieldname, 0)}" style="word-break:break-all;font-size:13px;" target="_blank">📎 ${esc(filename)}</a>
+                <a href="${attachUrl(cur, f.fieldname, 1)}" title="Download" style="color:var(--text-muted);font-size:12px;text-decoration:none;" target="_blank">⬇️ Download</a>
+                ${HAS_EDIT_PERMISSION ? `<button type="button" class="btn btn-ghost btn-xs" style="color:var(--danger);padding:0 4px;" onclick="removeFile('${f.fieldname}')">✕ Remove</button>` : ''}
+              </div>`;
             }
           }
+          
+          let inputHtml = '';
+          if (!hasFile && HAS_EDIT_PERMISSION) {
+            inputHtml = `<input type="file" class="form-control" style="padding:4px" onchange="handleFile('${f.fieldname}',this)"${isImage?' accept="image/*"':''}>`;
+          }
           return `<div>
-            <input type="file" class="form-control" style="padding:4px" onchange="handleFile('${f.fieldname}',this)"${isImage?' accept="image/*"':''}>
+            ${inputHtml}
             ${previewHtml}
           </div>`;
         }
@@ -852,6 +897,17 @@
       // Don't put filename in formData — the path will come from MinIO after upload
       markDirty();
       // Re-render just the attach field preview without a full form re-render
+      renderForm();
+    }
+
+    function removeFile(fieldname) {
+      if (pendingFiles[fieldname]) {
+        delete pendingFiles[fieldname];
+      }
+      if (formData[fieldname]) {
+        formData[fieldname] = '';
+      }
+      markDirty();
       renderForm();
     }
 

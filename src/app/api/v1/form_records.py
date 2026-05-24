@@ -81,9 +81,15 @@ async def update_record(
     from src.app.services.permission_service import PermissionService
     permission_service = PermissionService(db)
 
+    # Fetch existing record to get its form_type_id
+    svc = FormRecordService(db)
+    existing_record = await svc.get(record_id)
+    if not existing_record:
+        raise HTTPException(status_code=404, detail="Record not found")
+
     has_permission = await permission_service.check_form_type_permission(
         user_id=current_user.user_id,
-        form_type_id=payload.form_type_id,
+        form_type_id=existing_record.form_type_id,
         permission_type="can_edit"
     )
 

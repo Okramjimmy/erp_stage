@@ -34,22 +34,7 @@ class FormRecordService:
     def _new_id() -> str:
         return f"rec_{uuid.uuid4().hex[:12]}"
 
-    @staticmethod
-    def get_attachment_download_url(object_path: str, api_prefix: str = "/api/v1") -> str:
-        """Return the API download URL for a MinIO object path.
 
-        Each path segment is percent-encoded individually so that forward
-        slashes are preserved as real URL path separators (not %2F), which is
-        required by FastAPI's ``{file_name:path}`` route converter.
-
-        Example::
-
-            get_attachment_download_url("stage1/My Form/Attachment/report.pdf")
-            # → "/api/v1/download/stage1/My%20Form/Attachment/report.pdf"
-        """
-        from urllib.parse import quote
-        encoded = "/".join(quote(segment, safe="") for segment in object_path.split("/"))
-        return f"{api_prefix}/download/{encoded}"
 
     @staticmethod
     def _abbrev(form_name: str) -> str:
@@ -70,13 +55,6 @@ class FormRecordService:
         if record.data:
             try:
                 parsed_data = record.data
-                # Convert attachment paths to download URLs
-                if isinstance(parsed_data, dict):
-                    for field_name, field_value in parsed_data.items():
-                        if isinstance(field_value, str) and '/' in field_value:
-                            # This looks like a file path (form_type_id/record_id/field_label/filename)
-                            # Convert to download URL
-                            parsed_data[field_name] = self.get_attachment_download_url(field_value)
             except Exception:
                 parsed_data = {}
         return FormRecordResponse.model_validate({
@@ -114,7 +92,7 @@ class FormRecordService:
         return f"{ft.form_type_id}/{record_id}/{field_label}/{filename}"
 
     def _process_attachments(self, ft: FormType, data: dict, record_id: str) -> dict:
-        """Relocate any attachment paths that are not already in the canonical location."""
+        """Ensure attachment fields only contain the filename."""
         if not data or not ft.schema_reference:
             return data
 
@@ -133,16 +111,11 @@ class FormRecordService:
             if not value or not isinstance(value, str):
                 continue
 
-            filename = value.split('/')[-1]
-            expected_path = self._build_minio_path(ft, field, filename, record_id)
-
-            if value != expected_path:
-                success = storage_service.move_file(value, expected_path)
-                if success:
-                    data[field_name] = expected_path
-                    logger.info(f"Moved attachment {value} -> {expected_path}")
-                else:
-                    logger.warning(f"Failed to move attachment {value} -> {expected_path}")
+            # If the value is a full path, just save the filename
+            if '/' in value:
+                filename = value.split('/')[-1]
+                data[field_name] = filename
+                
         return data
 
     async def upload_attachment(
@@ -184,7 +157,7 @@ class FormRecordService:
 
         # Persist the path in the record
         data = dict(record.data) if record.data else {}
-        data[field_name] = object_name
+        data[field_name] = filename
         record.data = data
         logger.debug(f"------Updated record data: {data}")
         await self.db.commit()

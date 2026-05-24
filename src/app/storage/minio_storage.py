@@ -27,6 +27,20 @@ class MinIOStorageService:
                 secure=settings.minio_secure,
                 region=settings.minio_default_region
             )
+            
+            # Create a separate client for generating presigned URLs.
+            # The AWS v4 signature includes the Host header, so the endpoint must exactly
+            # match what the user's browser will use (e.g., localhost:9000 instead of minio:9000).
+            # Generating presigned URLs happens locally and requires no actual network connection.
+            public_endpoint = settings.minio_endpoint.replace("minio:9000", "localhost:9000")
+            self.public_client = Minio(
+                endpoint=public_endpoint,
+                access_key=settings.minio_access_key,
+                secret_key=settings.minio_secret_key,
+                secure=settings.minio_secure,
+                region=settings.minio_default_region
+            )
+            
             return True
         except Exception as e:
             print(f"Failed to connect to MinIO: {e}")
@@ -178,7 +192,8 @@ class MinIOStorageService:
     def generate_presigned_url(
         self,
         object_name: str,
-        expires: timedelta = timedelta(hours=1)
+        expires: timedelta = timedelta(hours=1),
+        response_headers: Optional[dict] = None
     ) -> Optional[str]:
         """
         Generate a presigned URL for file access
@@ -186,16 +201,19 @@ class MinIOStorageService:
         Args:
             object_name: Name of the object
             expires: URL expiration time
+            response_headers: Optional dictionary of response headers to override
 
         Returns:
             Presigned URL, or None if failed
         """
         try:
-            return self.client.presigned_get_object(
+            url = self.public_client.presigned_get_object(
                 bucket_name=self.bucket_name,
                 object_name=object_name,
-                expires=expires
+                expires=expires,
+                response_headers=response_headers
             )
+            return url
         except S3Error as e:
             print(f"Error generating presigned URL: {e}")
             return None

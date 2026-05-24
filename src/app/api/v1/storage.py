@@ -95,64 +95,47 @@ async def list_files(prefix: str = ""):
         )
 
 
-@router.get("/download/{file_name:path}")
-async def download_file(file_name: str):
+@router.get("/download/{formtype_id}/{form_record_id}/{field_name}/{file_name:path}")
+async def download_file(formtype_id: str, form_record_id: str, field_name: str, file_name: str, download: int = 0):
     """
-    Download a file from MinIO storage
-
-    Args:
-        file_name: Name of the file to download (including path)
-
-    Returns:
-        File response with the file content
+    Download a file from MinIO storage by computing its path and returning a presigned URL
     """
     try:
-        # FastAPI automatically decodes path parameters, so file_name is already decoded
-        # MinIO stores files with actual characters (not URL-encoded), so we use it directly
-        logger.info(f"Attempting to download file from MinIO: {file_name}")
-
-        # Decode each path segment individually to match the stored path
-        path_segments = file_name.split('/')
-        decoded_path = '/'.join(unquote(segment) for segment in path_segments)
-        logger.info(f"Decoded path for MinIO: {decoded_path}")
+        from urllib.parse import unquote
+        from datetime import timedelta
+        from fastapi.responses import RedirectResponse
         
+        # Decode path segments
+        formtype_id = unquote(formtype_id)
+        form_record_id = unquote(form_record_id)
+        field_name = unquote(field_name)
+        
+        path_segments = file_name.split('/')
+        decoded_filename = '/'.join(unquote(segment) for segment in path_segments)
+        
+        computed_path = f"{formtype_id}/{form_record_id}/{field_name}/{decoded_filename}"
+        logger.info(f"Computing download path for MinIO: {computed_path}")
 
-        file_content = storage_service.download_file(decoded_path)
+        headers = {
+            "response-content-disposition": f'inline; filename="{decoded_filename}"'
+        }
+        if download == 1:
+            headers["response-content-disposition"] = f'attachment; filename="{decoded_filename}"'
 
-        if file_content is None:
-            logger.error(f"File not found in MinIO: {decoded_path}")
+        url = storage_service.generate_presigned_url(
+            object_name=computed_path,
+            expires=timedelta(hours=1),
+            response_headers=headers
+        )
+
+        if url:
+            return RedirectResponse(url=url, status_code=307)
+        else:
             raise HTTPException(
-                status_code=404,
-                detail="File not found"
+                status_code=500,
+                detail="Failed to generate presigned URL"
             )
 
-        logger.info(f"Successfully downloaded file: {decoded_path}")
-
-        # Try to determine content type from file extension
-        content_type = "application/octet-stream"
-        if '.' in decoded_path:
-            ext = decoded_path.rsplit('.', 1)[1].lower()
-            content_types = {
-                'txt': 'text/plain',
-                'pdf': 'application/pdf',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'png': 'image/png',
-                'gif': 'image/gif',
-                'html': 'text/html',
-                'json': 'application/json',
-                'xml': 'application/xml'
-            }
-            content_type = content_types.get(ext, 'application/octet-stream')
-
-        return Response(
-            content=file_content,
-            media_type=content_type,
-            headers={
-                "Content-Disposition": f"attachment; filename={decoded_path.split('/')[-1]}",
-                "Content-Length": str(len(file_content))
-            }
-        )
     except HTTPException:
         raise
     except Exception as e:
