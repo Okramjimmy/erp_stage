@@ -171,7 +171,7 @@ async def upload_stage_file(
 
     # 3. Upload to MinIO
     from src.app.storage import storage_service
-    object_name = f"{stage_id}/{filename}"
+    object_name = f"{stage_id}/uploads/{filename}"
     success = storage_service.upload_file(
         file_data=file_content,
         object_name=object_name,
@@ -207,9 +207,9 @@ async def download_stage_file(
 
     # 2. Check if file exists in the stage folder
     from src.app.storage import storage_service
-    object_name = f"{stage_id}/{filename}"
+    object_name = f"{stage_id}/uploads/{filename}"
     
-    files = storage_service.list_files(prefix=f"{stage_id}/")
+    files = storage_service.list_files(prefix=f"{stage_id}/uploads/")
     if object_name not in files:
         raise HTTPException(status_code=404, detail=f"File {filename} not found in stage {stage_id}")
 

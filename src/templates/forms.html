@@ -14,7 +14,11 @@
         <div class="page-title">Form Types</div>
         <div class="page-subtitle">Manage all form types across the application</div>
     </div>
-    <div class="page-actions">
+    <div class="page-actions" style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" onclick="triggerParseDocument()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Parse Document
+        </button>
         <button class="btn btn-primary" onclick="createNewForm()">
             + Create Form Type
         </button>
@@ -65,12 +69,100 @@
         </table>
     </div>
 </div>
+
+<!-- Upload Parsing Modal Overlay -->
+<div class="modal-overlay" id="loading-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center;">
+  <div style="background: white; padding: 30px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); text-align: center; max-width: 400px; width: 90%;">
+    <div class="spinner-container" style="margin-bottom: 20px;">
+      <svg class="animate-spin" width="50" height="50" viewBox="0 0 50 50" style="animation: spin 1s linear infinite; margin: 0 auto;">
+        <circle cx="25" cy="25" r="20" fill="none" stroke="var(--primary-light)" stroke-width="4"></circle>
+        <path fill="none" stroke="var(--primary)" stroke-width="4" stroke-linecap="round" d="M25,5 A20,20 0 0,1 45,25"></path>
+      </svg>
+    </div>
+    <h3 style="font-weight: 700; font-size: 16px; margin-bottom: 8px; color: var(--text);">Parsing Document...</h3>
+    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 0;">We are extracting sections and questions from your document to build the form. This may take up to 2 minutes.</p>
+    <div id="parsing-timer" style="margin-top: 15px; font-size: 12px; font-weight: 600; color: var(--primary);">Elapsed: 0s</div>
+  </div>
+</div>
+
+<style>
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    let timerInterval;
+    function startParsingTimer() {
+        const timerEl = document.getElementById('parsing-timer');
+        let elapsed = 0;
+        timerEl.textContent = 'Elapsed: 0s';
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            elapsed++;
+            timerEl.textContent = `Elapsed: ${elapsed}s`;
+        }, 1000);
+    }
+
+    function stopParsingTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+    }
+
+    function triggerParseDocument() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.pdf,.docx,.doc,.txt';
+        fileInput.style.display = 'none';
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const modal = document.getElementById('loading-modal');
+            modal.style.display = 'flex';
+            startParsingTimer();
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const resp = await fetch('/api/v1/parse', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({detail: resp.statusText}));
+                    throw new Error(errData.detail || resp.statusText);
+                }
+                
+                const data = await resp.json();
+                if (data.form_metadata) {
+                    const storeData = {
+                        fields: data.form_metadata.fields,
+                        document_name: data.document_name || file.name
+                    };
+                    sessionStorage.setItem('parsed_form_metadata', JSON.stringify(storeData));
+                    
+                    window.location.href = '/form-builder/new/standalone?return_to=/forms';
+                } else {
+                    throw new Error('No form metadata returned from parse endpoint');
+                }
+            } catch (err) {
+                toast('Failed to parse document: ' + err.message, 'error');
+            } finally {
+                modal.style.display = 'none';
+                stopParsingTimer();
+            }
+        };
+        document.body.appendChild(fileInput);
+        fileInput.click();
+        document.body.removeChild(fileInput);
+    }
+
     function createNewForm() {
-        // We will just redirect to the form builder for a new form type with no stage linked
         window.location.href = '/form-builder/new/standalone?return_to=/forms';
     }
 

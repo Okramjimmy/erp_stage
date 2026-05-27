@@ -1143,12 +1143,44 @@ async function boot(){
   }
 
   await loadAvailableFormTypes();
-  const flat=window.FORM_DATA.fields||[];
-  if(flat.length){
-    importFields(flat);
+  
+  const sessionMetadataStr = sessionStorage.getItem('parsed_form_metadata');
+  if (sessionMetadataStr) {
+    try {
+      const parsedData = JSON.parse(sessionMetadataStr);
+      sessionStorage.removeItem('parsed_form_metadata');
+      
+      if (parsedData.fields && parsedData.fields.length) {
+        importFields(parsedData.fields);
+        
+        if (parsedData.document_name) {
+          let docName = parsedData.document_name;
+          docName = docName.replace(/\.[^/.]+$/, "");
+          docName = docName.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/, "");
+          let formName = docName.split(/[_-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          
+          document.getElementById('form-name').value = formName;
+          document.getElementById('canvas-title').textContent = formName;
+          window.FORM_META.name = formName;
+        }
+        markDirty();
+        setTimeout(() => toast('Form generated from document successfully!', 'success'), 500);
+      } else {
+        canvas = [mkSection()];
+      }
+    } catch(e) {
+      console.error('Error parsing stored form metadata:', e);
+      canvas = [mkSection()];
+    }
   } else {
-    canvas=[mkSection()];
+    const flat = window.FORM_DATA.fields || [];
+    if (flat.length) {
+      importFields(flat);
+    } else {
+      canvas = [mkSection()];
+    }
   }
+  
   renderCanvas();
 }
 boot();
