@@ -355,47 +355,70 @@
                     >
                         <span>Stage Tree</span>
                         <div
-                            class="drive-toggle"
-                            onclick="toggleDriveView()"
+                            class="view-mode-toggle-container"
                             style="
                                 display: flex;
                                 align-items: center;
-                                gap: 4px;
-                                color: var(--text);
-                                text-transform: none;
-                                font-size: 12px;
-                                cursor: pointer;
-                                font-weight: 500;
+                                gap: 2px;
+                                background: var(--bg);
+                                padding: 2px;
+                                border-radius: 4px;
+                                border: 1px solid var(--border-light);
                             "
                         >
-                            <span
-                                class="drive-text"
-                                style="letter-spacing: normal"
-                                >Drive</span
-                            >
-                            <div
+                            <button
+                                id="view-mode-dash-btn"
+                                onclick="setViewMode('dash')"
                                 style="
-                                    background: var(--primary);
-                                    color: white;
-                                    border-radius: 4px;
-                                    padding: 2px;
+                                    background: none;
+                                    border: none;
+                                    border-radius: 3px;
+                                    padding: 2px 6px;
+                                    cursor: pointer;
                                     display: flex;
+                                    align-items: center;
+                                    gap: 3px;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: var(--text-muted);
+                                    transition: all 0.15s;
+                                    outline: none;
                                 "
+                                title="DashView"
                             >
-                                <svg
-                                    width="12"
-                                    height="12"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                                     <rect x="3" y="3" width="7" height="7" />
                                     <rect x="14" y="3" width="7" height="7" />
                                     <rect x="3" y="14" width="7" height="7" />
                                     <rect x="14" y="14" width="7" height="7" />
                                 </svg>
-                            </div>
+                                <span class="drive-text" style="letter-spacing: normal">DashView</span>
+                            </button>
+                            <button
+                                id="view-mode-drive-btn"
+                                onclick="setViewMode('drive')"
+                                style="
+                                    background: none;
+                                    border: none;
+                                    border-radius: 3px;
+                                    padding: 2px 6px;
+                                    cursor: pointer;
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 3px;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    color: var(--text-muted);
+                                    transition: all 0.15s;
+                                    outline: none;
+                                "
+                                title="Drive View"
+                            >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                </svg>
+                                <span class="drive-text" style="letter-spacing: normal">Drive</span>
+                            </button>
                         </div>
                     </div>
                     <div id="sidebar-tree">
@@ -411,6 +434,17 @@
                     </div>
                 </div>
             </aside>
+            <div class="sidebar-resizer" id="sidebar-resizer" style="
+                position: fixed;
+                top: var(--navbar-h);
+                bottom: 0;
+                left: 240px;
+                width: 4px;
+                cursor: col-resize;
+                z-index: 99;
+                background: transparent;
+                transition: background 0.15s;
+            " onmouseover="this.style.background='var(--primary)'" onmouseout="this.style.background='transparent'"></div>
 
             <!-- Main -->
             <main class="main-content">{% block content %}{% endblock %}</main>
@@ -761,35 +795,134 @@
             // Sidebar Toggle
             function toggleSidebar() {
                 const sidebar = document.getElementById("sidebar");
-                const toggleBtn = document.getElementById("sidebar-toggle");
+                const resizer = document.getElementById("sidebar-resizer");
+                const mainContent = document.querySelector(".main-content");
+                if (!sidebar) return;
+
+                sidebar.classList.add("transitioning");
                 sidebar.classList.toggle("collapsed");
-                document.body.classList.toggle("sidebar-collapsed");
-                // Save state to localStorage
-                localStorage.setItem(
-                    "sidebar-collapsed",
-                    sidebar.classList.contains("collapsed"),
-                );
+                const isCollapsed = sidebar.classList.contains("collapsed");
+                document.body.classList.toggle("sidebar-collapsed", isCollapsed);
+                sessionStorage.setItem("sidebar-collapsed", isCollapsed ? "true" : "false");
+
+                if (isCollapsed) {
+                    sidebar.style.width = "60px";
+                    if (resizer) resizer.style.left = "60px";
+                    if (mainContent) mainContent.style.marginLeft = "60px";
+                } else {
+                    const savedWidth = parseInt(sessionStorage.getItem("sidebar-width")) || 240;
+                    sidebar.style.width = `${savedWidth}px`;
+                    if (resizer) resizer.style.left = `${savedWidth}px`;
+                    if (mainContent) mainContent.style.marginLeft = `${savedWidth}px`;
+                }
+                setTimeout(() => {
+                    sidebar.classList.remove("transitioning");
+                }, 200);
             }
 
             function collapseSidebar() {
                 const sidebar = document.getElementById("sidebar");
+                const resizer = document.getElementById("sidebar-resizer");
+                const mainContent = document.querySelector(".main-content");
                 if (sidebar && !sidebar.classList.contains("collapsed")) {
+                    sidebar.classList.add("transitioning");
                     sidebar.classList.add("collapsed");
                     document.body.classList.add("sidebar-collapsed");
-                    localStorage.setItem("sidebar-collapsed", "true");
+                    sessionStorage.setItem("sidebar-collapsed", "true");
+                    sidebar.style.width = "60px";
+                    if (resizer) resizer.style.left = "60px";
+                    if (mainContent) mainContent.style.marginLeft = "60px";
+                    setTimeout(() => {
+                        sidebar.classList.remove("transitioning");
+                    }, 200);
                 }
             }
 
-            // Drive View Toggle
-            function toggleDriveView() {
-                const isDriveView =
-                    localStorage.getItem("drive-view") === "true";
-                localStorage.setItem("drive-view", !isDriveView);
-                // Reload or navigate based on current view
-                if (window.location.pathname.startsWith("/stages/")) {
-                    window.location.reload();
+            // Drive/Dash view switcher helpers
+            async function getStartingStageId() {
+                let treeData = null;
+                const cached = sessionStorage.getItem('stageTreeCache');
+                if (cached) {
+                    try {
+                        treeData = JSON.parse(cached);
+                    } catch(e) {}
+                }
+                if (!treeData) {
+                    try {
+                        treeData = await apiFetch('/api/v1/stages/tree');
+                    } catch(e) {}
+                }
+                
+                function getLeastDepthStage(tree) {
+                    if (!tree || tree.length === 0) return null;
+                    let bestNode = null;
+                    function traverse(nodes) {
+                        for (const node of nodes) {
+                            if (!bestNode || node.depth_level < bestNode.depth_level) {
+                                bestNode = node;
+                            }
+                            if (node.children && node.children.length > 0) {
+                                traverse(node.children);
+                            }
+                        }
+                    }
+                    traverse(tree);
+                    return bestNode;
+                }
+                
+                if (treeData && treeData.length > 0) {
+                    const startStage = getLeastDepthStage(treeData);
+                    if (startStage) return startStage.stage_id;
+                }
+                return 'stage_system';
+            }
+
+            async function setViewMode(mode) {
+                sessionStorage.setItem("drive-view", mode === "drive" ? "true" : "false");
+                syncViewModeUI();
+                
+                const isStagePage = window.location.pathname.startsWith("/stages/");
+                if (mode === "drive" && !isStagePage) {
+                    const startStageId = await getStartingStageId();
+                    window.location.href = `/stages/${startStageId}`;
                 } else {
-                    window.location.href = "/stages/root";
+                    window.dispatchEvent(new CustomEvent("view-mode-changed", { detail: { mode } }));
+                }
+            }
+
+            function syncViewModeUI() {
+                const isDriveView = sessionStorage.getItem("drive-view") === "true";
+                const mode = isDriveView ? "drive" : "dash";
+                
+                // Sidebar switch buttons
+                const dashBtn = document.getElementById("view-mode-dash-btn");
+                const driveBtn = document.getElementById("view-mode-drive-btn");
+                
+                if (dashBtn && driveBtn) {
+                    if (mode === "drive") {
+                        driveBtn.style.background = "var(--primary)";
+                        driveBtn.style.color = "white";
+                        dashBtn.style.background = "none";
+                        dashBtn.style.color = "var(--text-muted)";
+                    } else {
+                        dashBtn.style.background = "var(--primary)";
+                        dashBtn.style.color = "white";
+                        driveBtn.style.background = "none";
+                        driveBtn.style.color = "var(--text-muted)";
+                    }
+                }
+
+                // Page tabs
+                const pageDashTab = document.getElementById("page-view-mode-dash");
+                const pageDriveTab = document.getElementById("page-view-mode-drive");
+                if (pageDashTab && pageDriveTab) {
+                    if (mode === "drive") {
+                        pageDriveTab.classList.add("active");
+                        pageDashTab.classList.remove("active");
+                    } else {
+                        pageDashTab.classList.add("active");
+                        pageDriveTab.classList.remove("active");
+                    }
                 }
             }
 
@@ -861,12 +994,64 @@
 
             // Initialize states on load
             document.addEventListener("DOMContentLoaded", () => {
-                if (localStorage.getItem("sidebar-collapsed") === "true") {
-                    document
-                        .getElementById("sidebar")
-                        .classList.add("collapsed");
+                const sidebar = document.getElementById("sidebar");
+                const resizer = document.getElementById("sidebar-resizer");
+                const mainContent = document.querySelector(".main-content");
+                
+                // Read saved width from sessionStorage, default to 240
+                let currentWidth = parseInt(sessionStorage.getItem("sidebar-width")) || 240;
+                
+                // If sessionStorage has sidebar-collapsed, use it. Otherwise, defaults to false (expanded)
+                const isCollapsed = sessionStorage.getItem("sidebar-collapsed") === "true";
+                if (isCollapsed) {
+                    if (sidebar) sidebar.classList.add("collapsed");
                     document.body.classList.add("sidebar-collapsed");
+                    if (sidebar) sidebar.style.width = "60px";
+                    if (resizer) resizer.style.left = "60px";
+                    if (mainContent) mainContent.style.marginLeft = "60px";
+                } else {
+                    if (sidebar) sidebar.style.width = `${currentWidth}px`;
+                    if (resizer) resizer.style.left = `${currentWidth}px`;
+                    if (mainContent) mainContent.style.marginLeft = `${currentWidth}px`;
                 }
+
+                if (resizer && sidebar) {
+                    resizer.addEventListener("mousedown", (e) => {
+                        e.preventDefault();
+                        document.body.style.cursor = "col-resize";
+                        document.body.style.userSelect = "none";
+                        
+                        function onMouseMove(moveEvent) {
+                            if (sidebar.classList.contains("collapsed")) {
+                                sidebar.classList.remove("collapsed");
+                                document.body.classList.remove("sidebar-collapsed");
+                                sessionStorage.setItem("sidebar-collapsed", "false");
+                            }
+                            let newWidth = moveEvent.clientX;
+                            if (newWidth < 150) newWidth = 150;
+                            if (newWidth > 600) newWidth = 600;
+                            
+                            sidebar.style.width = `${newWidth}px`;
+                            resizer.style.left = `${newWidth}px`;
+                            if (mainContent) mainContent.style.marginLeft = `${newWidth}px`;
+                            
+                            sessionStorage.setItem("sidebar-width", newWidth);
+                        }
+                        
+                        function onMouseUp() {
+                            document.body.style.cursor = "";
+                            document.body.style.userSelect = "";
+                            document.removeEventListener("mousemove", onMouseMove);
+                            document.removeEventListener("mouseup", onMouseUp);
+                        }
+                        
+                        document.addEventListener("mousemove", onMouseMove);
+                        document.addEventListener("mouseup", onMouseUp);
+                    });
+                }
+
+                // Sync view mode UI on load
+                syncViewModeUI();
             });
         </script>
 

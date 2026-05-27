@@ -28,6 +28,7 @@ class StageUpdate(BaseModel):
         None, pattern="^(public|private|restricted)$"
     )
     wbs_prefix: Optional[str] = Field(None, max_length=10, pattern="^[a-zA-Z0-9]*$")
+    wbs_number: Optional[int] = Field(None, ge=1)
 
 
 class StageResponse(BaseModel):

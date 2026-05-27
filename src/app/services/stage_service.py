@@ -357,25 +357,22 @@ class StageService:
                 if ancestor:
                     active_prefix = ancestor.wbs_prefix
 
-        # Clean and update stage name
-        if stage_data.stage_name and stage_data.stage_name != stage.stage_name:
-            clean_name = self.extract_base_name(stage_data.stage_name, active_prefix)
-            stage.stage_name = clean_name
-            # Set a temporary path on self to avoid unique constraint conflict if name changes
-            stage.stage_path = f"/temp_{uuid.uuid4().hex}"
-
-        # Update prefix if target stage is depth 1
-        if stage_data.wbs_prefix is not None:
-            if stage.depth_level != 1:
-                raise ValueError("WBS prefix can only be configured on direct children of System (depth 1).")
-
-            # When removing the prefix (empty string), clean the stored stage name and
-            # verify the resulting name does not already exist in the database.
-            if not stage_data.wbs_prefix:
-                # Strip the leading 3-char prefix (e.g. "abc1 Building" → "1 Building")
-                no_prefix_name = re.sub(r'^[a-zA-Z0-9]{3}(?=\d)', '', stage.stage_name)
-
-                # Reject if the would-be name already exists (anywhere in the DB, excluding self)
+        # Clean and update stage name & WBS prefix & WBS number
+        if stage.depth_level == 1:
+            new_base = self.extract_base_name(stage_data.stage_name or stage.stage_name, active_prefix)
+            
+            new_prefix = stage.wbs_prefix
+            if stage_data.wbs_prefix is not None:
+                new_prefix = stage_data.wbs_prefix if stage_data.wbs_prefix else None
+                
+            outline = self.parse_outline_number(stage.stage_name, stage.wbs_prefix)
+            current_num = outline[0] if (outline and len(outline) > 0) else 1
+            new_num = stage_data.wbs_number if stage_data.wbs_number is not None else current_num
+            
+            # If removing prefix, check for duplicates with no-prefix name
+            if stage_data.wbs_prefix is not None and not stage_data.wbs_prefix:
+                wbs_code = f"{new_num}"
+                no_prefix_name = f"{wbs_code} {new_base}"
                 dup_result = await self.db.execute(
                     select(Stage).where(
                         Stage.stage_name == no_prefix_name,
@@ -387,13 +384,21 @@ class StageService:
                         f"Cannot remove prefix: a stage with name '{no_prefix_name}' "
                         f"already exists in the database."
                     )
-
-                # Store the cleaned name; reindex will keep it without adding a new prefix
-                stage.stage_name = no_prefix_name
-
-            stage.wbs_prefix = stage_data.wbs_prefix if stage_data.wbs_prefix else None
-            # Assign temporary paths to allow cascade rename updates
+                    
+            wbs_code = f"{new_prefix}{new_num}" if new_prefix else f"{new_num}"
+            stage.stage_name = f"{wbs_code} {new_base}"
+            stage.wbs_prefix = new_prefix
             stage.stage_path = f"/temp_{uuid.uuid4().hex}"
+        else:
+            if stage_data.wbs_prefix is not None:
+                raise ValueError("WBS prefix can only be configured on direct children of System (depth 1).")
+            if stage_data.wbs_number is not None:
+                raise ValueError("WBS number can only be configured on direct children of System (depth 1).")
+            
+            if stage_data.stage_name and stage_data.stage_name != stage.stage_name:
+                clean_name = self.extract_base_name(stage_data.stage_name, active_prefix)
+                stage.stage_name = clean_name
+                stage.stage_path = f"/temp_{uuid.uuid4().hex}"
 
         if stage_data.visibility_scope:
             stage.visibility_scope = stage_data.visibility_scope

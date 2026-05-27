@@ -780,19 +780,9 @@ function renderProps(f){
     <div class="prop-section" id="ps-cond">
       <div class="prop-section-hd" onclick="togglePS('ps-cond')">Conditional Logic <span>▾</span></div>
       <div id="ps-cond-body">
-        <div class="form-group">
-          <label class="form-label">Depends On</label>
-          <input class="form-control text-mono" value="${esc(f.depends_on||'')}" oninput="fieldUpd(${f._id},'depends_on',this.value)" placeholder="eval:doc.status=='Draft'">
-          <div class="form-hint">Show only when true</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Mandatory Depends On</label>
-          <input class="form-control text-mono" value="${esc(f.mandatory_depends_on||'')}" oninput="fieldUpd(${f._id},'mandatory_depends_on',this.value)">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Read Only Depends On</label>
-          <input class="form-control text-mono" value="${esc(f.read_only_depends_on||'')}" oninput="fieldUpd(${f._id},'read_only_depends_on',this.value)">
-        </div>
+        ${renderCondRows(f, 'depends_on', 'Depends On', 'Show only when true')}
+        ${renderCondRows(f, 'mandatory_depends_on', 'Mandatory Depends On')}
+        ${renderCondRows(f, 'read_only_depends_on', 'Read Only Depends On')}
       </div>
     </div>
 
@@ -814,6 +804,10 @@ function togglePS(id){
 function fieldUpd(fid,key,val){
   const f=getField(fid); if(!f) return;
   f[key]=val;
+  if(key==='fieldname'){
+    const nm=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-name`);
+    if(nm) nm.textContent=val;
+  }
   if(key==='label'){
     document.getElementById('props-title').textContent=val||f.fieldtype;
     const el=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-label`);
@@ -834,21 +828,19 @@ function fieldUpd(fid,key,val){
 function propLabelChg(fid,label){
   const f=getField(fid); if(!f) return;
   f.label=label;
-  const fn=snake(label)||f.fieldname;
-  f.fieldname=fn;
-  const fnInp=document.getElementById('prop-fn'); if(fnInp) fnInp.value=fn;
   document.getElementById('props-title').textContent=label||f.fieldtype;
   const el=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-label`); if(el) el.textContent=label;
-  const nm=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-name`); if(nm) nm.textContent=fn;
   markDirty();
 }
 
 function propChgType(fid,type){
   const f=getField(fid); if(!f) return;
   f.fieldtype=type;
+  f.fieldname=snake(type)+'_'+fid;
   const ti=TMAP[type]||{icon:'📝'};
   const el=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-icon`); if(el) el.textContent=ti.icon;
   const tb=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-type`); if(tb) tb.textContent=type;
+  const nm=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-name`); if(nm) nm.textContent=f.fieldname;
   document.getElementById('props-type-badge').textContent=type;
   renderProps(f);
   markDirty();
@@ -911,6 +903,29 @@ function previewForm(){
   }
   let html='<form onsubmit="return false" style="font-size:13px">';
   let inCols=false;
+  
+  // Set up local state for preview values
+  window.PREVIEW_DATA = {};
+  flat.forEach(f => {
+    if (!LAYOUT_SET.has(f.fieldtype)) {
+      if (f.default !== undefined && f.default !== null && f.default !== '') {
+        if (f.fieldtype === 'Check') {
+          window.PREVIEW_DATA[f.fieldname] = (f.default === '1' || f.default === 1 || f.default === true || f.default === 'true');
+        } else if (['Int', 'Float', 'Currency', 'Percent'].includes(f.fieldtype)) {
+          window.PREVIEW_DATA[f.fieldname] = Number(f.default);
+        } else {
+          window.PREVIEW_DATA[f.fieldname] = f.default;
+        }
+      } else {
+        if (f.fieldtype === 'Check') {
+          window.PREVIEW_DATA[f.fieldname] = false;
+        } else {
+          window.PREVIEW_DATA[f.fieldname] = '';
+        }
+      }
+    }
+  });
+
   flat.forEach(f=>{
     if(f.hidden) return;
     if(f.fieldtype==='Section Break'){
@@ -924,39 +939,52 @@ function previewForm(){
     }
     if(f.fieldtype==='Tab Break'){
       if(inCols){html+='</div></div>';inCols=false;}
-      html+=`<div style="border-bottom:2px solid var(--primary);padding-bottom:4px;margin:24px 0 16px;color:var(--primary);font-size:13px;font-weight:700">${esc(f.label)||'Tab'}</div>`;return;
+      html+=`<div style="border-bottom:2px solid var(--primary);padding-bottom:4px;margin:24px 0 16px;color:var(--primary);font-size:13px;font-weight:700">${esc(f.label||'Tab')}</div>`;return;
     }
-    if(f.fieldtype==='Heading'){html+=`<h3 style="font-size:15px;font-weight:700;margin:16px 0 10px">${esc(f.label)}</h3>`;return;}
-    if(f.fieldtype==='HTML'){html+=`<div style="margin-bottom:12px">${f.options||''}</div>`;return;}
-    const req=f.required?`<span style="color:var(--danger)"> *</span>`:'';
-    const hint=f.description?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${esc(f.description)}</div>`:'';
-    const lbl=`<label style="display:block;font-size:12px;font-weight:${f.bold?'700':'600'};margin-bottom:5px">${esc(f.label)}${req}</label>`;
-    const ro=f.read_only?'pointer-events:none;opacity:.65':'';
-    const ph=esc(f.placeholder||'');
-    let inp='';
-    if(f.fieldtype==='Check'){html+=`<div style="margin-bottom:12px;${ro}"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${f.default==='1'?'checked':''}><span>${esc(f.label)}</span></label>${hint}</div>`;return;}
-    switch(f.fieldtype){
-      case 'Select':case 'Autocomplete': inp=`<select class="form-control">${(f.options||'').split('\n').filter(Boolean).map(o=>`<option>${esc(o)}</option>`).join('')}</select>`;break;
-      case 'Link':case 'Dynamic Link': inp=`<input type="text" class="form-control" placeholder="Search ${esc(f.options||'')}…">`;break;
-      case 'Table':case 'Table MultiSelect': inp=`<div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text-muted);font-size:12px;text-align:center">📋 ${esc(f.options||f.fieldname)}</div>`;break;
-      case 'Date': inp=`<input type="date" class="form-control">`;break;
-      case 'Datetime': inp=`<input type="datetime-local" class="form-control">`;break;
-      case 'Time': inp=`<input type="time" class="form-control">`;break;
-      case 'Int': inp=`<input type="number" step="1" class="form-control" placeholder="${ph}">`;break;
-      case 'Float':case 'Currency':case 'Percent': inp=`<input type="number" step="any" class="form-control" placeholder="${ph}">`;break;
-      case 'Password': inp=`<input type="password" class="form-control" placeholder="${ph}">`;break;
-      case 'Small Text': inp=`<textarea class="form-control" rows="2" placeholder="${ph}"></textarea>`;break;
-      case 'Long Text':case 'Text Editor': inp=`<textarea class="form-control" rows="4" placeholder="${ph}"></textarea>`;break;
-      case 'Code':case 'JSON': inp=`<textarea class="form-control text-mono" rows="4" style="font-size:12px"></textarea>`;break;
-      case 'Color': inp=`<input type="color" style="width:60px;height:34px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer">`;break;
-      case 'Rating': inp=`<div style="font-size:24px;letter-spacing:2px">⭐⭐⭐⭐⭐</div>`;break;
-      case 'Attach':case 'Attach Image': inp=`<input type="file" class="form-control" style="padding:4px">`;break;
-      case 'Signature': inp=`<div style="height:72px;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">✒ Click to sign</div>`;break;
-      case 'Duration': inp=`<input type="text" class="form-control" placeholder="HH:MM:SS">`;break;
-      case 'Geolocation': inp=`<div style="height:44px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;padding:0 12px;color:var(--text-muted);font-size:12px">📍 Click to pick location</div>`;break;
-      default: inp=`<input type="text" class="form-control" value="${esc(f.default||'')}" placeholder="${ph}">`;
+    
+    let fieldContent = '';
+    if(f.fieldtype==='Heading'){
+      fieldContent = `<h3 style="font-size:15px;font-weight:700;margin:16px 0 10px">${esc(f.label)}</h3>`;
+    } else if(f.fieldtype==='HTML'){
+      fieldContent = `<div style="margin-bottom:12px">${f.options||''}</div>`;
+    } else {
+      const req=f.required?`<span class="req-asterisk" style="color:var(--danger)"> *</span>`:'';
+      const hint=f.description?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${esc(f.description)}</div>`:'';
+      const lbl=`<label style="display:block;font-size:12px;font-weight:${f.bold?'700':'600'};margin-bottom:5px">${esc(f.label)}${req}</label>`;
+      const ro=f.read_only?'pointer-events:none;opacity:.65':'';
+      const ph=esc(f.placeholder||'');
+      let inp='';
+      if(f.fieldtype==='Check'){
+        const isChecked = window.PREVIEW_DATA[f.fieldname] === true;
+        fieldContent = `<div style="margin-bottom:12px;${ro}"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${isChecked?'checked':''} onchange="updatePreviewVal('${f.fieldname}',this.checked)"><span>${esc(f.label)}</span></label>${hint}</div>`;
+      } else {
+        const curVal = window.PREVIEW_DATA[f.fieldname];
+        switch(f.fieldtype){
+          case 'Select':case 'Autocomplete': inp=`<select class="form-control" onchange="updatePreviewVal('${f.fieldname}',this.value)"><option value="">— Select —</option>${(f.options||'').split('\n').filter(Boolean).map(o=>`<option${o===String(curVal)?' selected':''}>${esc(o)}</option>`).join('')}</select>`;break;
+          case 'Link':case 'Dynamic Link': inp=`<input type="text" class="form-control" placeholder="Search ${esc(f.options||'')}…" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;break;
+          case 'Table':case 'Table MultiSelect': inp=`<div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text-muted);font-size:12px;text-align:center">📋 ${esc(f.options||f.fieldname)}</div>`;break;
+          case 'Date': inp=`<input type="date" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
+          case 'Datetime': inp=`<input type="datetime-local" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
+          case 'Time': inp=`<input type="time" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
+          case 'Int': inp=`<input type="number" step="1" class="form-control" placeholder="${ph}" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',+this.value)">`;break;
+          case 'Float':case 'Currency':case 'Percent': inp=`<input type="number" step="any" class="form-control" placeholder="${ph}" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',+this.value)">`;break;
+          case 'Password': inp=`<input type="password" class="form-control" placeholder="${ph}" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;break;
+          case 'Small Text': inp=`<textarea class="form-control" rows="2" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal||'')}</textarea>`;break;
+          case 'Long Text':case 'Text Editor': inp=`<textarea class="form-control" rows="4" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal||'')}</textarea>`;break;
+          case 'Code':case 'JSON': inp=`<textarea class="form-control text-mono" rows="4" style="font-size:12px" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal||'')}</textarea>`;break;
+          case 'Color': inp=`<input type="color" style="width:60px;height:34px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer" value="${esc(curVal||'#000000')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
+          case 'Rating': inp=`<div style="font-size:24px;letter-spacing:2px">⭐⭐⭐⭐⭐</div>`;break;
+          case 'Attach':case 'Attach Image': inp=`<input type="file" class="form-control" style="padding:4px">`;break;
+          case 'Signature': inp=`<div style="height:72px;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">✒ Click to sign</div>`;break;
+          case 'Duration': inp=`<input type="text" class="form-control" placeholder="HH:MM:SS" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;break;
+          case 'Geolocation': inp=`<div style="height:44px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;padding:0 12px;color:var(--text-muted);font-size:12px">📍 Click to pick location</div>`;break;
+          default: inp=`<input type="text" class="form-control" value="${esc(curVal||'')}" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;
+        }
+        fieldContent = `<div style="margin-bottom:14px;${ro}">${lbl}${inp}${hint}</div>`;
+      }
     }
-    html+=`<div style="margin-bottom:14px;${ro}">${lbl}${inp}${hint}</div>`;
+    
+    html += `<div class="preview-field-wrapper" data-fieldname="${f.fieldname}">${fieldContent}</div>`;
   });
   if(inCols) html+='</div></div>';
   html+=`<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
@@ -964,13 +992,142 @@ function previewForm(){
     <button class="btn btn-primary" type="submit">Submit</button>
   </div></form>`;
   body.innerHTML=html; openPreview();
+  applyPreviewConditionalLogic();
 }
+
+window.updatePreviewVal = function(fieldname, val) {
+  window.PREVIEW_DATA[fieldname] = val;
+  applyPreviewConditionalLogic();
+};
+
+function evalPreviewExpr(expr) {
+  if (!expr) return false;
+  let code = expr.trim();
+  if (code.startsWith('eval:')) {
+    code = code.slice(5).trim();
+  }
+  const doc = Object.assign({ status: 'Draft' }, window.PREVIEW_DATA);
+  try {
+    return new Function('doc', `try { return (${code}); } catch(e) { return false; }`)(doc);
+  } catch(e) {
+    return false;
+  }
+}
+
+function applyPreviewConditionalLogic() {
+  const flat = exportFields();
+  flat.forEach(f => {
+    if (LAYOUT_SET.has(f.fieldtype) && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML') return;
+    const wrapper = document.querySelector(`.preview-field-wrapper[data-fieldname="${f.fieldname}"]`);
+    if (!wrapper) return;
+
+    // Visibility
+    const isVisible = !f.depends_on || evalPreviewExpr(f.depends_on);
+    wrapper.style.display = isVisible ? '' : 'none';
+
+    // Mandatory
+    const isMandatory = f.required || (f.mandatory_depends_on && evalPreviewExpr(f.mandatory_depends_on));
+    const asterisk = wrapper.querySelector('.req-asterisk');
+    if (asterisk) asterisk.style.display = isMandatory ? 'inline' : 'none';
+
+    // Read Only
+    const isReadOnly = f.read_only || (f.read_only_depends_on && evalPreviewExpr(f.read_only_depends_on));
+    const inputEl = wrapper.querySelector('input, select, textarea');
+    if (inputEl) {
+      if (isReadOnly) {
+        inputEl.setAttribute('readonly', 'true');
+        if (inputEl.tagName === 'SELECT') inputEl.disabled = true;
+        if (inputEl.type === 'checkbox') inputEl.disabled = true;
+        inputEl.style.pointerEvents = 'none';
+        inputEl.style.opacity = '0.65';
+      } else {
+        inputEl.removeAttribute('readonly');
+        if (inputEl.tagName === 'SELECT') inputEl.disabled = false;
+        if (inputEl.type === 'checkbox') inputEl.disabled = false;
+        inputEl.style.pointerEvents = '';
+        inputEl.style.opacity = '';
+      }
+    }
+  });
+}
+
 function openPreview(){document.getElementById('preview-modal').classList.add('open');}
 function closePreview(){document.getElementById('preview-modal').classList.remove('open');}
 document.getElementById('preview-modal').addEventListener('click',e=>{if(e.target===document.getElementById('preview-modal'))closePreview();});
 
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveForm();}});
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
+function parseCondExpr(expr) {
+  if (!expr) return { fieldname: '', value: '' };
+  let match = expr.match(/^\s*eval\s*:\s*doc\.([a-zA-Z0-9_]+)\s*==\s*['"]([^'"]*)['"]\s*$/);
+  if (match) {
+    return { fieldname: match[1], value: match[2] };
+  }
+  match = expr.match(/^\s*eval\s*:\s*doc\.([a-zA-Z0-9_]+)\s*==\s*([^'"]+)\s*$/);
+  if (match) {
+    return { fieldname: match[1], value: match[2].trim() };
+  }
+  return { fieldname: '', value: '' };
+}
+
+function getFieldByFieldname(fieldname) {
+  return exportFields().find(f => f.fieldname === fieldname);
+}
+
+function updateCondProp(fid, prop, part, val) {
+  const f = getField(fid);
+  if (!f) return;
+  const currentExpr = f[prop] || '';
+  const parsed = parseCondExpr(currentExpr);
+  if (part === 'fieldname') {
+    parsed.fieldname = val;
+  } else if (part === 'value') {
+    parsed.value = val;
+  }
+  let newExpr = '';
+  if (parsed.fieldname) {
+    const targetField = getFieldByFieldname(parsed.fieldname);
+    const ftype = targetField ? targetField.fieldtype : (parsed.fieldname === 'status' ? 'Select' : '');
+    const v = parsed.value || '';
+    if (v === 'true' || v === 'false') {
+      newExpr = `eval:doc.${parsed.fieldname} == ${v}`;
+    } else if (v !== '' && !isNaN(v) && ['Int', 'Float', 'Currency', 'Percent'].includes(ftype)) {
+      newExpr = `eval:doc.${parsed.fieldname} == ${v}`;
+    } else {
+      const escapedVal = v.replace(/'/g, "\\'");
+      newExpr = `eval:doc.${parsed.fieldname} == '${escapedVal}'`;
+    }
+  }
+  f[prop] = newExpr;
+  markDirty();
+}
+
+function renderCondRows(f, prop, label, hint) {
+  const dep = parseCondExpr(f[prop] || '');
+  const otherFields = exportFields().filter(other => other._id !== f._id && !LAYOUT_SET.has(other.fieldtype) && other.fieldname);
+  const statusOption = `<option value="status" ${dep.fieldname === 'status' ? 'selected' : ''}>status (Document Status)</option>`;
+  const otherOptions = otherFields.map(other => {
+    const selected = other.fieldname === dep.fieldname ? 'selected' : '';
+    return `<option value="${esc(other.fieldname)}" ${selected}>${esc(other.label || other.fieldname)} (${esc(other.fieldname)})</option>`;
+  }).join('');
+  const hintHtml = hint ? `<div class="form-hint">${hint}</div>` : '';
+  return `
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">${label}</label>
+      <select class="form-control form-control-sm" style="margin-bottom:4px" onchange="updateCondProp(${f._id}, '${prop}', 'fieldname', this.value)">
+        <option value="">— Select Field —</option>
+        ${statusOption}
+        ${otherOptions}
+      </select>
+      <input type="text" class="form-control form-control-sm" placeholder="Equals Value" value="${esc(dep.value || '')}" oninput="updateCondProp(${f._id}, '${prop}', 'value', this.value)">
+      ${hintHtml}
+    </div>
+  `;
+}
+
+window.parseCondExpr = parseCondExpr;
+window.updateCondProp = updateCondProp;
+window.renderCondRows = renderCondRows;
 
 async function boot(){
   // Dynamic Back Routing

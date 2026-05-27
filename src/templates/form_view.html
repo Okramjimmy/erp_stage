@@ -455,6 +455,7 @@
     const FORM_TYPE_ID = '{{ form_type.form_type_id }}';
     const RECORD_ID = {% if record %}"{{ record.record_id }}"{% else %}null{% endif %};
     const IS_READONLY = {% if is_readonly %}true{% else %}false{% endif %};
+    const STATUS = "{{ status }}";
     
     {% set js_perms = user_permissions.form_types.get(form_type.form_type_id, {}) if user_permissions else {} %}
     const HAS_EDIT_PERMISSION = (!RECORD_ID && {% if js_perms.create %}true{% else %}false{% endif %}) || (RECORD_ID && {% if js_perms.edit %}true{% else %}false{% endif %});
@@ -493,6 +494,26 @@
     }
 
     let formData = Object.assign({}, SAVED_DATA);
+    
+    function initializeDefaultValues() {
+      (SCHEMA.fields || []).forEach(f => {
+        if (f.default !== undefined && f.default !== null && f.default !== '') {
+          if (!(f.fieldname in formData) || formData[f.fieldname] === undefined || formData[f.fieldname] === null) {
+            if (!RECORD_ID || !(f.fieldname in SAVED_DATA)) {
+              if (f.fieldtype === 'Check') {
+                formData[f.fieldname] = (f.default === '1' || f.default === 1 || f.default === true || f.default === 'true');
+              } else if (['Int', 'Float', 'Currency', 'Percent'].includes(f.fieldtype)) {
+                formData[f.fieldname] = Number(f.default);
+              } else {
+                formData[f.fieldname] = f.default;
+              }
+            }
+          }
+        }
+      });
+    }
+    initializeDefaultValues();
+
     let dirty = false;
     // fieldname -> File object for pending (not-yet-uploaded) attachments
     const pendingFiles = {};
@@ -742,26 +763,121 @@
       return `<div class="child-table-wrap"><table><thead><tr>${headers}</tr></thead><tbody id="ct-${f.fieldname}">${bodyRows}</tbody></table>${addBtn}</div>`;
     }
 
+    function evalExpr(expr) {
+      if (!expr) return false;
+      let code = expr.trim();
+      if (code.startsWith('eval:')) {
+        code = code.slice(5).trim();
+      }
+      const doc = Object.assign({ status: STATUS }, formData);
+      try {
+        return new Function('doc', `try { return (${code}); } catch(e) { return false; }`)(doc);
+      } catch(e) {
+        console.error("Error evaluating expression:", expr, e);
+        return false;
+      }
+    }
+
+    function applyConditionalLogic() {
+      const fields = SCHEMA.fields || [];
+      fields.forEach(f => {
+        if (LAYOUT.has(f.fieldtype) && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML') return;
+        const wrapper = document.querySelector(`.field-wrapper[data-fieldname="${f.fieldname}"]`);
+        if (!wrapper) return;
+
+        // 1. Visibility (Depends On)
+        const isVisible = !f.depends_on || evalExpr(f.depends_on);
+        wrapper.style.display = isVisible ? '' : 'none';
+
+        // 2. Mandatory (Mandatory Depends On)
+        const isMandatory = f.required || (f.mandatory_depends_on && evalExpr(f.mandatory_depends_on));
+        const asterisk = wrapper.querySelector('.req-asterisk');
+        if (asterisk) {
+          asterisk.style.display = isMandatory ? 'inline' : 'none';
+        }
+        const inputEl = wrapper.querySelector('input, select, textarea');
+        if (inputEl) {
+          inputEl.required = !!isMandatory;
+        }
+
+        // 3. Read Only (Read Only Depends On)
+        const isReadOnly = IS_READONLY || f.read_only || (f.read_only_depends_on && evalExpr(f.read_only_depends_on));
+        if (inputEl) {
+          if (isReadOnly) {
+            inputEl.setAttribute('readonly', 'true');
+            if (inputEl.tagName === 'SELECT') {
+              inputEl.disabled = true;
+            }
+            if (inputEl.type === 'checkbox') {
+              inputEl.disabled = true;
+            }
+            inputEl.style.pointerEvents = 'none';
+            inputEl.style.opacity = '0.65';
+          } else {
+            inputEl.removeAttribute('readonly');
+            if (inputEl.tagName === 'SELECT') {
+              inputEl.disabled = false;
+            }
+            if (inputEl.type === 'checkbox') {
+              inputEl.disabled = false;
+            }
+            inputEl.style.pointerEvents = '';
+            inputEl.style.opacity = '';
+          }
+        }
+        
+        // Handle child table fields
+        if (['Table', 'Table MultiSelect'].includes(f.fieldtype)) {
+          const tableWrap = wrapper.querySelector('.child-table-wrap');
+          if (tableWrap) {
+            const addBtn = tableWrap.querySelector('.add-row-btn');
+            const delBtns = tableWrap.querySelectorAll('button.btn-ghost');
+            const inputs = tableWrap.querySelectorAll('input, select');
+            
+            if (isReadOnly) {
+              if (addBtn) addBtn.style.display = 'none';
+              delBtns.forEach(btn => btn.style.display = 'none');
+              inputs.forEach(inp => {
+                inp.setAttribute('readonly', 'true');
+                inp.disabled = true;
+              });
+            } else {
+              if (addBtn) addBtn.style.display = '';
+              delBtns.forEach(btn => btn.style.display = '');
+              inputs.forEach(inp => {
+                inp.removeAttribute('readonly');
+                inp.disabled = false;
+              });
+            }
+          }
+        }
+      });
+    }
+
     function buildField(f) {
       if(f.hidden) return '';
-      if(f.fieldtype === 'Heading') return `<h3 style="font-size:15px;font-weight:700;margin:12px 0 8px">${esc(f.label)}</h3>`;
-      if(f.fieldtype === 'HTML') return `<div style="margin-bottom:10px">${f.options||''}</div>`;
-      if(f.fieldtype === 'Check') {
-        const req = f.required ? '<span style="color:var(--danger)">*</span>' : '';
-        return `<div class="form-group">${buildInput(f, formData[f.fieldname])}</div>`;
-      }
-      if(['Table','Table MultiSelect'].includes(f.fieldtype)) {
-        return `<div class="form-group">
-          <label class="form-label ${f.required?'required':''}" style="font-weight:700">${esc(f.label)}</label>
+      let content = '';
+      if(f.fieldtype === 'Heading') {
+        content = `<h3 style="font-size:15px;font-weight:700;margin:12px 0 8px">${esc(f.label)}</h3>`;
+      } else if(f.fieldtype === 'HTML') {
+        content = `<div style="margin-bottom:10px">${f.options||''}</div>`;
+      } else if(f.fieldtype === 'Check') {
+        content = `<div class="form-group">${buildInput(f, formData[f.fieldname])}</div>`;
+      } else if(['Table','Table MultiSelect'].includes(f.fieldtype)) {
+        content = `<div class="form-group">
+          <label class="form-label ${f.required?'required-label':''}" style="font-weight:700">${esc(f.label)}<span class="req-asterisk" style="color:var(--danger);display:${f.required?'inline':'none'}"> *</span></label>
           ${buildChildTable(f)}
         </div>`;
+      } else {
+        const hint = f.description ? `<div class="form-hint">${esc(f.description)}</div>` : '';
+        content = `<div class="form-group">
+          <label class="form-label" style="font-weight:${f.bold?700:600}">${esc(f.label)}<span class="req-asterisk" style="color:var(--danger);display:${f.required?'inline':'none'}"> *</span></label>
+          ${buildInput(f, formData[f.fieldname])}
+          ${hint}
+        </div>`;
       }
-      const hint = f.description ? `<div class="form-hint">${esc(f.description)}</div>` : '';
-      const req = f.required ? '<span style="color:var(--danger)"> *</span>' : '';
-      return `<div class="form-group">
-        <label class="form-label" style="font-weight:${f.bold?700:600}">${esc(f.label)}${req}</label>
-        ${buildInput(f, formData[f.fieldname])}
-        ${hint}
+      return `<div class="field-wrapper" data-fieldname="${f.fieldname}">
+        ${content}
       </div>`;
     }
 
@@ -857,6 +973,7 @@
       </div>`;
 
       body.innerHTML = html;
+      applyConditionalLogic();
     }
 
     function toggleSection(hdr) {
@@ -867,6 +984,7 @@
     function setVal(fieldname, val) {
       formData[fieldname] = val;
       markDirty();
+      applyConditionalLogic();
     }
 
     function setChildVal(tableName, rowIdx, fieldname, val) {
@@ -874,6 +992,7 @@
       if(!formData[tableName][rowIdx]) formData[tableName][rowIdx] = {};
       formData[tableName][rowIdx][fieldname] = val;
       markDirty();
+      applyConditionalLogic();
     }
 
     function addChildRow(tableName) {

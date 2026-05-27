@@ -4,6 +4,24 @@
 {% block nav_dashboard %}active{% endblock %}
 
 {% block content %}
+<div class="tabs view-mode-tabs" style="margin-bottom: 20px;">
+    <button class="tab-btn active" id="page-view-mode-dash" onclick="setViewMode('dash')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle;">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+        </svg>
+        DashView
+    </button>
+    <button class="tab-btn" id="page-view-mode-drive" onclick="setViewMode('drive')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle;">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg>
+        Drive
+    </button>
+</div>
+
 <div class="page-header">
   <div>
     <div class="page-title">Dashboard</div>
@@ -176,10 +194,10 @@
       </div>
       <div class="form-group">
         <label class="form-label">Parent Stage</label>
-        <select class="form-control" id="new-stage-parent">
-          <option value="">— Root (no parent) —</option>
+        <select class="form-control" id="new-stage-parent" onchange="updateCreateModalLabels()">
+          <option value="" data-depth="-1">— Root (no parent) —</option>
           {% for stage in stages %}
-          <option value="{{ stage.stage_id }}">{{ stage.stage_path }}</option>
+          <option value="{{ stage.stage_id }}" data-depth="{{ stage.depth_level }}">{{ stage.stage_path }}</option>
           {% endfor %}
         </select>
       </div>
@@ -231,6 +249,13 @@
 
 {% block extra_js %}
 <script>
+// Redirect to starting stage if drive mode is active
+if (sessionStorage.getItem("drive-view") === "true") {
+    getStartingStageId().then(startStageId => {
+        window.location.href = `/stages/${startStageId}`;
+    });
+}
+
 function toggleChildren(el) {
   const parent = el.closest('div[style*="padding-left"]');
   const children = parent.querySelector('.tree-children');
@@ -247,7 +272,40 @@ function filterTable(q) {
   });
 }
 
-function openCreateStageModal() { openModal('create-stage-modal'); }
+function updateCreateModalLabels() {
+  const parentSelect = document.getElementById("new-stage-parent");
+  if (!parentSelect) return;
+  const selectedOpt = parentSelect.options[parentSelect.selectedIndex];
+  let targetDepth = 1;
+  if (selectedOpt && selectedOpt.value) {
+      const parentDepth = parseInt(selectedOpt.getAttribute("data-depth"));
+      targetDepth = parentDepth + 1;
+  }
+  
+  let term = "Stage";
+  if (targetDepth === 0) term = "Root";
+  else if (targetDepth === 1) term = "Project";
+  else if (targetDepth > 1) term = "Task";
+
+  const modalTitle = document.querySelector("#create-stage-modal .modal-title");
+  if (modalTitle) modalTitle.textContent = `Create New ${term}`;
+  
+  const nameLabel = document.querySelector("#create-stage-modal .form-label.required");
+  if (nameLabel) nameLabel.textContent = `${term} Name`;
+  
+  const nameInput = document.getElementById("new-stage-name");
+  if (nameInput) {
+      nameInput.placeholder = `e.g. ${term === "Project" ? "Recruitment" : (term === "Root" ? "System" : "Screening")}`;
+  }
+  
+  const submitBtn = document.querySelector("#create-stage-modal .btn-primary");
+  if (submitBtn) submitBtn.textContent = `Create ${term}`;
+}
+
+function openCreateStageModal() {
+  updateCreateModalLabels();
+  openModal('create-stage-modal');
+}
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -260,13 +318,26 @@ async function createStage() {
   const name = document.getElementById('new-stage-name').value.trim();
   const parent = document.getElementById('new-stage-parent').value;
   const visibility = document.getElementById('new-stage-visibility').value;
-  if (!name) { toast('Stage name is required', 'error'); return; }
+  
+  const parentSelect = document.getElementById("new-stage-parent");
+  const selectedOpt = parentSelect ? parentSelect.options[parentSelect.selectedIndex] : null;
+  let targetDepth = 1;
+  if (selectedOpt && selectedOpt.value) {
+      const parentDepth = parseInt(selectedOpt.getAttribute("data-depth"));
+      targetDepth = parentDepth + 1;
+  }
+  let term = "Stage";
+  if (targetDepth === 0) term = "Root";
+  else if (targetDepth === 1) term = "Project";
+  else if (targetDepth > 1) term = "Task";
+  
+  if (!name) { toast(`${term} name is required`, 'error'); return; }
   try {
     await apiFetch(`${API}/stages`, {
       method: 'POST',
       body: { stage_name: name, parent_stage_id: parent || null, visibility_scope: visibility }
     });
-    toast('Stage created', 'success');
+    toast(`${term} created`, 'success');
     closeModal('create-stage-modal');
     setTimeout(() => location.reload(), 600);
   } catch(e) { toast(e.message, 'error'); }

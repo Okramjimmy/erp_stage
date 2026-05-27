@@ -1,6 +1,24 @@
 {% extends "base.html" %} {% block title %}{{ stage.stage_name }} — ERP Stage
 Builder{% endblock %} {% block content %}
 
+<div class="tabs view-mode-tabs" style="margin-bottom: 20px;">
+    <button class="tab-btn active" id="page-view-mode-dash" onclick="setViewMode('dash')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle;">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+        </svg>
+        DashView
+    </button>
+    <button class="tab-btn" id="page-view-mode-drive" onclick="setViewMode('drive')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle;">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg>
+        Drive
+    </button>
+</div>
+
 <div class="breadcrumb">
     <a href="/">Home</a>
     {% for ancestor in breadcrumb %}
@@ -97,7 +115,7 @@ Builder{% endblock %} {% block content %}
                         font-size: 13px;
                     "
                 >
-                    <span style="color: var(--text-muted)">+</span> New Stage
+                    <span style="color: var(--text-muted)">+</span> New {% if stage.depth_level == 0 %}Project{% else %}Task{% endif %}
                 </a>
                 <a
                     href="#"
@@ -156,7 +174,7 @@ Builder{% endblock %} {% block content %}
         Form Types ({{ form_types | length }})
     </button>
     <button class="tab-btn" onclick="switchTab('children', this)">
-        Child Stages ({{ children | length }})
+        {% if stage.depth_level == 0 %}Projects{% else %}Tasks{% endif %} ({{ children | length }})
     </button>
     <button class="tab-btn" onclick="switchTab('permissions', this)">
         Permissions
@@ -318,16 +336,16 @@ Builder{% endblock %} {% block content %}
             class="btn btn-secondary btn-sm"
             onclick="openCreateChildModal()"
         >
-            + Add Child Stage
+            + Add {% if stage.depth_level == 0 %}Project{% else %}Task{% endif %}
         </button>
     </div>
     {% else %}
     <div class="empty-state">
         <div class="empty-icon">📂</div>
-        <h3>No child stages</h3>
-        <p>This stage has no children. Add a child stage to build hierarchy.</p>
+        <h3>No {% if stage.depth_level == 0 %}projects{% else %}tasks{% endif %}</h3>
+        <p>This {% if stage.depth_level == 0 %}root{% else %}project/task{% endif %} has no children. Add a {% if stage.depth_level == 0 %}project{% else %}task{% endif %} to build hierarchy.</p>
         <button class="btn btn-primary" onclick="openCreateChildModal()">
-            + Add Child Stage
+            + Add {% if stage.depth_level == 0 %}Project{% else %}Task{% endif %}
         </button>
     </div>
     {% endif %}
@@ -549,14 +567,48 @@ Builder{% endblock %} {% block content %}
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        if (localStorage.getItem("drive-view") === "true") {
-            document
-                .querySelectorAll(".stat-grid, .tabs, .tab-pane")
-                .forEach((el) => (el.style.display = "none"));
-            const driveView = document.getElementById("drive-view-container");
-            if (driveView) driveView.style.display = "block";
+    function updateViewModeElements() {
+        const isDriveView = sessionStorage.getItem("drive-view") === "true";
+        const driveView = document.getElementById("drive-view-container");
+        
+        // Update active state of page level tabs switcher
+        const pageDashTab = document.getElementById("page-view-mode-dash");
+        const pageDriveTab = document.getElementById("page-view-mode-drive");
+        if (pageDashTab && pageDriveTab) {
+            if (isDriveView) {
+                pageDriveTab.classList.add("active");
+                pageDashTab.classList.remove("active");
+            } else {
+                pageDashTab.classList.add("active");
+                pageDriveTab.classList.remove("active");
+            }
         }
+        
+        if (isDriveView) {
+            document.querySelectorAll(".stat-grid, .tabs:not(.view-mode-tabs), .tab-pane").forEach((el) => (el.style.display = "none"));
+            if (driveView) driveView.style.display = "block";
+        } else {
+            document.querySelectorAll(".stat-grid, .tabs:not(.view-mode-tabs)").forEach((el) => (el.style.display = ""));
+            if (driveView) driveView.style.display = "none";
+            // Also restore active tab pane display
+            const activeTabBtn = document.querySelector(".tabs:not(.view-mode-tabs) .tab-btn.active");
+            if (activeTabBtn) {
+                // Safely toggle tab pane
+                const match = activeTabBtn.getAttribute("onclick").match(/'([^']+)'/);
+                if (match) {
+                    const tabId = match[1];
+                    switchTab(tabId, activeTabBtn);
+                }
+            }
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        updateViewModeElements();
+    });
+
+    window.addEventListener("view-mode-changed", () => {
+        updateViewModeElements();
     });
 </script>
 
@@ -884,7 +936,7 @@ Builder{% endblock %} {% block content %}
 <div class="modal-overlay" id="create-child-modal">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">Add Child Stage</span>
+            <span class="modal-title">Create New {% if stage.depth_level == 0 %}Project{% else %}Task{% endif %}</span>
             <button
                 class="btn btn-ghost btn-icon"
                 onclick="closeModal('create-child-modal')"
@@ -894,12 +946,12 @@ Builder{% endblock %} {% block content %}
         </div>
         <div class="modal-body">
             <div class="form-group">
-                <label class="form-label required">Stage Name</label>
+                <label class="form-label required">{% if stage.depth_level == 0 %}Project{% else %}Task{% endif %} Name</label>
                 <input
                     type="text"
                     class="form-control"
                     id="child-stage-name"
-                    placeholder="e.g. Screening"
+                    placeholder="{% if stage.depth_level == 0 %}e.g. Recruitment{% else %}e.g. Screening{% endif %}"
                 />
             </div>
             <div class="form-group">
@@ -919,7 +971,7 @@ Builder{% endblock %} {% block content %}
                 Cancel
             </button>
             <button class="btn btn-primary" onclick="createChildStage()">
-                Create Stage
+                Create {% if stage.depth_level == 0 %}Project{% else %}Task{% endif %}
             </button>
         </div>
     </div>
@@ -928,7 +980,7 @@ Builder{% endblock %} {% block content %}
 <div class="modal-overlay" id="edit-stage-modal">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">Edit Stage</span>
+            <span class="modal-title">Edit {% if stage.depth_level == 0 %}Root{% elif stage.depth_level == 1 %}Project{% else %}Task{% endif %}</span>
             <button
                 class="btn btn-ghost btn-icon"
                 onclick="closeModal('edit-stage-modal')"
@@ -938,26 +990,38 @@ Builder{% endblock %} {% block content %}
         </div>
         <div class="modal-body">
             <div class="form-group">
-                <label class="form-label required">Stage Name</label>
+                <label class="form-label required">{% if stage.depth_level == 0 %}Root{% elif stage.depth_level == 1 %}Project{% else %}Task{% endif %} Name</label>
                 <input
                     type="text"
                     class="form-control"
                     id="edit-stage-name"
-                    value="{{ stage.stage_name }}"
+                    value=""
                 />
             </div>
             {% if stage.depth_level == 1 %}
             <div class="form-group">
                 <label class="form-label">WBS Prefix <span style="font-weight:400;font-size:0.85em;opacity:0.65">(3-char, leave empty to remove)</span></label>
                 <input
-                type="text"
-                class="form-control"
-                id="edit-stage-prefix"
-                maxlength="3"
-                placeholder="e.g. abc"
-                value="{{ stage.wbs_prefix or '' }}"
+                    type="text"
+                    class="form-control"
+                    id="edit-stage-prefix"
+                    maxlength="3"
+                    placeholder="e.g. abc"
+                    value="{{ stage.wbs_prefix or '' }}"
                 />
             </div>
+            <div class="form-group">
+                <label class="form-label required">WBS Number</label>
+                <input
+                    type="number"
+                    class="form-control"
+                    id="edit-stage-number"
+                    min="1"
+                    placeholder="e.g. 1"
+                    value=""
+                />
+            </div>
+            {% endif %}
             <div class="form-group">
                 <label class="form-label">Visibility</label>
                 <select class="form-control" id="edit-stage-visibility">
@@ -984,7 +1048,6 @@ Builder{% endblock %} {% block content %}
                     </option>
                 </select>
             </div>
-            {% endif %}
         </div>
         <div class="modal-footer">
             <button
@@ -1160,6 +1223,9 @@ Builder{% endblock %} {% block content %}
 {% endblock %} {% block extra_js %}
 <script>
     const STAGE_ID = "{{ stage.stage_id }}";
+    const STAGE_NAME = "{{ stage.stage_name }}";
+    const STAGE_PREFIX = "{{ stage.wbs_prefix or '' }}";
+    const STAGE_DEPTH = {{ stage.depth_level }};
 
     // Dropdown Toggle
     function toggleNewDropdown() {
@@ -1208,6 +1274,22 @@ Builder{% endblock %} {% block content %}
         openModal("create-child-modal");
     }
     function openEditStageModal() {
+        // Parse the stage full name
+        const prefix = STAGE_PREFIX;
+        const regex = new RegExp(`^(?:${prefix || "[a-zA-Z0-9]{3}"})?(\\d+(?:\\.\\d+)*)\\s+(.*)$`);
+        const match = STAGE_NAME.match(regex);
+        let baseName = STAGE_NAME;
+        let wbsNumber = 1;
+        if (match) {
+            wbsNumber = parseInt(match[1].split('.')[0]);
+            baseName = match[2];
+        }
+        
+        document.getElementById("edit-stage-name").value = baseName;
+        const numberEl = document.getElementById("edit-stage-number");
+        if (numberEl) {
+            numberEl.value = wbsNumber;
+        }
         openModal("edit-stage-modal");
     }
     function openMoveModal() {
@@ -1222,8 +1304,10 @@ Builder{% endblock %} {% block content %}
         const visibility = document.getElementById(
             "child-stage-visibility",
         ).value;
+        
+        let term = STAGE_DEPTH === 0 ? "Project" : "Task";
         if (!name) {
-            toast("Stage name is required", "error");
+            toast(`${term} name is required`, "error");
             return;
         }
         try {
@@ -1235,7 +1319,7 @@ Builder{% endblock %} {% block content %}
                     visibility_scope: visibility,
                 },
             });
-            toast("Child stage created", "success");
+            toast(`${term} created`, "success");
             closeModal("create-child-modal");
             setTimeout(() => location.reload(), 600);
         } catch (e) {
@@ -1249,17 +1333,35 @@ Builder{% endblock %} {% block content %}
             "edit-stage-visibility",
         ).value;
         const prefixEl = document.getElementById("edit-stage-prefix");
+        const numberEl = document.getElementById("edit-stage-number");
+        
+        let term = "Stage";
+        if (STAGE_DEPTH === 0) term = "Root";
+        else if (STAGE_DEPTH === 1) term = "Project";
+        else if (STAGE_DEPTH > 1) term = "Task";
+
+        if (!name) {
+            toast(`${term} name is required`, "error");
+            return;
+        }
         try {
             const body = { stage_name: name, visibility_scope: visibility };
-            // Include wbs_prefix only for depth-1 stages (field is rendered conditionally)
             if (prefixEl !== null) {
                 body.wbs_prefix = prefixEl.value.trim();
+            }
+            if (numberEl !== null) {
+                const val = parseInt(numberEl.value);
+                if (isNaN(val) || val < 1) {
+                    toast("WBS number must be a valid positive integer", "error");
+                    return;
+                }
+                body.wbs_number = val;
             }
             await apiFetch(`${API}/stages/${STAGE_ID}`, {
                 method: "PUT",
                 body: body,
             });
-            toast("Stage updated", "success");
+            toast(`${term} updated`, "success");
             closeModal("edit-stage-modal");
             setTimeout(() => location.reload(), 600);
         } catch (e) {

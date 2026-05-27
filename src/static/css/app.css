@@ -507,8 +507,10 @@ textarea.form-control { resize: vertical; min-height: 72px; }
 /* ── Sidebar Container Default Width ────────────────────── */
 .sidebar {
   width: 240px; /* Replace with your actual default width */
-  transition: width 0.3s ease;
   flex-shrink: 0; /* Prevents the sidebar from squishing */
+}
+.sidebar.transitioning {
+  transition: width 0.2s ease;
 }
 
 /* ── Sidebar Collapsed State ──────────────────────────────── */
