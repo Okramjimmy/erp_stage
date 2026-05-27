@@ -86,11 +86,17 @@ class StageService:
             stage_files = {}
             for file_path in all_files:
                 if "/" in file_path:
-                    parts = file_path.split("/", 1)
-                    sid = parts[0]
-                    fname = parts[1]
-                    if fname:
-                        stage_files.setdefault(sid, []).append(fname)
+                    parts = file_path.split("/", 2)
+                    if len(parts) > 2:
+                        sid = parts[0]
+                        fname = parts[2]
+                        if fname:
+                            stage_files.setdefault(sid, []).append(fname)
+                    elif len(parts) == 2:
+                        sid = parts[0]
+                        fname = parts[1]
+                        if fname:
+                            stage_files.setdefault(sid, []).append(fname)
             for stage in stages:
                 stage.filenames = stage_files.get(stage.stage_id, [])
         except Exception as e:
@@ -355,12 +361,15 @@ class StageService:
 
         from src.app.storage import storage_service
         try:
-            all_files = storage_service.list_files(prefix=f"{stage_id}/")
+            all_files = storage_service.list_files(prefix=f"{stage_id}/", recursive=True)
             filenames = []
             for file_path in all_files:
                 if "/" in file_path:
-                    parts = file_path.split("/", 1)
-                    fname = parts[1]
+                    parts = file_path.split("/", 2)
+                    if len(parts) > 2:
+                        fname = parts[2]
+                    else:
+                        fname = parts[1]
                     if fname:
                         filenames.append(fname)
                 else:
@@ -553,11 +562,17 @@ class StageService:
             all_files = storage_service.list_files(prefix="", recursive=True)
             for file_path in all_files:
                 if "/" in file_path:
-                    parts = file_path.split("/", 1)
-                    sid = parts[0]
-                    fname = parts[1]
-                    if fname:
-                        stage_files.setdefault(sid, []).append(fname)
+                    parts = file_path.split("/", 2)
+                    if len(parts) > 2:
+                        sid = parts[0]
+                        fname = parts[2]
+                        if fname:
+                            stage_files.setdefault(sid, []).append(fname)
+                    elif len(parts) == 2:
+                        sid = parts[0]
+                        fname = parts[1]
+                        if fname:
+                            stage_files.setdefault(sid, []).append(fname)
         except Exception as e:
             logger.error(f"Error fetching files for stage tree: {e}")
 

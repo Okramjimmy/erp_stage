@@ -194,6 +194,7 @@ async def upload_stage_file(
 async def download_stage_file(
     stage_id: str = Query(...),
     filename: str = Query(...),
+    request: Request = None,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -222,6 +223,13 @@ async def download_stage_file(
 
     if not url:
         raise HTTPException(status_code=500, detail="Failed to generate presigned URL")
+
+    if request and request.url.hostname:
+        from urllib.parse import urlparse, urlunparse
+        parsed_url = urlparse(url)
+        port = parsed_url.port
+        netloc = f"{request.url.hostname}:{port}" if port else request.url.hostname
+        url = urlunparse(parsed_url._replace(netloc=netloc))
 
     return {
         "url": url

@@ -15,7 +15,7 @@
         <div class="page-subtitle">Manage all form types across the application</div>
     </div>
     <div class="page-actions" style="display: flex; gap: 8px;">
-        <button class="btn btn-secondary" onclick="triggerParseDocument()">
+        <button id="parse-doc-btn" class="btn btn-secondary" onclick="triggerParseDocument()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; vertical-align: middle;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Parse Document
         </button>
@@ -85,6 +85,317 @@
   </div>
 </div>
 
+<!-- Build Options Modal -->
+<div class="modal-overlay" id="build-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Create Form</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('build-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="color: var(--text-muted); margin-bottom: 16px">
+                Choose how you want to create your form:
+            </p>
+            <div class="row" style="display: flex; gap: 16px">
+                <div
+                    class="col-6"
+                    style="
+                        flex: 1;
+                        cursor: pointer;
+                        transition: var(--transition);
+                    "
+                    onclick="openCreateFormModal('new')"
+                >
+                    <div
+                        class="card"
+                        style="
+                            border: 2px solid var(--border);
+                            border-radius: var(--radius-lg);
+                            padding: 20px;
+                            text-align: center;
+                            transition: var(--transition);
+                        "
+                        onmouseover="
+                            this.style.borderColor = 'var(--primary)';
+                            this.style.transform = 'translateY(-4px)';
+                            this.style.boxShadow = 'var(--shadow-md)';
+                        "
+                        onmouseout="
+                            this.style.borderColor = 'var(--border)';
+                            this.style.transform = 'translateY(0)';
+                            this.style.boxShadow = 'none';
+                        "
+                    >
+                        <div style="font-size: 40px; margin-bottom: 12px">
+                            📝
+                        </div>
+                        <h4 style="margin-bottom: 8px">New Formtype</h4>
+                        <p
+                            style="
+                                font-size: 12px;
+                                color: var(--text-muted);
+                                margin-bottom: 16px;
+                            "
+                        >
+                            Start with a blank canvas and build your form from
+                            scratch
+                        </p>
+                        <button
+                            class="btn btn-primary btn-sm"
+                            style="width: 100%"
+                        >
+                            Get Started
+                        </button>
+                    </div>
+                </div>
+                <div
+                    class="col-6"
+                    style="
+                        flex: 1;
+                        cursor: pointer;
+                        transition: var(--transition);
+                    "
+                    onclick="openTemplateModal()"
+                >
+                    <div
+                        class="card"
+                        style="
+                            border: 2px solid var(--border);
+                            border-radius: var(--radius-lg);
+                            padding: 20px;
+                            text-align: center;
+                            transition: var(--transition);
+                        "
+                        onmouseover="
+                            this.style.borderColor = 'var(--primary)';
+                            this.style.transform = 'translateY(-4px)';
+                            this.style.boxShadow = 'var(--shadow-md)';
+                        "
+                        onmouseout="
+                            this.style.borderColor = 'var(--border)';
+                            this.style.transform = 'translateY(0)';
+                            this.style.boxShadow = 'none';
+                        "
+                    >
+                        <div style="font-size: 40px; margin-bottom: 12px">
+                            📋
+                        </div>
+                        <h4 style="margin-bottom: 8px">
+                            Start with a Template
+                        </h4>
+                        <p
+                            style="
+                                font-size: 12px;
+                                color: var(--text-muted);
+                                margin-bottom: 16px;
+                            "
+                        >
+                            Choose from existing form templates to speed up your
+                            development
+                        </p>
+                        <button
+                            class="btn btn-primary btn-sm"
+                            style="width: 100%"
+                        >
+                            Browse Templates
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Form Modal -->
+<div class="modal-overlay" id="create-form-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title" id="create-form-modal-title"
+                >Create Form Type</span
+            >
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('create-form-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div
+            id="template-indicator"
+            style="
+                display: none;
+                background: var(--primary-light);
+                padding: 12px 16px;
+                border-bottom: 1px solid var(--border);
+            "
+        >
+            <div
+                style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: var(--primary);
+                "
+            >
+                <span>📋</span>
+                <strong>Selected Template:</strong>
+                <span id="selected-template-name">-</span>
+                <button
+                    class="btn btn-sm btn-secondary"
+                    onclick="clearTemplateSelection()"
+                    style="margin-left: auto; font-size: 11px; padding: 4px 8px"
+                >
+                    ✕ Clear
+                </button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label required">Form Name</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="new-form-name"
+                    placeholder="e.g. Application Form"
+                />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Version</label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="new-form-version"
+                    value="1.0.0"
+                    placeholder="1.0.0"
+                />
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('create-form-modal')"
+            >
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="createForm()">
+                Create & Open Builder
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Template Selection Modal -->
+<div class="modal-overlay" id="template-modal">
+    <div class="modal" style="max-width: 800px">
+        <div class="modal-header">
+            <span class="modal-title">Choose a Template</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('template-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Search Templates</label>
+                <div style="display: flex; gap: 8px">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="template-search"
+                        placeholder="Search by form name..."
+                        oninput="filterTemplates()"
+                    />
+                    <button
+                        class="btn btn-secondary"
+                        onclick="filterTemplates()"
+                    >
+                        🔍
+                    </button>
+                </div>
+            </div>
+            <div
+                id="template-list"
+                style="
+                    max-height: 400px;
+                    overflow-y: auto;
+                    border: 1px solid var(--border);
+                    border-radius: var(--radius);
+                "
+            >
+                <p
+                    style="
+                        padding: 20px;
+                        text-align: center;
+                        color: var(--text-muted);
+                    "
+                >
+                    Loading templates...
+                </p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('template-modal')"
+            >
+                Cancel
+            </button>
+            <button
+                class="btn btn-primary"
+                id="duplicate-template-btn"
+                onclick="duplicateSelectedTemplate()"
+                disabled
+            >
+                Duplicate & Modify
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Template Preview Modal -->
+<div class="modal-overlay" id="template-preview-modal">
+    <div class="modal" style="max-width: 900px">
+        <div class="modal-header">
+            <span class="modal-title" id="preview-title">Preview Template</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('template-preview-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div
+                id="preview-content"
+                style="max-height: 500px; overflow-y: auto"
+            >
+                Loading preview...
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('template-preview-modal')"
+            >
+                Close
+            </button>
+            <button
+                class="btn btn-primary"
+                id="use-preview-template-btn"
+            >
+                Use This Template
+            </button>
+        </div>
+    </div>
+</div>
+
 <style>
 @keyframes spin {
   0% { transform: rotate(0deg); }
@@ -119,25 +430,30 @@
         fileInput.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
+
+            const btn = document.getElementById('parse-doc-btn');
+            const origHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<svg class="animate-spin" width="14" height="14" viewBox="0 0 50 50" style="animation: spin 1s linear infinite; margin-right: 6px; vertical-align: middle; display: inline-block;"><circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle><path fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" d="M25,5 A20,20 0 0,1 45,25"></path></svg>Parsing...`;
+
             const modal = document.getElementById('loading-modal');
             modal.style.display = 'flex';
             startParsingTimer();
-            
+
             const formData = new FormData();
             formData.append('file', file);
-            
+
             try {
                 const resp = await fetch('/api/v1/parse', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 if (!resp.ok) {
                     const errData = await resp.json().catch(() => ({detail: resp.statusText}));
                     throw new Error(errData.detail || resp.statusText);
                 }
-                
+
                 const data = await resp.json();
                 if (data.form_metadata) {
                     const storeData = {
@@ -145,7 +461,7 @@
                         document_name: data.document_name || file.name
                     };
                     sessionStorage.setItem('parsed_form_metadata', JSON.stringify(storeData));
-                    
+
                     window.location.href = '/form-builder/new/standalone?return_to=/forms';
                 } else {
                     throw new Error('No form metadata returned from parse endpoint');
@@ -155,6 +471,8 @@
             } finally {
                 modal.style.display = 'none';
                 stopParsingTimer();
+                btn.disabled = false;
+                btn.innerHTML = origHTML;
             }
         };
         document.body.appendChild(fileInput);
@@ -162,8 +480,404 @@
         document.body.removeChild(fileInput);
     }
 
+    // Modal control logic
+    function openModal(id) {
+        document.getElementById(id).classList.add("open");
+    }
+    function closeModal(id) {
+        document.getElementById(id).classList.remove("open");
+    }
+    document.querySelectorAll(".modal-overlay").forEach((m) => {
+        m.addEventListener("click", (e) => {
+            if (e.target === m) m.classList.remove("open");
+        });
+    });
+
+    let selectedTemplateFormTypeId = null;
+    let selectedTemplateData = null;
+
     function createNewForm() {
-        window.location.href = '/form-builder/new/standalone?return_to=/forms';
+        openBuildModal();
+    }
+
+    function openBuildModal() {
+        openModal("build-modal");
+    }
+
+    function openTemplateModal() {
+        closeModal("build-modal");
+        openModal("template-modal");
+        loadAllFormTypes();
+        selectedTemplateFormTypeId = null;
+        selectedTemplateData = null;
+        document.getElementById("duplicate-template-btn").disabled = true;
+    }
+
+    async function loadAllFormTypes() {
+        try {
+            const resp = await fetch(`${API}/form-types/with-schema?limit=100`);
+            if (!resp.ok) throw new Error(resp.statusText);
+            const data = await resp.json();
+            const templateList = document.getElementById("template-list");
+
+            if (!data || data.length === 0) {
+                templateList.innerHTML =
+                    '<p style="padding: 20px; text-align: center; color: var(--text-muted);">No templates found. Create a new Formtype first.</p>';
+                return;
+            }
+
+            window.allTemplates = data;
+            renderTemplateList(data);
+        } catch (e) {
+            toast(e.message, "error");
+            document.getElementById("template-list").innerHTML =
+                '<p style="padding: 20px; text-align: center; color: var(--danger);">Error loading templates: ' +
+                e.message +
+                "</p>";
+        }
+    }
+
+    function renderTemplateList(formTypes) {
+        const templateList = document.getElementById("template-list");
+
+        if (formTypes.length === 0) {
+            templateList.innerHTML =
+                '<p style="padding: 20px; text-align: center; color: var(--text-muted);">No matching templates found.</p>';
+            return;
+        }
+
+        const html = formTypes
+            .map(
+                (ft) => `
+            <div class="template-item" data-form-type-id="${ft.form_type_id}"
+                 style="
+                    padding: 12px 16px;
+                    border-bottom: 1px solid var(--border);
+                    cursor: pointer;
+                    transition: var(--transition);
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                 "
+                 onclick="selectTemplate('${ft.form_type_id}')">
+                <div style="
+                    flex-shrink: 0;
+                    width: 40px;
+                    height: 40px;
+                    background: var(--primary-light);
+                    border-radius: var(--radius);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 18px;
+                ">
+                    📄
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="
+                        font-weight: 600;
+                        font-size: 14px;
+                        color: var(--text);
+                        margin-bottom: 2px;
+                    ">${ft.form_name}</div>
+                    <div style="
+                        font-size: 11px;
+                        color: var(--text-muted);
+                        font-family: monospace;
+                    ">${ft.form_type_id}</div>
+                </div>
+                <div style="
+                    display: flex;
+                    gap: 8px;
+                ">
+                    <button
+                        class="btn btn-secondary btn-sm"
+                        onclick="event.stopPropagation(); previewTemplate('${ft.form_type_id}')"
+                        style="font-size: 11px; padding: 4px 10px;"
+                    >
+                        👁 Preview
+                    </button>
+                    <button
+                        class="btn btn-primary btn-sm select-template-btn"
+                        data-id="${ft.form_type_id}"
+                        onclick="event.stopPropagation(); selectTemplate('${ft.form_type_id}')"
+                        style="font-size: 11px; padding: 4px 10px;"
+                    >
+                        ✓ Select
+                    </button>
+                </div>
+            </div>
+        `,
+            )
+            .join("");
+
+        templateList.innerHTML = html;
+    }
+
+    function filterTemplates() {
+        const searchTerm = document
+            .getElementById("template-search")
+            .value.toLowerCase()
+            .trim();
+        if (!searchTerm) {
+            renderTemplateList(window.allTemplates);
+            return;
+        }
+
+        const filtered = window.allTemplates.filter(
+            (ft) =>
+                ft.form_name.toLowerCase().includes(searchTerm) ||
+                ft.form_type_id.toLowerCase().includes(searchTerm),
+        );
+        renderTemplateList(filtered);
+    }
+
+    function selectTemplate(formTypeId) {
+        document.querySelectorAll(".template-item").forEach((item) => {
+            item.style.background = "";
+        });
+
+        const selectedItem = document.querySelector(
+            `.template-item[data-form-type-id="${formTypeId}"]`,
+        );
+        if (selectedItem) {
+            selectedItem.style.background = "var(--primary-light)";
+            selectedItem.style.borderColor = "var(--primary)";
+        }
+
+        selectedTemplateFormTypeId = formTypeId;
+        selectedTemplateData = window.allTemplates.find(
+            (ft) => ft.form_type_id === formTypeId,
+        );
+
+        const dupBtn = document.getElementById("duplicate-template-btn");
+        if (dupBtn) dupBtn.disabled = false;
+    }
+
+    async function duplicateSelectedTemplate() {
+        if (!selectedTemplateFormTypeId) {
+            toast("Please select a template first", "error");
+            return;
+        }
+        closeModal("template-modal");
+        openCreateFormModal("template");
+    }
+
+    async function previewTemplate(formTypeId) {
+        try {
+            const ft = window.allTemplates.find(
+                (f) => f.form_type_id === formTypeId,
+            );
+
+            if (!ft) {
+                toast("Template not found", "error");
+                return;
+            }
+
+            const schema = ft.schema_data || ft.schema_reference || {};
+
+            document.getElementById("preview-title").textContent =
+                `Preview: ${ft.form_name}`;
+            const previewContent = document.getElementById("preview-content");
+
+            if (
+                !schema.fields ||
+                (schema.fields && schema.fields.length === 0)
+            ) {
+                previewContent.innerHTML =
+                    '<p style="padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 14px;">This template has no fields defined yet.</p>';
+            } else {
+                let html = '<form style="padding: 24px; background: #fff; text-align: left;">';
+                html += `
+                    <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--border);">
+                        <h2 style="margin: 0 0 8px 0; font-size: 20px;">${esc(ft.form_name)}</h2>
+                        <div style="color: var(--text-muted); font-size: 12px;">
+                            <strong>Version:</strong> <code>${esc(ft.version)}</code>
+                        </div>
+                    </div>
+                `;
+
+                schema.fields.forEach((field) => {
+                    const FieldType = field.fieldtype || field.type || "Data";
+                    const label = field.label || field.name || "Unnamed Field";
+                    const required = field.required ? " *" : "";
+                    const readonly = field.read_only ? "readonly" : "";
+                    const placeholder = field.placeholder || "";
+                    const description = field.description || "";
+                    const defaultValue = field.default || "";
+
+                    const hint = description
+                        ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${esc(description)}</div>`
+                        : "";
+
+                    if (
+                        [
+                            "Section Break",
+                            "Column Break",
+                            "Tab Break",
+                        ].includes(FieldType)
+                    ) {
+                        if (FieldType === "Section Break") {
+                            html += `
+                                <div style="margin: 32px 0 20px 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 15px; color: var(--text);">
+                                    ${esc(label)}
+                                </div>
+                            `;
+                        }
+                        return;
+                    }
+
+                    const labelText = `<label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-dark);">${esc(label)}${required}</label>`;
+                    let inputHtml = "";
+
+                    switch (FieldType) {
+                        case "Check":
+                            inputHtml = `<div style="margin-bottom: 12px;"><label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" disabled> <span>${esc(label)}</span></label></div>`;
+                            break;
+                        case "Select":
+                        case "Autocomplete":
+                            inputHtml = `<select class="form-control" disabled><option>— Select —</option></select>`;
+                            break;
+                        case "Small Text":
+                            inputHtml = `<textarea class="form-control" rows="2" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                            break;
+                        case "Long Text":
+                        case "Text Editor":
+                        case "Code":
+                        case "JSON":
+                            inputHtml = `<textarea class="form-control" rows="4" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                            break;
+                        case "Signature":
+                            inputHtml = `<div style="height: 80px; border: 2px dashed var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; background: var(--bg);">✒ Click to sign</div>`;
+                            break;
+                        case "Duration":
+                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="HH:MM:SS" value="${esc(defaultValue)}">`;
+                            break;
+                        case "Geolocation":
+                            inputHtml = `<div style="height: 44px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; padding: 0 16px; color: var(--text-muted); font-size: 13px; background: var(--bg);">📍 Click to pick location</div>`;
+                            break;
+                        default:
+                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+                    }
+
+                    html += `<div style="margin-bottom: 20px;">${labelText}${inputHtml}${hint}</div>`;
+                });
+
+                addPreviewActions(html, formTypeId);
+            }
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    function addPreviewActions(html, formTypeId) {
+        const previewContent = document.getElementById("preview-content");
+        html += `
+            <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn btn-secondary" onclick="closeModal('template-preview-modal')">Close Preview</button>
+            </div>
+        </form>
+        `;
+        previewContent.innerHTML = html;
+
+        const useBtn = document.getElementById("use-preview-template-btn");
+        useBtn.onclick = function () {
+            closeModal("template-preview-modal");
+            selectTemplate(formTypeId);
+            openCreateFormModal("template");
+        };
+
+        openModal("template-preview-modal");
+    }
+
+    function openCreateFormModal(mode = "new") {
+        if (mode === "new") {
+            selectedTemplateFormTypeId = null;
+            selectedTemplateData = null;
+        }
+
+        const indicator = document.getElementById("template-indicator");
+        const templateName = document.getElementById("selected-template-name");
+        const modalTitle = document.getElementById("create-form-modal-title");
+
+        if (selectedTemplateData) {
+            indicator.style.display = "block";
+            templateName.textContent = selectedTemplateData.form_name;
+            modalTitle.textContent = "Create Form from Template";
+        } else {
+            indicator.style.display = "none";
+            templateName.textContent = "-";
+            modalTitle.textContent = "Create Form Type";
+        }
+
+        closeModal("build-modal");
+        openModal("create-form-modal");
+    }
+
+    function clearTemplateSelection() {
+        selectedTemplateFormTypeId = null;
+        selectedTemplateData = null;
+        document.getElementById("template-indicator").style.display = "none";
+        document.getElementById("selected-template-name").textContent = "-";
+        document.getElementById("create-form-modal-title").textContent =
+            "Create Form Type";
+    }
+
+    async function createForm() {
+        const name = document.getElementById("new-form-name").value.trim();
+        const version =
+            document.getElementById("new-form-version").value.trim() || "1.0.0";
+
+        if (!name) {
+            toast("Form name is required", "error");
+            return;
+        }
+
+        try {
+            let schema = { fields: [], settings: {} };
+
+            if (selectedTemplateData) {
+                const templateSchema =
+                    selectedTemplateData.schema_reference;
+
+                if (templateSchema && typeof templateSchema === "object") {
+                    schema = JSON.parse(JSON.stringify(templateSchema));
+                } else {
+                    toast("Template has no schema to copy", "warning");
+                }
+            }
+
+            const requestBody = {
+                form_name: name,
+                version,
+                schema_reference: schema,
+            };
+
+            const resp = await fetch(`${API}/form-types`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({detail: resp.statusText}));
+                throw new Error(errData.detail || resp.statusText);
+            }
+
+            const ft = await resp.json();
+
+            toast("Form type created successfully", "success");
+            closeModal("create-form-modal");
+
+            setTimeout(() => {
+                window.location = `/form-builder/${ft.form_type_id}?return_to=/forms`;
+            }, 500);
+        } catch (e) {
+            console.error("Error creating form:", e);
+            toast(e.message, "error");
+        }
     }
 
     async function deleteFormType(formTypeId, formName) {
@@ -171,14 +885,28 @@
             return;
         }
         try {
-            await apiFetch(`/api/v1/form-types/${formTypeId}`, {
+            const resp = await fetch(`/api/v1/form-types/${formTypeId}`, {
                 method: 'DELETE'
             });
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({detail: resp.statusText}));
+                throw new Error(errData.detail || resp.statusText);
+            }
             toast('Form type deleted successfully', 'success');
             setTimeout(() => window.location.reload(), 1000);
         } catch (error) {
             toast('Error: ' + error.message, 'error');
         }
+    }
+
+    function esc(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 </script>
 {% endblock %}

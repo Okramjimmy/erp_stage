@@ -321,9 +321,16 @@ async function reloadFTDropdown(fid){
 let canvas = [];
 let selectedFieldId = null;
 let nextId = 1;
+let nextSecId = 1;
+let nextColId = 1;
+let nextTabId = 1;
 let dirty  = false;
 
 function mkId(){ return nextId++; }
+function mkSecId(){ return 'sec_' + (nextSecId++); }
+function mkColId(){ return 'col_' + (nextColId++); }
+function mkTabId(){ return 'tab_' + (nextTabId++); }
+
 function mkField(type){
   const id=mkId();
   return {
@@ -337,10 +344,10 @@ function mkField(type){
   };
 }
 function mkSection(label=''){
-  return {type:'section', _sid:mkId(), label, collapsible:false, columns:[{_cid:mkId(), fields:[]}]};
+  return {type:'section', _sid:mkSecId(), label, collapsible:false, columns:[{_cid:mkColId(), fields:[]}]};
 }
 function mkTab(label='New Tab'){
-  return {type:'tab', _tid:mkId(), label};
+  return {type:'tab', _tid:mkTabId(), label};
 }
 
 function importFields(flat){
@@ -352,12 +359,12 @@ function importFields(flat){
       curSection=null; curColIdx=0; return;
     }
     if(f.fieldtype==='Section Break'){
-      curSection={type:'section',_sid:mkId(),label:f.label||'',collapsible:f.collapsible||false,columns:[{_cid:mkId(),fields:[]}]};
+      curSection={type:'section',_sid:mkSecId(),label:f.label||'',collapsible:f.collapsible||false,columns:[{_cid:mkColId(),fields:[]}]};
       canvas.push(curSection); curColIdx=0; return;
     }
     if(f.fieldtype==='Column Break'){
       if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
-      curSection.columns.push({_cid:mkId(),fields:[]});
+      curSection.columns.push({_cid:mkColId(),fields:[]});
       curColIdx++; return;
     }
     if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
@@ -408,7 +415,7 @@ function removeSection(sid){
 function addColumn(sid){
   const sec=canvas.find(b=>b._sid===sid);
   if(!sec) return;
-  sec.columns.push({_cid:mkId(),fields:[]});
+  sec.columns.push({_cid:mkColId(),fields:[]});
   renderCanvas(); markDirty();
 }
 
@@ -1059,11 +1066,11 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 function parseCondExpr(expr) {
   if (!expr) return { fieldname: '', value: '' };
-  let match = expr.match(/^\s*eval\s*:\s*doc\.([a-zA-Z0-9_]+)\s*==\s*['"]([^'"]*)['"]\s*$/);
+  let match = expr.match(/^\s*(?:eval\s*:\s*)?doc\.([a-zA-Z0-9_]+)\s*==={0,1}\s*['"]([^'"]*)['"]\s*$/);
   if (match) {
     return { fieldname: match[1], value: match[2] };
   }
-  match = expr.match(/^\s*eval\s*:\s*doc\.([a-zA-Z0-9_]+)\s*==\s*([^'"]+)\s*$/);
+  match = expr.match(/^\s*(?:eval\s*:\s*)?doc\.([a-zA-Z0-9_]+)\s*==={0,1}\s*([^'"]+)\s*$/);
   if (match) {
     return { fieldname: match[1], value: match[2].trim() };
   }
