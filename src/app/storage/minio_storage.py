@@ -218,12 +218,13 @@ class MinIOStorageService:
             print(f"Error generating presigned URL: {e}")
             return None
 
-    def list_files(self, prefix: str = "") -> list:
+    def list_files(self, prefix: str = "", recursive: bool = False) -> list:
         """
         List files in bucket with optional prefix filter
 
         Args:
             prefix: Filter objects by prefix
+            recursive: List objects recursively
 
         Returns:
             List of object names
@@ -231,7 +232,8 @@ class MinIOStorageService:
         try:
             objects = self.client.list_objects(
                 bucket_name=self.bucket_name,
-                prefix=prefix
+                prefix=prefix,
+                recursive=recursive
             )
             return [obj.object_name for obj in objects]
         except S3Error as e:

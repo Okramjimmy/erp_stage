@@ -78,6 +78,27 @@ class StageService:
         else:
             return (1, [], stage.created_at or datetime.min, stage.stage_id)
 
+    async def _populate_filenames(self, stages: List[StageResponse]) -> List[StageResponse]:
+        """Fetch files from storage recursively and populate the filenames field for each stage response."""
+        from src.app.storage import storage_service
+        try:
+            all_files = storage_service.list_files(prefix="", recursive=True)
+            stage_files = {}
+            for file_path in all_files:
+                if "/" in file_path:
+                    parts = file_path.split("/", 1)
+                    sid = parts[0]
+                    fname = parts[1]
+                    if fname:
+                        stage_files.setdefault(sid, []).append(fname)
+            for stage in stages:
+                stage.filenames = stage_files.get(stage.stage_id, [])
+        except Exception as e:
+            logger.error(f"Error populating filenames: {e}")
+            for stage in stages:
+                stage.filenames = []
+        return stages
+
     async def seed_system_stage(self) -> None:
         """Seed the unique root 'System' stage if it doesn't exist."""
         system_stage = await self.db.get(Stage, "stage_system")
@@ -332,7 +353,25 @@ class StageService:
         if not stage:
             return None
 
-        return StageResponse.model_validate(stage)
+        from src.app.storage import storage_service
+        try:
+            all_files = storage_service.list_files(prefix=f"{stage_id}/")
+            filenames = []
+            for file_path in all_files:
+                if "/" in file_path:
+                    parts = file_path.split("/", 1)
+                    fname = parts[1]
+                    if fname:
+                        filenames.append(fname)
+                else:
+                    filenames.append(file_path)
+        except Exception as e:
+            logger.error(f"Error fetching files for stage {stage_id}: {e}")
+            filenames = []
+
+        response = StageResponse.model_validate(stage)
+        response.filenames = filenames
+        return response
 
     async def update_stage(
         self, stage_id: str, stage_data: StageUpdate
@@ -425,7 +464,8 @@ class StageService:
             .limit(limit)
         )
         stages = result.scalars().all()
-        return [StageResponse.model_validate(s) for s in stages]
+        responses = [StageResponse.model_validate(s) for s in stages]
+        return await self._populate_filenames(responses)
 
     async def search_stages(
         self, query: str, limit: int = 50
@@ -438,7 +478,8 @@ class StageService:
             .limit(limit)
         )
         stages = result.scalars().all()
-        return [StageResponse.model_validate(s) for s in stages]
+        responses = [StageResponse.model_validate(s) for s in stages]
+        return await self._populate_filenames(responses)
 
     async def get_stage_tree(
         self, 
@@ -505,6 +546,21 @@ class StageService:
             stages_result = await self.db.execute(query)
             stages = stages_result.scalars().all()
 
+        # Fetch all files from storage recursively
+        from src.app.storage import storage_service
+        stage_files = {}
+        try:
+            all_files = storage_service.list_files(prefix="", recursive=True)
+            for file_path in all_files:
+                if "/" in file_path:
+                    parts = file_path.split("/", 1)
+                    sid = parts[0]
+                    fname = parts[1]
+                    if fname:
+                        stage_files.setdefault(sid, []).append(fname)
+        except Exception as e:
+            logger.error(f"Error fetching files for stage tree: {e}")
+
         # Build tree structure
         stage_map: Dict[str, StageTreeNode] = {}
         root_nodes: List[StageTreeNode] = []
@@ -548,6 +604,7 @@ class StageService:
                 created_at=stage.created_at,
                 updated_at=stage.updated_at,
                 metadata_reference=stage.metadata_reference,
+                filenames=stage_files.get(stage.stage_id, []),
                 children=[],
                 form_types=[
                     FormTypeRef(
@@ -591,7 +648,8 @@ class StageService:
         )
         stages = result.scalars().all()
 
-        return [StageResponse.model_validate(stage) for stage in stages]
+        responses = [StageResponse.model_validate(stage) for stage in stages]
+        return await self._populate_filenames(responses)
 
     async def move_stage(
         self, stage_id: str, target_parent_id: Optional[str] = None, user_id: Optional[str] = None

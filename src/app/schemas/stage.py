@@ -51,6 +51,7 @@ class StageResponse(BaseModel):
     updated_at: datetime
     metadata_reference: Optional[str] = None
     allowed_permissions: Optional[Dict[str, bool]] = Field(default=None, serialization_alias="permissions")
+    filenames: List[str] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

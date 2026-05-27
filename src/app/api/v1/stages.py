@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.core.auth import get_current_user, get_current_user_optional
@@ -137,6 +137,95 @@ async def search_stages(
     """Search stages by name."""
     service = StageService(db)
     return await service.search_stages(query=q, limit=limit)
+
+
+@router.post("/upload")
+async def upload_stage_file(
+    stage_id: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Upload a file for a specific stage, stored in the stage's directory in MinIO.
+    Max file size: 50MB.
+    """
+    # 1. Enforce max file size of 50MB
+    MAX_SIZE = 50 * 1024 * 1024
+    if file.size and file.size > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 50MB")
+    
+    file_content = await file.read()
+    if len(file_content) > MAX_SIZE:
+        raise HTTPException(status_code=400, detail="File size exceeds the maximum limit of 50MB")
+
+    # Extract filename from uploaded file
+    filename = file.filename
+    if not filename:
+        raise HTTPException(status_code=400, detail="Uploaded file must have a filename")
+
+    # 2. Check if stage exists
+    service = StageService(db)
+    stage = await service.get_stage(stage_id)
+    if not stage:
+        raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
+
+    # 3. Upload to MinIO
+    from src.app.storage import storage_service
+    object_name = f"{stage_id}/{filename}"
+    success = storage_service.upload_file(
+        file_data=file_content,
+        object_name=object_name,
+        content_type=file.content_type or "application/octet-stream"
+    )
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
+    return {
+        "status": "success",
+        "message": "File uploaded successfully",
+        "stage_id": stage_id,
+        "filename": filename,
+        "object_name": object_name
+    }
+
+
+@router.get("/download")
+async def download_stage_file(
+    stage_id: str = Query(...),
+    filename: str = Query(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate a presigned URL to download a file associated with a stage.
+    """
+    # 1. Check if stage exists
+    service = StageService(db)
+    stage = await service.get_stage(stage_id)
+    if not stage:
+        raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
+
+    # 2. Check if file exists in the stage folder
+    from src.app.storage import storage_service
+    object_name = f"{stage_id}/{filename}"
+    
+    files = storage_service.list_files(prefix=f"{stage_id}/")
+    if object_name not in files:
+        raise HTTPException(status_code=404, detail=f"File {filename} not found in stage {stage_id}")
+
+    # 3. Generate presigned URL
+    from datetime import timedelta
+    url = storage_service.generate_presigned_url(
+        object_name=object_name,
+        expires=timedelta(hours=1)
+    )
+
+    if not url:
+        raise HTTPException(status_code=500, detail="Failed to generate presigned URL")
+
+    return {
+        "url": url
+    }
 
 
 @router.get("/{stage_id}", response_model=StageResponse)
