@@ -96,11 +96,11 @@ class FormRecordService:
         if not data or not ft.schema_reference:
             return data
 
-        schema = ft.schema_reference
-        if not isinstance(schema, dict):
+        schema_ref = ft.schema_reference
+        if not isinstance(schema_ref, dict):
             return data
 
-        for field in schema.get("fields", []):
+        for field in schema_ref.get("fields", []):
             field_type = field.get("fieldtype") or ""
             if field_type not in ("Attach", "Attach Image"):
                 continue

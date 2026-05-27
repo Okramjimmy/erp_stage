@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
 class FormTypeBase(BaseModel):
@@ -15,46 +15,39 @@ class FormTypeBase(BaseModel):
 class FormTypeCreate(FormTypeBase):
     """Schema for creating a Form Type."""
 
-    schema: Optional[Dict[str, Any]] = Field(default=None, alias="schema_reference")
+    schema_reference: Optional[Dict[str, Any]] = Field(
+        default=None,
+        validation_alias="schema",
+        serialization_alias="schema",
+    )
+
     workflow_data: Optional[Dict[str, Any]] = None
 
-    model_config = {
-        "populate_by_name": True
-    }
-
-    @model_validator(mode='before')
-    @classmethod
-    def map_schema_fields(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if 'schema' in data and 'schema_reference' not in data:
-                data['schema_reference'] = data['schema']
-            elif 'schema_reference' in data and 'schema' not in data:
-                data['schema'] = data['schema_reference']
-        return data
-
+    model_config = ConfigDict(
+        populate_by_name=True
+    )
 
 class FormTypeUpdate(BaseModel):
     """Schema for updating a Form Type."""
 
     form_name: Optional[str] = Field(None, min_length=1, max_length=255)
-    version: Optional[str] = Field(None, pattern=r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
-    schema: Optional[Dict[str, Any]] = Field(default=None, alias="schema_reference")
+
+    version: Optional[str] = Field(
+        None,
+        pattern=r"^\d{1,3}\.\d{1,3}\.\d{1,3}$"
+    )
+
+    schema_reference: Optional[Dict[str, Any]] = Field(
+        default=None,
+        validation_alias="schema",
+        serialization_alias="schema",
+    )
+
     workflow_data: Optional[Dict[str, Any]] = None
 
-    model_config = {
-        "populate_by_name": True
-    }
-
-    @model_validator(mode='before')
-    @classmethod
-    def map_schema_fields(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if 'schema' in data and 'schema_reference' not in data:
-                data['schema_reference'] = data['schema']
-            elif 'schema_reference' in data and 'schema' not in data:
-                data['schema'] = data['schema_reference']
-        return data
-
+    model_config = ConfigDict(
+        populate_by_name=True
+    )
 
 class FormTypeResponse(BaseModel):
     """Schema for Form Type response."""

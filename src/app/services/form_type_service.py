@@ -52,7 +52,7 @@ class FormTypeService:
             form_name=form_data.form_name,
             description=form_data.description,
             version=form_data.version,
-            schema_reference=form_data.schema,  # JSONB accepts dict directly
+            schema_reference=form_data.schema_reference,  # JSONB accepts dict directly
             created_by=created_by,
         )
 
@@ -248,8 +248,8 @@ class FormTypeService:
         if form_data.version:
             form_type.version = form_data.version
 
-        if form_data.schema is not None:
-            form_type.schema_reference = form_data.schema  # JSONB accepts dict directly
+        if form_data.schema_reference is not None:
+            form_type.schema_reference = form_data.schema_reference  # JSONB accepts dict directly
         
         if form_data.workflow_data is not None:
             form_type.workflow_data = form_data.workflow_data  # JSONB accepts dict directly
