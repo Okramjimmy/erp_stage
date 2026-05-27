@@ -16,6 +16,7 @@ class MinIOStorageService:
     def __init__(self):
         self.client = None
         self.bucket_name = settings.minio_bucket_name
+        self.public_url = settings.public_url
 
     def connect(self):
         """Initialize MinIO client connection"""
@@ -32,7 +33,7 @@ class MinIOStorageService:
             # The AWS v4 signature includes the Host header, so the endpoint must exactly
             # match what the user's browser will use (e.g., localhost:9000 instead of minio:9000).
             # Generating presigned URLs happens locally and requires no actual network connection.
-            public_endpoint = settings.minio_endpoint.replace("minio:9000", "localhost:9000")
+            public_endpoint = settings.minio_endpoint.replace("minio:9000", f"{self.public_url}:9000")
             self.public_client = Minio(
                 endpoint=public_endpoint,
                 access_key=settings.minio_access_key,

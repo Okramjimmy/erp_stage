@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     minio_bucket_name: str = "erp-stage-storage"
     minio_default_region: str = "us-east-1"
+    public_url: str = "13.214.237.209"
 
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
