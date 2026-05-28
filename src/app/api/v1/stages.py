@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.app.core.auth import get_current_user, get_current_user_optional
 from src.app.database import get_db
 from src.app.models.user import User
+from src.app.models.stage import StageFile
 from src.app.schemas.stage import (
     StageCreate,
     StageMoveRequest,
@@ -127,6 +128,10 @@ async def get_stage_tree(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+# async def generate_random_filename(filename: str) -> str:
+#     import time
+#     import random
+#     return f"erp_{str(int(time.time()))[:6]}_{random.randint(1, 99)}_{filename}"
 
 @router.get("/search", response_model=List[StageResponse])
 async def search_stages(
@@ -143,6 +148,7 @@ async def search_stages(
 async def upload_stage_file(
     stage_id: str = Form(...),
     file: UploadFile = File(...),
+    remarks: str = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -168,6 +174,17 @@ async def upload_stage_file(
     stage = await service.get_stage(stage_id)
     if not stage:
         raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
+        
+    # Check if file already exists in this stage
+    from sqlalchemy import select
+    stmt = select(StageFile).where(StageFile.stage_id == stage_id, StageFile.file_name == filename)
+    res = await db.execute(stmt)
+    existing_file = res.scalars().first()
+    if existing_file:
+        raise HTTPException(status_code=400, detail="File already present")
+    
+    # Generate Filename
+    # new_filename = await generate_random_filename(filename)
 
     # 3. Upload to MinIO
     from src.app.storage import storage_service
@@ -180,6 +197,16 @@ async def upload_stage_file(
 
     if not success:
         raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+    
+    # Insert into StageFile table
+    stage_file = StageFile(
+        stage_id=stage_id,
+        file_name=filename,
+        file_path=object_name,
+        remark=remarks
+    )
+    db.add(stage_file)
+    await db.commit()
 
     return {
         "status": "success",
@@ -190,15 +217,17 @@ async def upload_stage_file(
     }
 
 
-# @router.get("/download")
-async def download_stage_file(
-    stage_id: str = Query(...),
-    filename: str = Query(...),
-    request: Request = None,
+
+
+
+@router.delete("/{stage_id}/uploads/{filename}")
+async def delete_stage_file(
+    stage_id: str,
+    filename: str,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Generate a presigned URL to download a file associated with a stage.
+    Delete a file associated with a stage from both MinIO and database.
     """
     # 1. Check if stage exists
     service = StageService(db)
@@ -206,33 +235,75 @@ async def download_stage_file(
     if not stage:
         raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
 
-    # 2. Check if file exists in the stage folder
-    from src.app.storage import storage_service
-    object_name = f"{stage_id}/uploads/{filename}"
+    # 2. Check if file exists in the database
+    from src.app.models.stage import StageFile
+    from sqlalchemy import select, delete
     
-    files = storage_service.list_files(prefix=f"{stage_id}/uploads/")
-    if object_name not in files:
+    stmt = select(StageFile).where(StageFile.stage_id == stage_id, StageFile.file_name == filename)
+    res = await db.execute(stmt)
+    stage_file = res.scalar_one_or_none()
+    if not stage_file:
         raise HTTPException(status_code=404, detail=f"File {filename} not found in stage {stage_id}")
 
-    # 3. Generate presigned URL
-    from datetime import timedelta
-    url = storage_service.generate_presigned_url(
-        object_name=object_name,
-        expires=timedelta(hours=1)
+    # 3. Delete from MinIO
+    from src.app.storage import storage_service
+    object_name = f"{stage_id}/uploads/{filename}"
+    try:
+        storage_service.delete_file(object_name)
+    except Exception as e:
+        print(f"Error deleting file from MinIO: {e}")
+
+    # 4. Delete from Database
+    await db.execute(
+        delete(StageFile).where(StageFile.stage_id == stage_id, StageFile.file_name == filename)
     )
-
-    if not url:
-        raise HTTPException(status_code=500, detail="Failed to generate presigned URL")
-
-    if request and request.url.hostname:
-        from urllib.parse import urlparse, urlunparse
-        parsed_url = urlparse(url)
-        port = parsed_url.port
-        netloc = f"{request.url.hostname}:{port}" if port else request.url.hostname
-        url = urlunparse(parsed_url._replace(netloc=netloc))
+    await db.commit()
 
     return {
-        "url": url
+        "status": "success",
+        "message": "File deleted successfully"
+    }
+
+from pydantic import BaseModel
+
+class UpdateRemarkRequest(BaseModel):
+    remark: Optional[str] = None
+
+
+@router.put("/{stage_id}/uploads/{filename}/remark")
+async def update_file_remark(
+    stage_id: str,
+    filename: str,
+    remark_data: UpdateRemarkRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update the remark for a file associated with a stage.
+    """
+    # 1. Check if stage exists
+    service = StageService(db)
+    stage = await service.get_stage(stage_id)
+    if not stage:
+        raise HTTPException(status_code=404, detail=f"Stage {stage_id} not found")
+
+    # 2. Check if file exists in the database
+    from src.app.models.stage import StageFile
+    from sqlalchemy import select
+    
+    stmt = select(StageFile).where(StageFile.stage_id == stage_id, StageFile.file_name == filename).order_by(StageFile.created_at.desc())
+    res = await db.execute(stmt)
+    stage_file = res.scalars().first()
+    if not stage_file:
+        raise HTTPException(status_code=404, detail=f"File {filename} not found in stage {stage_id}")
+
+    # 3. Update remark
+    stage_file.remark = remark_data.remark
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": "Remark updated successfully",
+        "remark": stage_file.remark
     }
 
 

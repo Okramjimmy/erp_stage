@@ -79,24 +79,23 @@ class StageService:
             return (1, [], stage.created_at or datetime.min, stage.stage_id)
 
     async def _populate_filenames(self, stages: List[StageResponse]) -> List[StageResponse]:
-        """Fetch files from storage recursively and populate the filenames field for each stage response."""
-        from src.app.storage import storage_service
+        """Fetch files from database for stage_ids and populate the filenames field for each stage response."""
+        if not stages:
+            return stages
         try:
-            all_files = storage_service.list_files(prefix="", recursive=True)
+            from src.app.models.stage import StageFile
+            from src.app.schemas.stage import StageFileResponse
+            stage_ids = [s.stage_id for s in stages]
+            stmt = select(StageFile).where(StageFile.stage_id.in_(stage_ids))
+            res = await self.db.execute(stmt)
+            db_files = res.scalars().all()
+            
             stage_files = {}
-            for file_path in all_files:
-                if "/" in file_path:
-                    parts = file_path.split("/", 2)
-                    if len(parts) > 2:
-                        sid = parts[0]
-                        fname = parts[2]
-                        if fname:
-                            stage_files.setdefault(sid, []).append(fname)
-                    elif len(parts) == 2:
-                        sid = parts[0]
-                        fname = parts[1]
-                        if fname:
-                            stage_files.setdefault(sid, []).append(fname)
+            for f in db_files:
+                stage_files.setdefault(f.stage_id, []).append(
+                    StageFileResponse(filename=f.file_name, created_at=f.created_at)
+                )
+                
             for stage in stages:
                 stage.filenames = stage_files.get(stage.stage_id, [])
         except Exception as e:
@@ -359,21 +358,17 @@ class StageService:
         if not stage:
             return None
 
-        from src.app.storage import storage_service
         try:
-            all_files = storage_service.list_files(prefix=f"{stage_id}/", recursive=True)
-            filenames = []
-            for file_path in all_files:
-                if "/" in file_path:
-                    parts = file_path.split("/", 2)
-                    if len(parts) > 2:
-                        fname = parts[2]
-                    else:
-                        fname = parts[1]
-                    if fname:
-                        filenames.append(fname)
-                else:
-                    filenames.append(file_path)
+            from src.app.models.stage import StageFile
+            from src.app.schemas.stage import StageFileResponse
+            db_files_result = await self.db.execute(
+                select(StageFile).where(StageFile.stage_id == stage_id)
+            )
+            db_files = db_files_result.scalars().all()
+            filenames = [
+                StageFileResponse(filename=f.file_name, created_at=f.created_at)
+                for f in db_files
+            ]
         except Exception as e:
             logger.error(f"Error fetching files for stage {stage_id}: {e}")
             filenames = []
@@ -542,11 +537,14 @@ class StageService:
                 raise ValueError(f"Root stage {root_stage_id} not found")
 
             # Get all descendants
+            from sqlalchemy import or_
             descendants_result = await self.db.execute(
                 select(Stage)
                 .where(
-                    (text(":root_id = ANY(lineage_path)").bindparams(root_id=root_stage_id))
-                    | (Stage.stage_id == root_stage_id)
+                    or_(
+                        text(":root_id = ANY(lineage_path)").bindparams(root_id=root_stage_id),
+                        Stage.stage_id == root_stage_id
+                    )
                 )
                 .order_by(Stage.depth_level, Stage.stage_name)
             )
@@ -555,24 +553,20 @@ class StageService:
             stages_result = await self.db.execute(query)
             stages = stages_result.scalars().all()
 
-        # Fetch all files from storage recursively
-        from src.app.storage import storage_service
+        # Fetch filenames for stage_ids from database
         stage_files = {}
         try:
-            all_files = storage_service.list_files(prefix="", recursive=True)
-            for file_path in all_files:
-                if "/" in file_path:
-                    parts = file_path.split("/", 2)
-                    if len(parts) > 2:
-                        sid = parts[0]
-                        fname = parts[2]
-                        if fname:
-                            stage_files.setdefault(sid, []).append(fname)
-                    elif len(parts) == 2:
-                        sid = parts[0]
-                        fname = parts[1]
-                        if fname:
-                            stage_files.setdefault(sid, []).append(fname)
+            from src.app.models.stage import StageFile
+            from src.app.schemas.stage import StageFileResponse
+            stage_ids = [s.stage_id for s in stages]
+            if stage_ids:
+                stmt = select(StageFile).where(StageFile.stage_id.in_(stage_ids))
+                res = await self.db.execute(stmt)
+                db_files = res.scalars().all()
+                for f in db_files:
+                    stage_files.setdefault(f.stage_id, []).append(
+                        StageFileResponse(filename=f.file_name, created_at=f.created_at)
+                    )
         except Exception as e:
             logger.error(f"Error fetching files for stage tree: {e}")
 
@@ -843,6 +837,13 @@ class StageService:
                 "total_stages": len(stage_ids),
                 "total_items": len(stage_ids),
             }
+
+        # Delete referencing StageFile records
+        from src.app.models.stage import StageFile
+        from sqlalchemy import delete
+        await self.db.execute(
+            delete(StageFile).where(StageFile.stage_id.in_(stage_ids))
+        )
 
         # Delete stages (cascade will handle form types and permissions)
         from src.app.storage.minio_storage import storage_service

@@ -31,6 +31,15 @@ class StageUpdate(BaseModel):
     wbs_number: Optional[int] = Field(None, ge=1)
 
 
+class StageFileResponse(BaseModel):
+    """Schema for Stage File metadata."""
+    filename: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class StageResponse(BaseModel):
     """Schema for Stage response."""
 
@@ -51,7 +60,7 @@ class StageResponse(BaseModel):
     updated_at: datetime
     metadata_reference: Optional[str] = None
     allowed_permissions: Optional[Dict[str, bool]] = Field(default=None, serialization_alias="permissions")
-    filenames: List[str] = Field(default_factory=list)
+    filenames: List[StageFileResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

@@ -4,13 +4,15 @@ Storage API endpoints for MinIO file operations
 
 import logging
 from typing import Optional
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response
+from fastapi import APIRouter, UploadFile, File, HTTPException, Response, Depends, Request
 from fastapi.responses import StreamingResponse
 import io
 
 from ...storage import storage_service
 from src.config import settings
 from urllib.parse import unquote
+from sqlalchemy.ext.asyncio import AsyncSession
+from src.app.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -96,7 +98,12 @@ async def list_files(prefix: str = ""):
 
 
 @router.get("/download/{file_path:path}")
-async def download_file(file_path: str, download: int = 0):
+async def download_file(
+    file_path: str,
+    download: int = 0,
+    request: Request = None,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Download a file from MinIO storage by accepting its complete path
     """
@@ -125,13 +132,30 @@ async def download_file(file_path: str, download: int = 0):
             response_headers=headers
         )
 
-        if url:
-            return RedirectResponse(url=url, status_code=307)
-        else:
+        if not url:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate presigned URL"
             )
+
+        if download == 0 and "/uploads/" in decoded_path:
+            parts = decoded_path.split("/uploads/", 1)
+            stage_id = parts[0]
+            filename = parts[1]
+
+            from src.app.models.stage import StageFile
+            from sqlalchemy import select
+            
+            stmt = select(StageFile).where(StageFile.stage_id == stage_id, StageFile.file_name == filename)
+            res = await db.execute(stmt)
+            stage_file = res.scalar_one_or_none()
+
+            return {
+                "remark": stage_file.remark if stage_file else None,
+                "url": url
+            }
+
+        return RedirectResponse(url=url, status_code=307)
 
     except HTTPException:
         raise

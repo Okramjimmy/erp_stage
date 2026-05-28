@@ -85,3 +85,12 @@ class Stage(Base):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "metadata_reference": self.metadata_reference,
         }
+
+class StageFile(Base):
+    __tablename__ = "stage_files"
+    file_id = Column(Integer, primary_key=True, index=True)
+    stage_id = Column(String(50), ForeignKey("stages.stage_id"))
+    file_name = Column(String(255), nullable=False)
+    remark = Column(Text, nullable=True)
+    file_path = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
