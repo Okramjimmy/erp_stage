@@ -61,6 +61,10 @@
     .field-row-item .fi-del{opacity:0;color:var(--text-muted);font-size:12px;cursor:pointer;flex-shrink:0;padding:2px 4px;border-radius:3px;transition:var(--transition)}
     .field-row-item:hover .fi-del{opacity:1}
     .field-row-item .fi-del:hover{background:#fee2e2;color:var(--danger)}
+    .field-row-item .fi-ins{opacity:0;color:var(--text-muted);font-size:14px;cursor:pointer;flex-shrink:0;padding:2px 4px;border-radius:3px;transition:var(--transition);margin-right:4px}
+    .field-row-item:hover .fi-ins{opacity:1}
+    .field-row-item .fi-ins:hover{background:var(--primary-light);color:var(--primary)}
+    .field-row-item .fi-number{font-size:11px;font-weight:600;color:var(--text-muted);margin-right:4px}
 
     .col-add-btn{display:flex;align-items:center;gap:6px;width:100%;padding:5px 8px;border:1px dashed var(--border);border-radius:var(--radius);background:none;color:var(--text-muted);font-size:12px;cursor:pointer;transition:var(--transition);margin-top:2px}
     .col-add-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
@@ -331,10 +335,36 @@ function mkSecId(){ return 'sec_' + (nextSecId++); }
 function mkColId(){ return 'col_' + (nextColId++); }
 function mkTabId(){ return 'tab_' + (nextTabId++); }
 
+function getNextFieldName(type) {
+  const prefix = snake(type) + '_';
+  let maxNum = 0;
+  
+  const scanFields = (fields) => {
+    fields.forEach(f => {
+      if (f.fieldname && f.fieldname.startsWith(prefix)) {
+        const numPart = f.fieldname.substring(prefix.length);
+        const num = parseInt(numPart, 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+  };
+
+  canvas.forEach(block => {
+    if (block.type !== 'section') return;
+    block.columns.forEach(col => {
+      scanFields(col.fields);
+    });
+  });
+
+  return prefix + (maxNum + 1);
+}
+
 function mkField(type){
   const id=mkId();
   return {
-    _id:id, label:type, fieldname:snake(type)+'_'+id, fieldtype:type,
+    _id:id, label:type, fieldname:getNextFieldName(type), fieldtype:type,
     options:'', empty_table_columns:'', default:'', placeholder:'', description:'',
     required:false, unique:false, read_only:false, hidden:false, bold:false,
     in_list_view:false, in_filter:false, search_index:false, print_hide:false,
@@ -375,6 +405,7 @@ function importFields(flat){
 }
 
 function exportFields(){
+  recomputeFieldNumbers();
   const out=[];
   canvas.forEach(block=>{
     if(block.type==='tab'){
@@ -513,10 +544,30 @@ function getField(fid){
   return null;
 }
 
+function recomputeFieldNumbers() {
+  canvas.forEach(block => {
+    if (block.type !== 'section') return;
+    let count = 1;
+    block.columns.forEach(col => {
+      col.fields.forEach(f => {
+        if (!LAYOUT_SET.has(f.fieldtype)) {
+          f.field_number = count;
+          f.filed_number = count;
+          count++;
+        } else {
+          delete f.field_number;
+          delete f.filed_number;
+        }
+      });
+    });
+  });
+}
+
 let _sortables=[];
 function destroySortables(){ _sortables.forEach(s=>s.destroy()); _sortables=[]; }
 
 function renderCanvas(){
+  recomputeFieldNumbers();
   destroySortables();
   const root=document.getElementById('form-canvas');
   const empty=document.getElementById('empty-state');
@@ -536,8 +587,8 @@ function renderCanvas(){
       div.className='tab-divider'; div.dataset.tid=block._tid;
       div.innerHTML=`
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);flex-shrink:0"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M3 11h18M3 17h18"/></svg>
-        <input class="tab-label-inp" value="${esc(block.label)}" placeholder="Tab label" oninput="block_label_tab(${block._tid},this.value)" onclick="event.stopPropagation()">
-        <button class="btn btn-ghost btn-icon btn-xs" onclick="removeTabBreak(${block._tid})" style="color:var(--text-muted)" title="Remove tab break">✕</button>
+        <input class="tab-label-inp" value="${esc(block.label)}" placeholder="Tab label" oninput="block_label_tab('${block._tid}',this.value)" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-icon btn-xs" onclick="removeTabBreak('${block._tid}')" style="color:var(--text-muted)" title="Remove tab break">✕</button>
       `;
       root.appendChild(div);
       return;
@@ -546,23 +597,23 @@ function renderCanvas(){
     const wrap=document.createElement('div');
     wrap.className='section-wrap'; wrap.dataset.sid=block._sid;
     wrap.innerHTML=`
-      <div class="section-hdr" onclick="sectionClicked(${block._sid},event)">
+      <div class="section-hdr" onclick="sectionClicked('${block._sid}',event)">
         <span class="sec-drag" title="Drag to reorder section">⠿</span>
         <span class="sec-icon">━</span>
         <input class="sec-label-inp" value="${esc(block.label)}" placeholder="Section label (optional)"
-          oninput="block_label_sec(${block._sid},this.value)" onclick="event.stopPropagation()">
+          oninput="block_label_sec('${block._sid}',this.value)" onclick="event.stopPropagation()">
         <div class="sec-actions">
-          <button class="btn btn-ghost btn-icon btn-xs" title="Add column" onclick="event.stopPropagation();addColumn(${block._sid})">
+          <button class="btn btn-ghost btn-icon btn-xs" title="Add column" onclick="event.stopPropagation();addColumn('${block._sid}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
             Col
           </button>
-          <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger)" title="Remove section" onclick="event.stopPropagation();removeSection(${block._sid})">✕</button>
+          <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger)" title="Remove section" onclick="event.stopPropagation();removeSection('${block._sid}')">✕</button>
         </div>
-        <svg class="sec-collapsible ${block._collapsed?'collapsed':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" onclick="event.stopPropagation();toggleSectionCollapse(${block._sid})"><path d="m6 9 6 6 6-6"/></svg>
+        <svg class="sec-collapsible ${block._collapsed?'collapsed':''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" onclick="event.stopPropagation();toggleSectionCollapse('${block._sid}')"><path d="m6 9 6 6 6-6"/></svg>
       </div>
       <div class="section-content ${block._collapsed?'collapsed':''}">
         <div class="cols-wrap" id="sec-cols-${block._sid}"></div>
-        <button class="add-col-btn" onclick="addColumn(${block._sid})">
+        <button class="add-col-btn" onclick="addColumn('${block._sid}')">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
           Add Column
         </button>
@@ -578,13 +629,13 @@ function renderCanvas(){
       if(block.columns.length>1){
         colDiv.innerHTML=`<div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
           Col ${ci+1}
-          <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger);opacity:.5" onclick="event.stopPropagation();removeColumn(${block._sid},${col._cid})" title="Remove column">✕</button>
+          <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger);opacity:.5" onclick="event.stopPropagation();removeColumn('${block._sid}','${col._cid}')" title="Remove column">✕</button>
         </div>`;
       }
 
       const fieldList=document.createElement('div');
       fieldList.id=`col-fields-${col._cid}`;
-      col.fields.forEach(f=>fieldList.appendChild(makeFieldRow(f)));
+      col.fields.forEach(f=>fieldList.appendChild(makeFieldRow(f, block._sid, col._cid)));
       colDiv.appendChild(fieldList);
 
       const addBtn=document.createElement('button');
@@ -615,6 +666,7 @@ function renderCanvas(){
             blk.columns.forEach(c=>{ if(c._cid===newCid) newCol=c; });
           });
           if(newCol&&field) newCol.fields.splice(evt.newIndex,0,field);
+          renderCanvas();
           markDirty();
         }
       });
@@ -628,6 +680,7 @@ function renderCanvas(){
     onEnd(evt){
       const [m]=canvas.splice(evt.oldIndex,1);
       canvas.splice(evt.newIndex,0,m);
+      renderCanvas();
       markDirty();
     }
   });
@@ -636,13 +689,14 @@ function renderCanvas(){
   if(selectedFieldId) document.querySelector(`.field-row-item[data-fid="${selectedFieldId}"]`)?.classList.add('selected');
 }
 
-function makeFieldRow(f){
+function makeFieldRow(f, sid, cid){
   const ti=TMAP[f.fieldtype]||{icon:'📝'};
   const div=document.createElement('div');
   div.className='field-row-item'+(f._id===selectedFieldId?' selected':'');
   div.dataset.fid=f._id;
   div.innerHTML=`
     <span class="fi-drag">⠿</span>
+    <span class="fi-number">${f.field_number ? f.field_number + '.' : ''}</span>
     <span class="fi-icon">${ti.icon}</span>
     <div class="fi-body">
       <div class="fi-label" style="${f.bold?'font-weight:700':''}">${esc(f.label||f.fieldtype)}</div>
@@ -650,6 +704,7 @@ function makeFieldRow(f){
     </div>
     <span class="fi-type">${esc(f.fieldtype)}</span>
     ${f.required?'<span class="fi-req">*</span>':''}
+    <span class="fi-ins" onclick="event.stopPropagation();addFieldToCol('${sid}','${cid}',${f._id},this)" title="Insert Field After">+</span>
     <span class="fi-del" onclick="event.stopPropagation();removeField(${f._id})" title="Remove">✕</span>
   `;
   div.addEventListener('click',()=>selectField(f._id));

@@ -68,67 +68,80 @@ class ParsingService:
                     if not result:
                         raise ValueError("No result obtained from parsing job")
 
-                    # Map parsed result to form builder fields schema
-                    fields = []
-                    current_section = None
+                    # Group questions by section
+                    sections_map = {}
+                    section_order = []
                     checklist = result.get("checklist", {})
                     questions = checklist.get("questions", [])
                     
                     for q in questions:
-                        q_section = None
-                        sec_path = q.get("section_path")
-                        if sec_path and isinstance(sec_path, list) and len(sec_path) > 0:
-                            q_section = sec_path[0]
-                        elif q.get("section"):
-                            q_section = q.get("section")
-                            
-                        if q_section and q_section != current_section:
-                            ft_slug = slugify("Section Break")
-                            existing_fns = {f["fieldname"] for f in fields}
-                            counter = 1
-                            fn = f"{ft_slug}_{counter}"
-                            while fn in existing_fns:
-                                counter += 1
-                                fn = f"{ft_slug}_{counter}"
+                        q_section = q.get("section")
+                        if not q_section:
+                            sec_path = q.get("section_path")
+                            if sec_path and isinstance(sec_path, list) and len(sec_path) > 0:
+                                q_section = sec_path[-1]
+                            else:
+                                q_section = "General"
                                 
-                            fields.append({
-                                "label": q_section,
-                                "fieldtype": "Section Break",
-                                "fieldname": fn,
-                                "collapsible": False
-                            })
-                            current_section = q_section
-                            
-                        lbl = q.get("question", "")
-                        
-                        ft_slug = slugify("Long Text")
+                        if q_section not in sections_map:
+                            sections_map[q_section] = []
+                            section_order.append(q_section)
+                        sections_map[q_section].append(q)
+
+                    fields = []
+                    for sec_name in section_order:
+                        # Append Section Break
+                        ft_slug = slugify("Section Break")
                         existing_fns = {f["fieldname"] for f in fields}
                         counter = 1
                         fn = f"{ft_slug}_{counter}"
                         while fn in existing_fns:
                             counter += 1
                             fn = f"{ft_slug}_{counter}"
-                                
+                            
                         fields.append({
-                            "label": lbl,
+                            "label": sec_name,
+                            "fieldtype": "Section Break",
                             "fieldname": fn,
-                            "fieldtype": "Long Text",
-                            "options": "",
-                            "required": False,
-                            "unique": False,
-                            "read_only": False,
-                            "hidden": False,
-                            "bold": False,
-                            "in_list_view": False,
-                            "in_filter": False,
-                            "search_index": False,
-                            "print_hide": False,
-                            "no_copy": False,
-                            "allow_on_submit": False,
-                            "description": q.get("question_code", ""),
-                            "default": "",
-                            "placeholder": ""
+                            "collapsible": False
                         })
+                        
+                        # Append all questions of this section
+                        q_idx = 1
+                        for q in sections_map[sec_name]:
+                            lbl = q.get("question", "")
+                            
+                            ft_slug = slugify("Long Text")
+                            existing_fns = {f["fieldname"] for f in fields}
+                            counter = 1
+                            fn = f"{ft_slug}_{counter}"
+                            while fn in existing_fns:
+                                counter += 1
+                                fn = f"{ft_slug}_{counter}"
+                                    
+                            fields.append({
+                                "label": lbl,
+                                "fieldname": fn,
+                                "fieldtype": "Long Text",
+                                "options": "",
+                                "required": False,
+                                "unique": False,
+                                "read_only": False,
+                                "hidden": False,
+                                "bold": False,
+                                "in_list_view": False,
+                                "in_filter": False,
+                                "search_index": False,
+                                "print_hide": False,
+                                "no_copy": False,
+                                "allow_on_submit": False,
+                                "description": q.get("question_code", ""),
+                                "default": "",
+                                "placeholder": "",
+                                "field_number": q_idx,
+                                "filed_number": q_idx
+                            })
+                            q_idx += 1
                         
                     return {
                         "job_id": job_id,
