@@ -87,12 +87,12 @@ class FormRecordService:
         return None
 
     def _build_minio_path(self, ft: FormType, field: dict, filename: str, record_id: str) -> str:
-        """Build the canonical MinIO path: form_type_id/record_id/field_label/filename."""
-        field_label = field.get("fieldname")
-        return f"{ft.form_type_id}/{record_id}/{field_label}/{filename}"
+        """Build the canonical MinIO path: form_type_id/record_id/field_id/filename."""
+        field_id = field.get("fieldname")
+        return f"{ft.form_type_id}/{record_id}/{field_id}/{filename}"
 
     def _process_attachments(self, ft: FormType, data: dict, record_id: str) -> dict:
-        """Ensure attachment fields only contain the filename."""
+        """Ensure attachment fields contain the full path."""
         if not data or not ft.schema_reference:
             return data
 
@@ -111,10 +111,10 @@ class FormRecordService:
             if not value or not isinstance(value, str):
                 continue
 
-            # If the value is a full path, just save the filename
-            if '/' in value:
-                filename = value.split('/')[-1]
-                data[field_name] = filename
+            # If the value is not a full path (i.e. does not have '/'), build the full path
+            if '/' not in value:
+                value = self._build_minio_path(ft, field, value, record_id)
+            data[field_name] = value
                 
         return data
 
@@ -155,9 +155,9 @@ class FormRecordService:
 
         logger.info(f"Uploaded attachment for record {record_id}, field '{field_name}' -> {object_name}")
 
-        # Persist the path in the record
+        # Persist the full path in the record
         data = dict(record.data) if record.data else {}
-        data[field_name] = filename
+        data[field_name] = object_name
         record.data = data
         logger.debug(f"------Updated record data: {data}")
         await self.db.commit()

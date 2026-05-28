@@ -1,6 +1,9 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
 class Settings(BaseSettings):
     # Application
@@ -32,7 +35,7 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     minio_bucket_name: str = "erp-stage-storage"
     minio_default_region: str = "us-east-1"
-    public_url: str = "13.214.237.209"
+    public_url: str = os.getenv("PUBLIC_URL") or "localhost"
 
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]

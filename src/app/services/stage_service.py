@@ -845,12 +845,15 @@ class StageService:
             }
 
         # Delete stages (cascade will handle form types and permissions)
+        from src.app.storage.minio_storage import storage_service
         for sid in stage_ids:
             result = await self.db.execute(
                 select(Stage).where(Stage.stage_id == sid)
             )
             s = result.scalar_one_or_none()
             if s:
+                # Delete all files associated with this stage in MinIO
+                storage_service.delete_file(sid)
                 await self.db.delete(s)
 
         # Explicitly flush pending deletes to the database transaction

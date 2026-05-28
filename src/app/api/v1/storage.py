@@ -95,35 +95,32 @@ async def list_files(prefix: str = ""):
         )
 
 
-@router.get("/download/{formtype_id}/{form_record_id}/{field_name}/{file_name:path}")
-async def download_file(formtype_id: str, form_record_id: str, field_name: str, file_name: str, download: int = 0):
+@router.get("/download/{file_path:path}")
+async def download_file(file_path: str, download: int = 0):
     """
-    Download a file from MinIO storage by computing its path and returning a presigned URL
+    Download a file from MinIO storage by accepting its complete path
     """
     try:
         from urllib.parse import unquote
         from datetime import timedelta
         from fastapi.responses import RedirectResponse
         
-        # Decode path segments
-        formtype_id = unquote(formtype_id)
-        form_record_id = unquote(form_record_id)
-        field_name = unquote(field_name)
+        # Decode path
+        decoded_path = unquote(file_path)
         
-        path_segments = file_name.split('/')
-        decoded_filename = '/'.join(unquote(segment) for segment in path_segments)
+        # Extract filename (last segment)
+        filename = decoded_path.split('/')[-1] if '/' in decoded_path else decoded_path
         
-        computed_path = f"{formtype_id}/{form_record_id}/{field_name}/{decoded_filename}"
-        logger.info(f"Computing download path for MinIO: {computed_path}")
+        logger.info(f"Downloading/previewing file from MinIO: {decoded_path}")
 
         headers = {
-            "response-content-disposition": f'inline; filename="{decoded_filename}"'
+            "response-content-disposition": f'inline; filename="{filename}"'
         }
         if download == 1:
-            headers["response-content-disposition"] = f'attachment; filename="{decoded_filename}"'
+            headers["response-content-disposition"] = f'attachment; filename="{filename}"'
 
         url = storage_service.generate_presigned_url(
-            object_name=computed_path,
+            object_name=decoded_path,
             expires=timedelta(hours=1),
             response_headers=headers
         )

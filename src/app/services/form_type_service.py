@@ -273,6 +273,10 @@ class FormTypeService:
         if not form_type:
             raise ValueError(f"FormType {form_type_id} not found")
 
+        # Delete all associated files in MinIO
+        from src.app.storage.minio_storage import storage_service
+        storage_service.delete_file(form_type_id)
+
         # Invalidate cache for all stages this form type was linked to
         stage_links = await self.db.execute(
             select(StageFormType.stage_id).where(StageFormType.form_type_id == form_type_id)

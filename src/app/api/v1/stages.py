@@ -190,7 +190,7 @@ async def upload_stage_file(
     }
 
 
-@router.get("/download")
+# @router.get("/download")
 async def download_stage_file(
     stage_id: str = Query(...),
     filename: str = Query(...),
