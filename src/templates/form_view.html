@@ -318,7 +318,7 @@
             {% if ft_perms.create %}
             <button
                 class="btn btn-secondary btn-sm"
-                onclick="window.location.href='/forms/{{ form_type.form_type_id }}/new'"
+                onclick="window.location.href='/forms/{{ form_type.form_type_id }}/new{% if record.stage_id %}?stage_id={{ record.stage_id }}{% elif stage %}?stage_id={{ stage.stage_id }}{% endif %}'"
             >
                 + New
             </button>
@@ -570,7 +570,12 @@
             return;
         }
         const returnUrl = encodeURIComponent(window.location.pathname);
-        window.location.href = `/forms/${ft.form_type_id}/new?return_to=${returnUrl}`;
+        const stageId = {% if record and record.stage_id %}"{{ record.stage_id }}"{% elif stage %}"{{ stage.stage_id }}"{% else %}null{% endif %};
+        let newUrl = `/forms/${ft.form_type_id}/new?return_to=${returnUrl}`;
+        if (stageId) {
+          newUrl += `&stage_id=${stageId}`;
+        }
+        window.location.href = newUrl;
       } catch (e) {
         toast('Failed to load form type', 'error');
       }
@@ -1058,7 +1063,74 @@
           rec = await apiFetch(`${API}/form-records/${currentRecordId}`, {method:'PUT', body:{data:dataToSave}});
         } else {
           btn.innerHTML = '⏳ Creating…';
-          rec = await apiFetch(`${API}/form-records`, {method:'POST', body:{form_type_id:FORM_TYPE_ID, data:dataToSave}});
+          let stageIdToSend = null;
+          
+          const urlParams = new URLSearchParams(window.location.search);
+          const fromForms = urlParams.get('from_forms') === 'true' || (() => {
+            try {
+              return document.referrer && new URL(document.referrer).pathname === '/forms';
+            } catch (e) {
+              return false;
+            }
+          })();
+
+          let candidateStageId = null;
+          if (!fromForms) {
+            // 0. Try direct stage_id query parameter
+            candidateStageId = urlParams.get('stage_id');
+
+            // 1. Try return_to parameter
+            if (!candidateStageId) {
+              const returnTo = urlParams.get('return_to');
+              if (returnTo) {
+                const match = returnTo.match(/\/stages\/([^/?#]+)/);
+                if (match) {
+                  candidateStageId = match[1];
+                }
+              }
+            }
+
+            // 2. Try referrer
+            if (!candidateStageId && document.referrer) {
+              try {
+                const refUrl = new URL(document.referrer);
+                const match = refUrl.pathname.match(/\/stages\/([^/?#]+)/);
+                if (match) {
+                  candidateStageId = match[1];
+                }
+              } catch(e) {}
+            }
+          }
+
+          // 3. Fallback to stage from backend context
+          const backendStageId = {% if stage %}"{{ stage.stage_id }}"{% else %}null{% endif %};
+          
+          if (candidateStageId) {
+            // Verify if FORM_TYPE_ID is linked to candidateStageId
+            try {
+              const fts = await apiFetch(`${API}/form-types/stage/${candidateStageId}`);
+              const isLinked = (fts || []).some(ft => ft.form_type_id === FORM_TYPE_ID);
+              if (isLinked) {
+                stageIdToSend = candidateStageId;
+              }
+            } catch (e) {
+              console.error('Failed to verify stage linkage:', e);
+            }
+          }
+          
+          // If not matched or verified, fall back to backendStageId
+          if (!stageIdToSend && backendStageId && !fromForms) {
+            stageIdToSend = backendStageId;
+          }
+
+          rec = await apiFetch(`${API}/form-records`, {
+            method:'POST',
+            body:{
+              form_type_id:FORM_TYPE_ID,
+              stage_id:stageIdToSend,
+              data:dataToSave
+            }
+          });
           currentRecordId = rec.record_id;
           // Update URL without reload so uploads use the new record id
           window.history.replaceState({}, '', `/forms/${FORM_TYPE_ID}/${currentRecordId}`);

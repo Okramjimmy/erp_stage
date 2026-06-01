@@ -18,7 +18,7 @@
   </div>
   <div class="page-actions">
     <a href="/form-builder/{{ form_type.form_type_id }}" class="btn btn-secondary btn-sm">Edit Schema</a>
-    <a href="/forms/{{ form_type.form_type_id }}/new" class="btn btn-primary">
+    <a href="/forms/{{ form_type.form_type_id }}/new{% if request.query_params.get('from_forms') == 'true' %}?from_forms=true{% elif stage %}?stage_id={{ stage.stage_id }}{% endif %}" class="btn btn-primary">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
       New Record
     </a>
@@ -76,7 +76,7 @@
     <div class="empty-icon">📋</div>
     <h3>No records yet</h3>
     <p>Create the first {{ form_type.form_name }} record.</p>
-    <a href="/forms/{{ form_type.form_type_id }}/new" class="btn btn-primary btn-sm">New Record</a>
+    <a href="/forms/{{ form_type.form_type_id }}/new{% if request.query_params.get('from_forms') == 'true' %}?from_forms=true{% elif stage %}?stage_id={{ stage.stage_id }}{% endif %}" class="btn btn-primary btn-sm">New Record</a>
   </div>
   {% endif %}
 </div>

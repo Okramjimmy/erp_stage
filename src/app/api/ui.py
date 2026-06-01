@@ -268,7 +268,11 @@ async def workflow_builder(
 
 @router.get("/forms/{form_type_id}/new", response_class=HTMLResponse)
 async def new_form_view(
-    request: Request, form_type_id: str, db: AsyncSession = Depends(get_db)
+    request: Request,
+    form_type_id: str,
+    stage_id: str | None = None,
+    from_forms: bool = False,
+    db: AsyncSession = Depends(get_db)
 ):
     user, roles = await _require_auth(request, db)
     if not user:
@@ -278,7 +282,15 @@ async def new_form_view(
     form_type = await ft_service.get_form_type_with_schema(form_type_id)
     if not form_type:
         return HTMLResponse("Form type not found", status_code=404)
-    stage = await _get_stage_for_form_type(db, form_type_id)
+    
+    if from_forms:
+        stage = None
+    elif stage_id:
+        stage_service = StageService(db)
+        stage = await stage_service.get_stage(stage_id)
+    else:
+        stage = await _get_stage_for_form_type(db, form_type_id)
+
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
     user_permissions = await perm_service.get_user_permissions(user.user_id)

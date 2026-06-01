@@ -15,3 +15,11 @@ postgres_data/
 redis_data/
 graphify*
 *.md
+
+.mcp.json
+.claude/
+.cursor/
+opencode.jsonc
+.gemini/
+.kiro/
+.codegraph/

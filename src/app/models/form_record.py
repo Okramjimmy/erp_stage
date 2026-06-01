@@ -16,6 +16,7 @@ class FormRecord(Base):
         nullable=False,
         index=True,
     )
+    stage_id = Column(String(50), nullable=True)
     docname = Column(String(255), nullable=False, index=True)
     status = Column(String(20), nullable=False, default="Draft")
     assigned_role = Column(String(50), nullable=True)

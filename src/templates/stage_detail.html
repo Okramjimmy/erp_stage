@@ -219,7 +219,7 @@ Builder{% endblock %} {% block content %}
             </div>
             <div class="form-card-actions" onclick="event.stopPropagation()">
                 <a
-                    href="/forms/{{ ft.form_type_id }}/new"
+                    href="/forms/{{ ft.form_type_id }}/new?stage_id={{ stage.stage_id }}"
                     class="btn btn-sm btn-primary"
                     >+ New Record</a
                 >

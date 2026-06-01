@@ -62,6 +62,23 @@ CREATE INDEX idx_stages_name ON stages(stage_name);
 
 
 -- =================================================================
+-- 1.5. STAGE_FILES TABLE
+-- =================================================================
+-- Files attached to stages
+-- =================================================================
+CREATE TABLE stage_files (
+    file_id SERIAL PRIMARY KEY,
+    stage_id VARCHAR(50) REFERENCES stages(stage_id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    remark TEXT,
+    file_path VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_stage_files_stage ON stage_files(stage_id);
+
+
+-- =================================================================
 -- 2. FORM_TYPES TABLE
 -- =================================================================
 -- Core table for form type definitions
@@ -117,6 +134,7 @@ CREATE INDEX idx_stage_form_types_form_type ON stage_form_types(form_type_id);
 CREATE TABLE form_records (
     record_id VARCHAR(50) PRIMARY KEY,
     form_type_id VARCHAR(50) NOT NULL REFERENCES form_types(form_type_id) ON DELETE CASCADE,
+    stage_id VARCHAR(50) REFERENCES stages(stage_id) ON DELETE SET NULL,
     docname VARCHAR(255) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'Draft',
     data JSONB,
@@ -136,6 +154,7 @@ CREATE TABLE form_records (
 );
 
 CREATE INDEX idx_form_records_form_type ON form_records(form_type_id);
+CREATE INDEX idx_form_records_stage ON form_records(stage_id);
 CREATE INDEX idx_form_records_docname ON form_records(docname);
 CREATE INDEX idx_form_records_assigned_to ON form_records(assigned_to);
 

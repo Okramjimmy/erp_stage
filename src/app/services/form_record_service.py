@@ -60,9 +60,15 @@ class FormRecordService:
         return FormRecordResponse.model_validate({
             "record_id": record.record_id,
             "form_type_id": record.form_type_id,
+            "stage_id": record.stage_id,
             "docname": record.docname,
             "status": record.status,
+            "assigned_role": record.assigned_role,
+            "assigned_department": record.assigned_department,
+            "assigned_to": record.assigned_to,
             "data": parsed_data,
+            "schema_snapshot": record.schema_snapshot,
+            "form_version": record.form_version,
             "amended_from": record.amended_from,
             "submitted_by": record.submitted_by,
             "submitted_at": record.submitted_at,
@@ -182,6 +188,7 @@ class FormRecordService:
         record = FormRecord(
             record_id=record_id,
             form_type_id=payload.form_type_id,
+            stage_id=payload.stage_id,
             docname=docname,
             status="Draft",
             data=processed_data,
