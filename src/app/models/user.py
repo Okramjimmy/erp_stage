@@ -1,6 +1,7 @@
 """SQLAlchemy model for Users."""
 
 import uuid
+from typing import Optional
 from sqlalchemy import Boolean, Column, DateTime, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -25,7 +26,7 @@ class User(Base):
     manager_id = Column(String(36), ForeignKey("users.user_id"), nullable=True)
 
     # Profile fields
-    department = Column(String(100), nullable=True)
+    dept = Column(String(36), ForeignKey("departments.department_id"), nullable=True)
     phone = Column(String(50), nullable=True)
 
     # Photo stored as a MinIO object key: "users/{user_id}_{department}/photo.{ext}"
@@ -50,6 +51,11 @@ class User(Base):
     # Relationships
     # One user → one UserRole row (role_ids stored as JSONB integer array)
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan", uselist=False)
+    department_rel = relationship("Department", foreign_keys=[dept], lazy="selectin")
+
+    @property
+    def department(self) -> Optional[str]:
+        return self.department_rel.name if self.department_rel else None
 
     def __repr__(self):
         return f"<User(id={self.user_id}, username={self.username})>"
@@ -61,6 +67,7 @@ class User(Base):
             "username": self.username,
             "email": self.email,
             "full_name": self.full_name,
+            "dept": self.dept,
             "department": self.department,
             "phone": self.phone,
             "profile_photo_url": self.profile_photo_url,
@@ -68,3 +75,4 @@ class User(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+

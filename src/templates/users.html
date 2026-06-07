@@ -62,6 +62,21 @@
                     </td>
                     <td>
                         <div class="d-flex gap-1">
+                            <button class="btn btn-xs btn-secondary" 
+                                data-user-id="{{ user_data.user_id }}"
+                                data-username="{{ user_data.username }}"
+                                data-email="{{ user_data.email }}"
+                                data-full-name="{{ user_data.full_name }}"
+                                data-dept="{{ user_data.dept or '' }}"
+                                data-department="{{ user_data.department or '' }}"
+                                data-phone="{{ user_data.phone or '' }}"
+                                data-manager-id="{{ user_data.manager_id or '' }}"
+                                data-profile-photo-url="{{ user_data.profile_photo_url or '' }}"
+                                data-is-active="{{ user_data.is_active | tojson }}"
+                                data-roles="{{ user_data.roles | join(',') }}"
+                                onclick="handleDetailsClick(this)">
+                                Details
+                            </button>
                             <button class="btn btn-xs btn-primary" 
                                 data-user-id="{{ user_data.user_id }}"
                                 data-username="{{ user_data.username }}"
@@ -135,8 +150,16 @@
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
                     <div class="form-group">
                         <label class="form-label">Department</label>
-                        <input type="text" class="form-control" id="newDepartment"
-                            maxlength="100" placeholder="e.g. Finance" />
+                        <select class="form-control" id="newDepartmentSelect" onchange="toggleNewDepartmentInput()">
+                            <option value="">-- None / Select --</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept.name }}">{{ dept.name }}</option>
+                            {% endfor %}
+                            <option value="__new__">+ Create New Department...</option>
+                        </select>
+                        <div id="newDepartmentTextInputWrapper" style="display:none; margin-top:8px;">
+                            <input type="text" class="form-control" id="newDepartmentText" maxlength="100" placeholder="Enter new department name" />
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Phone</label>
@@ -208,9 +231,90 @@
                 <div id="currentRolesList" style="display:flex; flex-wrap:wrap; gap:8px; padding:12px; background:var(--bg-light); border-radius:6px; border:1px solid var(--border-light); min-height:60px; align-items:flex-start">
                 </div>
             </div>
+            </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeRolesModal()">Close</button>
+    </div>
+</div>
+
+<!-- User Details Modal (View/Edit) -->
+<div class="modal-overlay" id="user-details-modal">
+    <div class="modal" style="max-width: 500px; width: 100%;">
+        <div class="modal-header">
+            <span class="modal-title" id="detailsModalTitle">User Details</span>
+            <button class="btn btn-ghost btn-icon" onclick="closeUserDetailsModal()">✕</button>
+        </div>
+        <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; text-align: center;">
+                <img
+                    id="details-user-avatar"
+                    src="https://ui-avatars.com/api/?name=User&background=random"
+                    alt="User"
+                    style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); background: var(--bg);"
+                />
+                <div style="margin-top: 10px; font-weight: 700; font-size: 16px;" id="details-full-name-display"></div>
+                <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;" id="details-username-display"></div>
+            </div>
+
+            <form id="detailsUserForm" onsubmit="saveUserDetails(event)">
+                <input type="hidden" id="detailsUserId" />
+                
+                <div class="form-group">
+                    <label class="form-label required">Full Name</label>
+                    <input type="text" class="form-control" id="detailsFullName" required />
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label required">Email</label>
+                    <input type="email" class="form-control" id="detailsEmail" required />
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="detailsPhone" placeholder="e.g. +91 98765 43210" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select class="form-control" id="detailsStatus">
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Department</label>
+                    <select class="form-control" id="detailsDepartmentSelect" onchange="toggleDetailsNewDepartmentInput()">
+                        <option value="">-- None / Select --</option>
+                        <option value="__new__">+ Create New Department...</option>
+                    </select>
+                    <div id="detailsNewDepartmentTextInputWrapper" style="display:none; margin-top:8px;">
+                        <input type="text" class="form-control" id="detailsNewDepartmentText" maxlength="100" placeholder="Enter new department name" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Manager</label>
+                    <select class="form-control" id="detailsManager">
+                        <option value="">-- No Manager --</option>
+                        {% for u in users %}
+                        <option value="{{ u.user_id }}">{{ u.full_name }} (@{{ u.username }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Roles</label>
+                    <div id="detailsRolesContainer" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;">
+                        <!-- Badges will be generated dynamically -->
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserDetailsModal()">Close</button>
+                    <button type="submit" class="btn btn-primary" id="saveUserDetailsSubmitBtn">Save Changes</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -226,6 +330,18 @@
     function closeCreateUserModal() {
         document.getElementById("create-user-modal").classList.remove("open");
         document.getElementById("createUserForm").reset();
+        document.getElementById("newDepartmentTextInputWrapper").style.display = "none";
+    }
+
+    function toggleNewDepartmentInput() {
+        const select = document.getElementById("newDepartmentSelect");
+        const wrapper = document.getElementById("newDepartmentTextInputWrapper");
+        if (select.value === "__new__") {
+            wrapper.style.display = "block";
+            document.getElementById("newDepartmentText").focus();
+        } else {
+            wrapper.style.display = "none";
+        }
     }
 
     async function createUser(e) {
@@ -235,7 +351,13 @@
         const email = document.getElementById("newEmail").value.trim();
         const fullName = document.getElementById("newFullName").value.trim();
         const password = document.getElementById("newPassword").value;
-        const department = document.getElementById("newDepartment").value.trim() || null;
+        let department = null;
+        const deptSelect = document.getElementById("newDepartmentSelect").value;
+        if (deptSelect === "__new__") {
+            department = document.getElementById("newDepartmentText").value.trim() || null;
+        } else if (deptSelect) {
+            department = deptSelect;
+        }
         const phone = document.getElementById("newPhone").value.trim() || null;
         const manager_id = document.getElementById("newManager").value || null;
 
@@ -384,5 +506,204 @@
             toast(error.message || "Failed to revoke role", "error");
         }
     }
+
+    let allDepartmentsList = [];
+
+    async function loadDepartmentsForDetailsModal() {
+        try {
+            const response = await fetch('/api/v1/departments');
+            if (response.ok) {
+                allDepartmentsList = await response.json();
+                
+                // Populate Create User modal select
+                const createUserSelect = document.getElementById("newDepartmentSelect");
+                if (createUserSelect) {
+                    const currentVal = createUserSelect.value;
+                    createUserSelect.innerHTML = '<option value="">-- None / Select --</option>';
+                    allDepartmentsList.forEach(d => {
+                        createUserSelect.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+                    });
+                    createUserSelect.innerHTML += '<option value="__new__">+ Create New Department...</option>';
+                    createUserSelect.value = currentVal;
+                }
+
+                // Populate Details modal select
+                const detailsSelect = document.getElementById("detailsDepartmentSelect");
+                if (detailsSelect) {
+                    const currentVal = detailsSelect.value;
+                    detailsSelect.innerHTML = '<option value="">-- None / Select --</option>';
+                    allDepartmentsList.forEach(d => {
+                        detailsSelect.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+                    });
+                    detailsSelect.innerHTML += '<option value="__new__">+ Create New Department...</option>';
+                    detailsSelect.value = currentVal;
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function closeUserDetailsModal() {
+        document.getElementById("user-details-modal").classList.remove("open");
+        document.getElementById("detailsNewDepartmentTextInputWrapper").style.display = "none";
+    }
+
+    function toggleDetailsNewDepartmentInput() {
+        const select = document.getElementById("detailsDepartmentSelect");
+        const wrapper = document.getElementById("detailsNewDepartmentTextInputWrapper");
+        if (select.value === "__new__") {
+            wrapper.style.display = "block";
+            document.getElementById("detailsNewDepartmentText").focus();
+        } else {
+            wrapper.style.display = "none";
+        }
+    }
+
+    async function openUserDetailsModal(user) {
+        document.getElementById("detailsUserId").value = user.user_id;
+        document.getElementById("detailsFullName").value = user.full_name;
+        document.getElementById("detailsEmail").value = user.email;
+        document.getElementById("detailsPhone").value = user.phone || "";
+        document.getElementById("detailsStatus").value = user.is_active ? "true" : "false";
+        
+        // Populate display
+        document.getElementById("details-full-name-display").textContent = user.full_name;
+        document.getElementById("details-username-display").textContent = `@${user.username}`;
+        
+        // Set avatar
+        const avatarEl = document.getElementById("details-user-avatar");
+        if (user.profile_photo_url) {
+            try {
+                const r = await fetch(`/api/v1/users/${user.user_id}/photo`);
+                if (r.ok) {
+                    const data = await r.json();
+                    if (data.url) avatarEl.src = data.url;
+                } else {
+                    avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.full_name)}&background=random`;
+                }
+            } catch (e) {
+                avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.full_name)}&background=random`;
+            }
+        } else {
+            avatarEl.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.full_name)}&background=random`;
+        }
+
+        // Set department
+        const detailsSelect = document.getElementById("detailsDepartmentSelect");
+        if (detailsSelect) {
+            if (allDepartmentsList.length === 0) {
+                await loadDepartmentsForDetailsModal();
+            }
+            
+            const deptName = user.department || "";
+            let found = false;
+            for (let opt of detailsSelect.options) {
+                if (opt.value === deptName) {
+                    detailsSelect.value = deptName;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && deptName && deptName !== "None") {
+                const opt = document.createElement("option");
+                opt.value = deptName;
+                opt.textContent = deptName;
+                opt.selected = true;
+                detailsSelect.insertBefore(opt, detailsSelect.lastChild);
+            } else if (!deptName) {
+                detailsSelect.value = "";
+            }
+        }
+        document.getElementById("detailsNewDepartmentTextInputWrapper").style.display = "none";
+
+        // Set manager
+        const managerSelect = document.getElementById("detailsManager");
+        if (managerSelect) {
+            managerSelect.value = user.manager_id || "";
+            for (let opt of managerSelect.options) {
+                if (opt.value === user.user_id) {
+                    opt.disabled = true;
+                } else {
+                    opt.disabled = false;
+                }
+            }
+        }
+
+        // Set roles
+        const container = document.getElementById("detailsRolesContainer");
+        container.innerHTML = "";
+        if (user.roles && user.roles.length > 0) {
+            user.roles.forEach(role => {
+                const badge = document.createElement("span");
+                badge.className = "badge badge-blue";
+                badge.textContent = role;
+                container.appendChild(badge);
+            });
+        } else {
+            container.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">No roles</span>';
+        }
+
+        document.getElementById("user-details-modal").classList.add("open");
+    }
+
+    function handleDetailsClick(btn) {
+        const user = {
+            user_id: btn.dataset.userId,
+            username: btn.dataset.username,
+            email: btn.dataset.email,
+            full_name: btn.dataset.fullName,
+            dept: btn.dataset.dept || "",
+            department: btn.dataset.department || "",
+            phone: btn.dataset.phone || "",
+            manager_id: btn.dataset.managerId || "",
+            profile_photo_url: btn.dataset.profilePhotoUrl || "",
+            is_active: btn.dataset.isActive === "true",
+            roles: btn.dataset.roles ? btn.dataset.roles.split(",") : []
+        };
+        openUserDetailsModal(user);
+    }
+
+    async function saveUserDetails(event) {
+        event.preventDefault();
+        const userId = document.getElementById("detailsUserId").value;
+        const full_name = document.getElementById("detailsFullName").value.trim();
+        const email = document.getElementById("detailsEmail").value.trim();
+        const phone = document.getElementById("detailsPhone").value.trim() || null;
+        const is_active = document.getElementById("detailsStatus").value === "true";
+        const manager_id = document.getElementById("detailsManager").value || null;
+
+        let department = null;
+        const deptSelect = document.getElementById("detailsDepartmentSelect").value;
+        if (deptSelect === "__new__") {
+            department = document.getElementById("detailsNewDepartmentText").value.trim() || null;
+        } else if (deptSelect) {
+            department = deptSelect;
+        }
+
+        const submitBtn = document.getElementById("saveUserDetailsSubmitBtn");
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Saving...";
+
+        try {
+            await apiFetch(`/api/v1/users/${userId}`, {
+                method: "PUT",
+                body: { full_name, email, phone, department, is_active, manager_id }
+            });
+
+            toast("User updated successfully!", "success");
+            closeUserDetailsModal();
+            setTimeout(() => window.location.reload(), 800);
+        } catch (error) {
+            toast(error.message || "Failed to update user", "error");
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Save Changes";
+        }
+    }
+
+    // Call initial departments load
+    document.addEventListener("DOMContentLoaded", () => {
+        loadDepartmentsForDetailsModal();
+    });
 </script>
 {% endblock %}

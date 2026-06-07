@@ -51,6 +51,8 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     department: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=50)
+    manager_id: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class UserPasswordChange(BaseModel):
@@ -111,6 +113,7 @@ class UserResponse(BaseModel):
     username: str
     email: str
     full_name: str
+    dept: Optional[str] = None
     department: Optional[str] = None
     phone: Optional[str] = None
     manager_id: Optional[str] = None
@@ -132,6 +135,7 @@ class UserListItem(BaseModel):
     username: str
     email: str
     full_name: str
+    dept: Optional[str] = None
     department: Optional[str] = None
     phone: Optional[str] = None
     manager_id: Optional[str] = None

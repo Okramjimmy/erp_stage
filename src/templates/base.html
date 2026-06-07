@@ -170,8 +170,13 @@
                         padding: 12px 16px;
                         border-bottom: 1px solid var(--border-light);
                         margin-bottom: 12px;
+                        cursor: pointer;
+                        transition: background-color 0.2s;
                     "
                     title="{% if current_user %}{{ current_user.full_name }}{% else %}User Profile{% endif %}"
+                    onclick="openProfileModal()"
+                    onmouseover="this.style.backgroundColor='var(--bg-light)'"
+                    onmouseout="this.style.backgroundColor='transparent'"
                 >
                     <img
                         id="user-avatar"
@@ -480,6 +485,70 @@
                         <button type="submit" class="btn btn-primary" id="cpSubmitBtn">Update Password</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- User Profile Modal -->
+        <div class="modal-overlay" id="profile-modal">
+            <div class="modal" style="max-width: 480px; width: 100%;">
+                <div class="modal-header">
+                    <span class="modal-title">My Profile</span>
+                    <button class="btn btn-ghost btn-icon" onclick="closeProfileModal()">✕</button>
+                </div>
+                <div class="modal-body" style="max-height: 80vh; overflow-y: auto;">
+                    {% if current_user %}
+                    <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; text-align: center;">
+                        <div style="position: relative; display: inline-block;">
+                            <img
+                                id="modal-user-avatar"
+                                src="https://ui-avatars.com/api/?name={{ current_user.full_name | urlencode }}&background=random"
+                                alt="{{ current_user.full_name }}"
+                                style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary-light); background: var(--bg);"
+                            />
+                            <label for="profilePhotoInput" style="position: absolute; bottom: 0; right: 0; background: var(--primary); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid white; font-size: 12px;" title="Upload Photo">
+                                📷
+                            </label>
+                            <input type="file" id="profilePhotoInput" style="display: none;" accept="image/*" onchange="uploadProfilePhoto(event)" />
+                        </div>
+                        <div style="margin-top: 10px; font-weight: 700; font-size: 16px;">{{ current_user.full_name }}</div>
+                        <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">@{{ current_user.username }}</div>
+                    </div>
+
+                    <form id="profileForm" onsubmit="saveProfile(event)">
+                        <div class="form-group">
+                            <label class="form-label required">Full Name</label>
+                            <input type="text" class="form-control" id="profileFullName" value="{{ current_user.full_name }}" required />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label required">Email</label>
+                            <input type="email" class="form-control" id="profileEmail" value="{{ current_user.email }}" required />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control" id="profilePhone" value="{% if current_user.phone %}{{ current_user.phone }}{% endif %}" placeholder="e.g. +91 98765 43210" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Department</label>
+                            <select class="form-control" id="profileDepartmentSelect" onchange="toggleProfileNewDepartmentInput()">
+                                <option value="">-- None / Select --</option>
+                                <option value="__new__">+ Create New Department...</option>
+                            </select>
+                            <div id="profileNewDepartmentTextInputWrapper" style="display:none; margin-top:8px;">
+                                <input type="text" class="form-control" id="profileNewDepartmentText" maxlength="100" placeholder="Enter new department name" />
+                            </div>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px;">
+                            <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="saveProfileSubmitBtn">Save Changes</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div style="text-align: center; padding: 24px; color: var(--text-muted);">
+                        Please log in to view profile details.
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
 
@@ -996,6 +1065,157 @@
 
             // Fetch User Details removed (handled server-side via jinja)
 
+            function openProfileModal() {
+                document.getElementById("profile-modal").classList.add("open");
+                loadDepartmentsForProfile();
+            }
+
+            function closeProfileModal() {
+                document.getElementById("profile-modal").classList.remove("open");
+                document.getElementById("profileNewDepartmentTextInputWrapper").style.display = "none";
+            }
+
+            function toggleProfileNewDepartmentInput() {
+                const select = document.getElementById("profileDepartmentSelect");
+                const wrapper = document.getElementById("profileNewDepartmentTextInputWrapper");
+                if (select.value === "__new__") {
+                    wrapper.style.display = "block";
+                    document.getElementById("profileNewDepartmentText").focus();
+                } else {
+                    wrapper.style.display = "none";
+                }
+            }
+
+            async function loadDepartmentsForProfile() {
+                try {
+                    const response = await fetch('/api/v1/departments');
+                    if (response.ok) {
+                        const depts = await response.json();
+                        
+                        // Populate Create User modal select (if it exists on the page)
+                        const createUserSelect = document.getElementById("newDepartmentSelect");
+                        if (createUserSelect) {
+                            const currentVal = createUserSelect.value;
+                            createUserSelect.innerHTML = '<option value="">-- None / Select --</option>';
+                            depts.forEach(d => {
+                                createUserSelect.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+                            });
+                            createUserSelect.innerHTML += '<option value="__new__">+ Create New Department...</option>';
+                            createUserSelect.value = currentVal;
+                        }
+
+                        // Populate Profile modal select (if it exists)
+                        const profileSelect = document.getElementById("profileDepartmentSelect");
+                        if (profileSelect) {
+                            const currentDept = "{% if current_user %}{{ current_user.department }}{% endif %}";
+                            profileSelect.innerHTML = '<option value="">-- None / Select --</option>';
+                            let foundCurrent = false;
+                            depts.forEach(d => {
+                                const selected = d.name === currentDept ? 'selected' : '';
+                                if (d.name === currentDept) foundCurrent = true;
+                                profileSelect.innerHTML += `<option value="${d.name}" ${selected}>${d.name}</option>`;
+                            });
+                            profileSelect.innerHTML += '<option value="__new__">+ Create New Department...</option>';
+                            if (currentDept && !foundCurrent && currentDept !== "None" && currentDept !== "") {
+                                const opt = document.createElement("option");
+                                opt.value = currentDept;
+                                opt.textContent = currentDept;
+                                opt.selected = true;
+                                profileSelect.insertBefore(opt, profileSelect.lastChild);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to load departments", e);
+                }
+            }
+
+            async function uploadProfilePhoto(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const formData = new FormData();
+                formData.append("file", file);
+
+                try {
+                    const response = await fetch(`/api/v1/users/${window.CURRENT_USER_ID}/photo`, {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        toast("Profile photo updated successfully!", "success");
+                        await loadUserAvatar();
+                    } else {
+                        const err = await response.json();
+                        toast(err.detail || "Failed to upload photo", "error");
+                    }
+                } catch (e) {
+                    console.error(e);
+                    toast("An error occurred during upload", "error");
+                }
+            }
+
+            async function saveProfile(event) {
+                event.preventDefault();
+                const fullName = document.getElementById("profileFullName").value.trim();
+                const email = document.getElementById("profileEmail").value.trim();
+                const phone = document.getElementById("profilePhone").value.trim() || null;
+                
+                let department = null;
+                const deptSelect = document.getElementById("profileDepartmentSelect").value;
+                if (deptSelect === "__new__") {
+                    department = document.getElementById("profileNewDepartmentText").value.trim() || null;
+                } else if (deptSelect) {
+                    department = deptSelect;
+                }
+
+                const submitBtn = document.getElementById("saveProfileSubmitBtn");
+                submitBtn.disabled = true;
+                submitBtn.textContent = "Saving...";
+
+                try {
+                    const response = await fetch(`/api/v1/users/${window.CURRENT_USER_ID}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ full_name: fullName, email, phone, department })
+                    });
+
+                    if (response.ok) {
+                        toast("Profile updated successfully!", "success");
+                        setTimeout(() => window.location.reload(), 800);
+                    } else {
+                        const err = await response.json();
+                        toast(err.detail || "Failed to update profile", "error");
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = "Save Changes";
+                    }
+                } catch (e) {
+                    console.error(e);
+                    toast("An error occurred while saving profile", "error");
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = "Save Changes";
+                }
+            }
+
+            async function loadUserAvatar() {
+                if (!window.CURRENT_USER_ID) return;
+                try {
+                    const r = await fetch(`/api/v1/users/${window.CURRENT_USER_ID}/photo`);
+                    if (r.ok) {
+                        const data = await r.json();
+                        if (data.url) {
+                            const avatar = document.getElementById("user-avatar");
+                            if (avatar) avatar.src = data.url;
+                            const modalAvatar = document.getElementById("modal-user-avatar");
+                            if (modalAvatar) modalAvatar.src = data.url;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to load user avatar", e);
+                }
+            }
+
             // Initialize states on load
             document.addEventListener("DOMContentLoaded", () => {
                 const sidebar = document.getElementById("sidebar");
@@ -1053,6 +1273,12 @@
                         document.addEventListener("mouseup", onMouseUp);
                     });
                 }
+
+                // Load user avatar
+                loadUserAvatar();
+
+                // Prefetch/load departments to populate any department dropdown
+                loadDepartmentsForProfile();
 
                 // Sync view mode UI on load
                 syncViewModeUI();

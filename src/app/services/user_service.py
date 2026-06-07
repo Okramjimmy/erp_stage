@@ -98,12 +98,19 @@ class UserService:
         if await self.get_by_email(data.email):
             raise ValueError(f"Email '{data.email}' is already registered")
 
+        dept_id = None
+        if data.department:
+            from src.app.services.department_service import DepartmentService
+            dept_service = DepartmentService(self.db)
+            dept_obj = await dept_service.get_or_create(data.department)
+            dept_id = dept_obj.department_id
+
         user = User(
             user_id=str(uuid.uuid4()),
             username=data.username,
             email=data.email,
             full_name=data.full_name,
-            department=data.department,
+            dept=dept_id,
             phone=data.phone,
             manager_id=data.manager_id,
             hashed_password=hash_password(data.password),
@@ -132,9 +139,19 @@ class UserService:
                 raise ValueError("Email already in use by another account")
             user.email = data.email
         if data.department is not None:
-            user.department = data.department
+            if data.department == "":
+                user.dept = None
+            else:
+                from src.app.services.department_service import DepartmentService
+                dept_service = DepartmentService(self.db)
+                dept_obj = await dept_service.get_or_create(data.department)
+                user.dept = dept_obj.department_id
         if data.phone is not None:
             user.phone = data.phone
+        if data.manager_id is not None:
+            user.manager_id = data.manager_id if data.manager_id != "" else None
+        if data.is_active is not None:
+            user.is_active = data.is_active
 
         await self.db.commit()
         await self.db.refresh(user)
@@ -286,13 +303,17 @@ class UserService:
             self.db.add(superadmin_role)
             await self.db.flush()  # flush to get role_id before using it
 
+        from src.app.services.department_service import DepartmentService
+        dept_service = DepartmentService(self.db)
+        dept_obj = await dept_service.get_or_create("IT")
+
         admin_id = str(uuid.uuid4())
         admin = User(
             user_id=admin_id,
             username="admin",
             email="admin@erp.local",
             full_name="System Administrator",
-            department="IT",
+            dept=dept_obj.department_id,
             hashed_password=hash_password("changeme123"),
             is_active=True,
         )

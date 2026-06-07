@@ -528,6 +528,10 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
     perm_service = PermissionService(db)
     all_roles = await perm_service.list_all_roles()
 
+    from src.app.services.department_service import DepartmentService
+    dept_service = DepartmentService(db)
+    all_departments = await dept_service.list_departments(limit=50)
+
     users_data = [
         {**u.to_dict(), "roles": r}
         for u, r in all_users_with_roles
@@ -541,5 +545,6 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
             "current_user_roles": roles,
             "users": users_data,
             "all_roles": all_roles,
+            "departments": all_departments,
         },
     )

@@ -229,6 +229,19 @@ CREATE INDEX idx_form_type_permissions_role ON form_type_permissions(role_name);
 
 
 -- =================================================================
+-- 4.4. DEPARTMENTS TABLE
+-- =================================================================
+CREATE TABLE departments (
+    department_id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_departments_name ON departments(name);
+
+-- =================================================================
 -- 4.5. ROLES TABLE
 -- =================================================================
 -- Dedicated roles table
@@ -250,7 +263,7 @@ CREATE TABLE users (
     email VARCHAR(255) NOT NULL UNIQUE,
     full_name VARCHAR(255) NOT NULL,
     manager_id VARCHAR(36) REFERENCES users(user_id),
-    department VARCHAR(100),
+    dept VARCHAR(36) REFERENCES departments(department_id),
     phone VARCHAR(50),
     profile_photo_url TEXT,
     hashed_password TEXT NOT NULL,
@@ -773,6 +786,11 @@ EXECUTE FUNCTION trg_update_timestamp();
 
 CREATE TRIGGER t_users_update_timestamp
 BEFORE UPDATE ON users
+FOR EACH ROW
+EXECUTE FUNCTION trg_update_timestamp();
+
+CREATE TRIGGER t_departments_update_timestamp
+BEFORE UPDATE ON departments
 FOR EACH ROW
 EXECUTE FUNCTION trg_update_timestamp();
 
