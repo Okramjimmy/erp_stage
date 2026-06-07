@@ -891,6 +891,9 @@
             }
 
             function syncViewModeUI() {
+                if (sessionStorage.getItem("drive-view") === null) {
+                    sessionStorage.setItem("drive-view", "true");
+                }
                 const isDriveView = sessionStorage.getItem("drive-view") === "true";
                 const mode = isDriveView ? "drive" : "dash";
                 
@@ -916,7 +919,8 @@
                 const pageDashTab = document.getElementById("page-view-mode-dash");
                 const pageDriveTab = document.getElementById("page-view-mode-drive");
                 if (pageDashTab && pageDriveTab) {
-                    if (mode === "drive") {
+                    const isStagePage = window.location.pathname.startsWith("/stages/");
+                    if (isStagePage && mode === "drive") {
                         pageDriveTab.classList.add("active");
                         pageDashTab.classList.remove("active");
                     } else {

@@ -1,5 +1,12 @@
 {% extends "base.html" %} {% block title %}{{ stage.stage_name }} — ERP Stage
 Builder{% endblock %} {% block content %}
+<script>
+    (function() {
+        if (sessionStorage.getItem("drive-view") !== "false") {
+            document.write('<style id="anti-flicker-style">.stat-grid, .tabs:not(.view-mode-tabs), .tab-pane { display: none !important; } #drive-view-container { display: block !important; }</style>');
+        }
+    })();
+</script>
 
 <div class="tabs view-mode-tabs" style="margin-bottom: 20px;">
     <button class="tab-btn active" id="page-view-mode-dash" onclick="setViewMode('dash')">
@@ -52,11 +59,13 @@ Builder{% endblock %} {% block content %}
         </div>
     </div>
     <div class="page-actions">
-        <button class="btn btn-secondary btn-sm" onclick="openEditStageModal()">
-            ✏️ Edit
+        <button class="btn btn-secondary btn-sm" onclick="openEditStageModal()" style="display: inline-flex; align-items: center; gap: 4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Edit
         </button>
-        <button class="btn btn-secondary btn-sm" onclick="openMoveModal()">
-            ↕️ Move
+        <button class="btn btn-secondary btn-sm" onclick="openMoveModal()" style="display: inline-flex; align-items: center; gap: 4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+            Move
         </button>
         <div
             class="navbar-dropdown-container"
@@ -115,7 +124,8 @@ Builder{% endblock %} {% block content %}
                         font-size: 13px;
                     "
                 >
-                    <span style="color: var(--text-muted)">+</span> New {% if stage.depth_level == 0 %}Project{% else %}Task{% endif %}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted)"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    New {% if stage.depth_level == 0 %}Project{% else %}Task{% endif %}
                 </a>
                 <a
                     href="#"
@@ -135,8 +145,8 @@ Builder{% endblock %} {% block content %}
                         font-size: 13px;
                     "
                 >
-                    <span style="color: var(--text-muted)">📄</span> New Form
-                    Type
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted)"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    New Form Type
                 </a>
             </div>
         </div>
@@ -144,8 +154,10 @@ Builder{% endblock %} {% block content %}
         <button
             class="btn btn-danger btn-sm"
             onclick="showDeletePreview('{{ stage.stage_id }}','{{ stage.stage_name }}')"
+            style="display: inline-flex; align-items: center; gap: 4px;"
         >
-            🗑 Delete
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete
         </button>
         {% endif %}
     </div>
@@ -153,22 +165,24 @@ Builder{% endblock %} {% block content %}
 
 <div class="stat-grid" style="margin-bottom: 20px">
     <div class="stat-card">
-        <div class="stat-icon blue">🏠</div>
+        <div class="stat-icon blue" style="display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
         <div class="stat-label">Depth Level</div>
         <div class="stat-value">{{ stage.depth_level }}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon green">📂</div>
+        <div class="stat-icon green" style="display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
         <div class="stat-label">Direct Children</div>
         <div class="stat-value">{{ stage.children_count }}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-icon orange">📋</div>
+        <div class="stat-icon orange" style="display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div>
         <div class="stat-label">Form Types</div>
         <div class="stat-value">{{ stage.formtype_count }}</div>
     </div>
     <div class="stat-card" style="background-color: #fef9c3; border: 1px solid #fef08a; cursor: pointer;" onclick="openUploadsModal()">
-        <div class="stat-icon yellow" style="background-color: #fef08a; color: #ca8a04; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px;">📁</div>
+        <div class="stat-icon yellow" style="background-color: #fef08a; color: #ca8a04; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
         <div class="stat-label" style="color: #854d0e; font-weight: 600;">Uploads Folder</div>
         <div class="stat-value" id="uploads-count" style="color: #ca8a04;">{{ stage.filenames | length }}</div>
     </div>
@@ -196,7 +210,9 @@ Builder{% endblock %} {% block content %}
             onclick="openBuildModal('explicit', '{{ ft.form_type_id }}')"
         >
             <div class="form-card-header">
-                <div class="form-card-icon">📋</div>
+                <div class="form-card-icon" style="display: flex; align-items: center; justify-content: center;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                </div>
                 <div>
                     <div class="form-card-name">{{ ft.form_name }}</div>
                     <div class="form-card-meta">
@@ -231,14 +247,19 @@ Builder{% endblock %} {% block content %}
                 <button
                     class="btn btn-sm btn-secondary"
                     onclick="openBuildModal('explicit', '{{ ft.form_type_id }}')"
+                    style="display: inline-flex; align-items: center; gap: 4px;"
                 >
-                    ✏️ Build
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    Build
                 </button>
                 <a
                     href="/workflow-builder/{{ ft.form_type_id }}"
                     class="btn btn-sm btn-secondary"
-                    >⚙ Workflow</a
+                    style="display: inline-flex; align-items: center; gap: 4px;"
                 >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    Workflow
+                </a>
                 <button
                     class="btn btn-sm btn-secondary"
                     onclick="exportFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')"
@@ -259,7 +280,9 @@ Builder{% endblock %} {% block content %}
     </div>
     {% else %}
     <div class="empty-state">
-        <div class="empty-icon">📋</div>
+        <div class="empty-icon" style="display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
         <h3>No form types yet</h3>
         <p>
             Form types define the fields and schema for data entry at this
@@ -346,7 +369,9 @@ Builder{% endblock %} {% block content %}
     </div>
     {% else %}
     <div class="empty-state">
-        <div class="empty-icon">📂</div>
+        <div class="empty-icon" style="display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted);">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
         <h3>No {% if stage.depth_level == 0 %}projects{% else %}tasks{% endif %}</h3>
         <p>This {% if stage.depth_level == 0 %}root{% else %}project/task{% endif %} has no children. Add a {% if stage.depth_level == 0 %}project{% else %}task{% endif %} to build hierarchy.</p>
         <button class="btn btn-primary" onclick="openCreateChildModal()">
@@ -520,22 +545,99 @@ Builder{% endblock %} {% block content %}
                     </div>
                 </div>
                 <div
-                    class="ml-auto"
-                    style="color: var(--text-muted); cursor: pointer"
+                    class="ml-auto dropdown-trigger-wrapper"
+                    style="position: relative; display: inline-block;"
                     onclick="event.stopPropagation()"
                 >
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
+                    <button
+                        type="button"
+                        class="btn-taste-dropdown-trigger"
+                        style="background: transparent; border: none; padding: 4px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; border-radius: 4px; transition: background 0.15s, transform 0.1s;"
+                        onmouseover="this.style.background='var(--bg)'"
+                        onmouseout="this.style.background='transparent'"
+                        onmousedown="this.style.transform='scale(0.95)'"
+                        onmouseup="this.style.transform='scale(1)'"
+                        onclick="toggleCardDropdown(event, 'child-stage-{{ child.stage_id }}')"
                     >
-                        <circle cx="12" cy="12" r="1" />
-                        <circle cx="12" cy="5" r="1" />
-                        <circle cx="12" cy="19" r="1" />
-                    </svg>
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <circle cx="12" cy="12" r="1" />
+                            <circle cx="12" cy="5" r="1" />
+                            <circle cx="12" cy="19" r="1" />
+                        </svg>
+                    </button>
+                    <div
+                        id="dropdown-child-stage-{{ child.stage_id }}"
+                        class="dropdown-menu card-dropdown-menu"
+                        style="
+                            display: none;
+                            position: absolute;
+                            right: 0;
+                            top: 100%;
+                            margin-top: 4px;
+                            background: white;
+                            border: 1px solid var(--border);
+                            border-radius: var(--radius);
+                            box-shadow: var(--shadow-md);
+                            width: 160px;
+                            z-index: 1000;
+                            text-align: left;
+                        "
+                    >
+                        <a
+                            href="/stages/{{ child.stage_id }}"
+                            class="dropdown-item"
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            View Stage
+                        </a>
+                        <a
+                            href="#"
+                            class="dropdown-item"
+                            data-stage-id="{{ child.stage_id }}"
+                            data-stage-name="{{ child.stage_name }}"
+                            data-wbs-prefix="{{ child.wbs_prefix or '' }}"
+                            data-depth-level="{{ child.depth_level }}"
+                            data-visibility="{{ child.visibility_scope }}"
+                            onclick="
+                                event.preventDefault();
+                                handleEditChildStageClick(this);
+                            "
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            Edit Stage
+                        </a>
+                        {% if user_permissions and user_permissions.stages.get(child.stage_id) and user_permissions.stages[child.stage_id].delete %}
+                        <a
+                            href="#"
+                            class="dropdown-item text-danger"
+                            data-stage-id="{{ child.stage_id }}"
+                            data-stage-name="{{ child.stage_name }}"
+                            onclick="
+                                event.preventDefault();
+                                handleDeleteChildStageClick(this);
+                            "
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--danger); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Delete
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -582,28 +684,137 @@ Builder{% endblock %} {% block content %}
                     </div>
                 </div>
                 <div
-                    class="ml-auto"
-                    style="color: var(--text-muted); cursor: pointer"
+                    class="ml-auto dropdown-trigger-wrapper"
+                    style="position: relative; display: inline-block;"
                     onclick="event.stopPropagation()"
                 >
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
+                    <button
+                        type="button"
+                        class="btn-taste-dropdown-trigger"
+                        style="background: transparent; border: none; padding: 4px; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; border-radius: 4px; transition: background 0.15s, transform 0.1s;"
+                        onmouseover="this.style.background='var(--bg)'"
+                        onmouseout="this.style.background='transparent'"
+                        onmousedown="this.style.transform='scale(0.95)'"
+                        onmouseup="this.style.transform='scale(1)'"
+                        onclick="toggleCardDropdown(event, 'ft-{{ ft.form_type_id }}')"
                     >
-                        <circle cx="12" cy="12" r="1" />
-                        <circle cx="12" cy="5" r="1" />
-                        <circle cx="12" cy="19" r="1" />
-                    </svg>
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <circle cx="12" cy="12" r="1" />
+                            <circle cx="12" cy="5" r="1" />
+                            <circle cx="12" cy="19" r="1" />
+                        </svg>
+                    </button>
+                    <div
+                        id="dropdown-ft-{{ ft.form_type_id }}"
+                        class="dropdown-menu card-dropdown-menu"
+                        style="
+                            display: none;
+                            position: absolute;
+                            right: 0;
+                            top: 100%;
+                            margin-top: 4px;
+                            background: white;
+                            border: 1px solid var(--border);
+                            border-radius: var(--radius);
+                            box-shadow: var(--shadow-md);
+                            width: 160px;
+                            z-index: 1000;
+                            text-align: left;
+                        "
+                    >
+                        <a
+                            href="/forms/{{ ft.form_type_id }}/new?stage_id={{ stage.stage_id }}"
+                            class="dropdown-item"
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                            New Record
+                        </a>
+                        <a
+                            href="/forms/{{ ft.form_type_id }}"
+                            class="dropdown-item"
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            List Records
+                        </a>
+                        <a
+                            href="#"
+                            class="dropdown-item"
+                            onclick="
+                                event.preventDefault();
+                                openBuildModal('explicit', '{{ ft.form_type_id }}');
+                                closeAllCardDropdowns();
+                            "
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            Build Form
+                        </a>
+                        <a
+                            href="/workflow-builder/{{ ft.form_type_id }}"
+                            class="dropdown-item"
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            Workflow
+                        </a>
+                        <a
+                            href="#"
+                            class="dropdown-item"
+                            onclick="
+                                event.preventDefault();
+                                exportFormType('{{ ft.form_type_id }}', {{ ft.form_name | tojson | safe }});
+                                closeAllCardDropdowns();
+                            "
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Export
+                        </a>
+                        {% if user_permissions and user_permissions.form_types.get(ft.form_type_id) and user_permissions.form_types[ft.form_type_id].delete %}
+                        <a
+                            href="#"
+                            class="dropdown-item text-danger"
+                            onclick="
+                                event.preventDefault();
+                                deleteForm('{{ ft.form_type_id }}', {{ ft.form_name | tojson | safe }});
+                                closeAllCardDropdowns();
+                            "
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--danger); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Delete
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
         {% endfor %} {% if not children and not form_types %}
         <div class="empty-state" style="grid-column: 1 / -1">
-            <div class="empty-icon">📂</div>
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 12px; color: var(--text-muted);">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </div>
             <h3>Drive is empty</h3>
             <p>Add a child stage or form type to get started.</p>
         </div>
@@ -613,8 +824,16 @@ Builder{% endblock %} {% block content %}
 
 <script>
     function updateViewModeElements() {
+        if (sessionStorage.getItem("drive-view") === null) {
+            sessionStorage.setItem("drive-view", "true");
+        }
         const isDriveView = sessionStorage.getItem("drive-view") === "true";
         const driveView = document.getElementById("drive-view-container");
+        
+        const antiFlicker = document.getElementById("anti-flicker-style");
+        if (antiFlicker) {
+            antiFlicker.remove();
+        }
         
         // Update active state of page level tabs switcher
         const pageDashTab = document.getElementById("page-view-mode-dash");
@@ -655,6 +874,43 @@ Builder{% endblock %} {% block content %}
     window.addEventListener("view-mode-changed", () => {
         updateViewModeElements();
     });
+
+    function toggleCardDropdown(event, id) {
+        event.stopPropagation();
+        const el = document.getElementById('dropdown-' + id);
+        const isOpen = el && el.style.display === 'block';
+        closeAllCardDropdowns();
+        if (el && !isOpen) {
+            el.style.display = 'block';
+        }
+    }
+
+    function closeAllCardDropdowns() {
+        document.querySelectorAll('.card-dropdown-menu').forEach(el => {
+            el.style.display = 'none';
+        });
+    }
+
+    function handleEditChildStageClick(el) {
+        const stageId = el.getAttribute('data-stage-id');
+        const stageName = el.getAttribute('data-stage-name');
+        const stagePrefix = el.getAttribute('data-wbs-prefix');
+        const stageDepth = parseInt(el.getAttribute('data-depth-level'));
+        const visibility = el.getAttribute('data-visibility');
+        openEditStageModal(stageId, stageName, stagePrefix, stageDepth, visibility);
+        closeAllCardDropdowns();
+    }
+
+    function handleDeleteChildStageClick(el) {
+        const stageId = el.getAttribute('data-stage-id');
+        const stageName = el.getAttribute('data-stage-name');
+        showDeletePreview(stageId, stageName);
+        closeAllCardDropdowns();
+    }
+
+    document.addEventListener('click', () => {
+        closeAllCardDropdowns();
+    });
 </script>
 
 <div class="modal-overlay" id="create-form-modal">
@@ -687,7 +943,7 @@ Builder{% endblock %} {% block content %}
                     color: var(--primary);
                 "
             >
-                <span>📋</span>
+                <span style="display: inline-flex; align-items: center; justify-content: center;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
                 <strong>Selected Template:</strong>
                 <span id="selected-template-name">-</span>
                 <button
@@ -780,8 +1036,8 @@ Builder{% endblock %} {% block content %}
                             this.style.boxShadow = 'none';
                         "
                     >
-                        <div style="font-size: 40px; margin-bottom: 12px">
-                            📝
+                        <div style="font-size: 40px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center;">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--primary);"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                         </div>
                         <h4 style="margin-bottom: 8px">New Formtype</h4>
                         <p
@@ -831,8 +1087,8 @@ Builder{% endblock %} {% block content %}
                             this.style.boxShadow = 'none';
                         "
                     >
-                        <div style="font-size: 40px; margin-bottom: 12px">
-                            📋
+                        <div style="font-size: 40px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center;">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color: var(--primary);"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                         </div>
                         <h4 style="margin-bottom: 8px">
                             Start with a Template
@@ -1025,17 +1281,17 @@ Builder{% endblock %} {% block content %}
 <div class="modal-overlay" id="edit-stage-modal">
     <div class="modal">
         <div class="modal-header">
-            <span class="modal-title">Edit {% if stage.depth_level == 0 %}Root{% elif stage.depth_level == 1 %}Project{% else %}Task{% endif %}</span>
+            <span class="modal-title">Edit Stage</span>
             <button
                 class="btn btn-ghost btn-icon"
                 onclick="closeModal('edit-stage-modal')"
             >
-                ✕
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
         </div>
         <div class="modal-body">
             <div class="form-group">
-                <label class="form-label required">{% if stage.depth_level == 0 %}Root{% elif stage.depth_level == 1 %}Project{% else %}Task{% endif %} Name</label>
+                <label class="form-label required" for="edit-stage-name">Stage Name</label>
                 <input
                     type="text"
                     class="form-control"
@@ -1043,54 +1299,36 @@ Builder{% endblock %} {% block content %}
                     value=""
                 />
             </div>
-            {% if stage.depth_level == 1 %}
-            <div class="form-group">
-                <label class="form-label">WBS Prefix <span style="font-weight:400;font-size:0.85em;opacity:0.65">(3-char, leave empty to remove)</span></label>
-                <input
-                    type="text"
-                    class="form-control"
-                    id="edit-stage-prefix"
-                    maxlength="3"
-                    placeholder="e.g. abc"
-                    value="{{ stage.wbs_prefix or '' }}"
-                />
+            <div id="edit-wbs-container" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label" for="edit-stage-prefix">WBS Prefix <span style="font-weight:400;font-size:0.85em;opacity:0.65">(3-char, leave empty to remove)</span></label>
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="edit-stage-prefix"
+                        maxlength="3"
+                        placeholder="e.g. abc"
+                        value=""
+                    />
+                </div>
+                <div class="form-group">
+                    <label class="form-label required" for="edit-stage-number">WBS Number</label>
+                    <input
+                        type="number"
+                        class="form-control"
+                        id="edit-stage-number"
+                        min="1"
+                        placeholder="e.g. 1"
+                        value=""
+                    />
+                </div>
             </div>
             <div class="form-group">
-                <label class="form-label required">WBS Number</label>
-                <input
-                    type="number"
-                    class="form-control"
-                    id="edit-stage-number"
-                    min="1"
-                    placeholder="e.g. 1"
-                    value=""
-                />
-            </div>
-            {% endif %}
-            <div class="form-group">
-                <label class="form-label">Visibility</label>
+                <label class="form-label" for="edit-stage-visibility">Visibility</label>
                 <select class="form-control" id="edit-stage-visibility">
-                    <option
-                        value="private"
-                        {% if stage.visibility_scope == "private" %}selected{%
-                        endif %}
-                    >
-                        Private
-                    </option>
-                    <option
-                        value="public"
-                        {% if stage.visibility_scope == "public" %}selected{%
-                        endif %}
-                    >
-                        Public
-                    </option>
-                    <option
-                        value="restricted"
-                        {% if stage.visibility_scope == "restricted" %}selected{%
-                        endif %}
-                    >
-                        Restricted
-                    </option>
+                    <option value="private">Private</option>
+                    <option value="public">Public</option>
+                    <option value="restricted">Restricted</option>
                 </select>
             </div>
         </div>
@@ -1213,7 +1451,10 @@ Builder{% endblock %} {% block content %}
 <div class="modal-overlay" id="delete-preview-modal">
     <div class="modal" style="max-width: 600px">
         <div class="modal-header">
-            <span class="modal-title">🗑 Delete Confirmation</span>
+            <span class="modal-title" style="display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--danger)"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete Confirmation
+            </span>
             <button
                 class="btn btn-ghost btn-icon"
                 onclick="closeModal('delete-preview-modal')"
@@ -1227,7 +1468,10 @@ Builder{% endblock %} {% block content %}
                 <strong id="delete-target-name"></strong>?
             </p>
             <div class="alert alert-warning" style="margin-top: 12px">
-                <strong>⚠ This will also delete:</strong>
+                <strong style="display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--warning)"><path d="m12 5 9 14H3L12 5z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    This will also delete:
+                </strong>
                 <ul
                     id="delete-preview-list"
                     style="
@@ -1269,7 +1513,10 @@ Builder{% endblock %} {% block content %}
 <div class="modal-overlay" id="uploads-modal">
     <div class="modal" style="max-width: 800px; width: 90%;">
         <div class="modal-header">
-            <span class="modal-title">📁 Stage Uploads: {{ stage.stage_name }}</span>
+            <span class="modal-title" style="display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                Stage Uploads: {{ stage.stage_name }}
+            </span>
             <button
                 class="btn btn-ghost btn-icon"
                 onclick="closeModal('uploads-modal')"
@@ -1349,10 +1596,16 @@ Builder{% endblock %} {% block content %}
             </div>
         </div>
         <div class="modal-footer" style="display: flex; justify-content: space-between;">
-            <button class="btn btn-danger btn-sm" id="btn-delete-file">🗑 Delete</button>
+            <button class="btn btn-danger btn-sm" id="btn-delete-file" style="display: inline-flex; align-items: center; gap: 4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                Delete
+            </button>
             <div style="display: flex; gap: 8px;">
                 <button class="btn btn-secondary btn-sm" onclick="closeModal('file-detail-modal')">Close</button>
-                <a href="#" id="link-download-file" class="btn btn-primary btn-sm" target="_blank">📥 Download</a>
+                <a href="#" id="link-download-file" class="btn btn-primary btn-sm" target="_blank" style="display: inline-flex; align-items: center; gap: 4px;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Download
+                </a>
             </div>
         </div>
     </div>
@@ -1655,31 +1908,126 @@ Builder{% endblock %} {% block content %}
     function openCreateChildModal() {
         openModal("create-child-modal");
     }
-    function openEditStageModal() {
-        // Parse the stage full name
-        const prefix = STAGE_PREFIX;
-        const regex = new RegExp(`^(?:${prefix || "[a-zA-Z0-9]{3}"})?(\\d+(?:\\.\\d+)*)\\s+(.*)$`);
-        const match = STAGE_NAME.match(regex);
-        let baseName = STAGE_NAME;
-        let wbsNumber = 1;
-        if (match) {
-            wbsNumber = parseInt(match[1].split('.')[0]);
-            baseName = match[2];
+    let currentEditingStageId = STAGE_ID;
+    let currentEditingStageDepth = STAGE_DEPTH;
+
+    function openEditStageModal(stageId = null, stageName = null, stagePrefix = null, stageDepth = null, visibility = null) {
+        if (!stageId) {
+            currentEditingStageId = STAGE_ID;
+            currentEditingStageDepth = STAGE_DEPTH;
+            visibility = "{{ stage.visibility_scope }}";
+            
+            const prefix = STAGE_PREFIX;
+            const regex = new RegExp(`^(?:${prefix || "[a-zA-Z0-9]{3}"})?(\\d+(?:\\.\\d+)*)\\s+(.*)$`);
+            const match = STAGE_NAME.match(regex);
+            let baseName = STAGE_NAME;
+            let wbsNumber = 1;
+            if (match) {
+                wbsNumber = parseInt(match[1].split('.')[0]);
+                baseName = match[2];
+            }
+            document.getElementById("edit-stage-name").value = baseName;
+            
+            const prefixEl = document.getElementById("edit-stage-prefix");
+            if (prefixEl) prefixEl.value = prefix;
+            
+            const numberEl = document.getElementById("edit-stage-number");
+            if (numberEl) numberEl.value = wbsNumber;
+        } else {
+            currentEditingStageId = stageId;
+            currentEditingStageDepth = stageDepth;
+            
+            const prefix = stagePrefix || '';
+            const regex = new RegExp(`^(?:${prefix || "[a-zA-Z0-9]{3}"})?(\\d+(?:\\.\\d+)*)\\s+(.*)$`);
+            const match = stageName.match(regex);
+            let baseName = stageName;
+            let wbsNumber = 1;
+            if (match) {
+                wbsNumber = parseInt(match[1].split('.')[0]);
+                baseName = match[2];
+            }
+            document.getElementById("edit-stage-name").value = baseName;
+            
+            const prefixEl = document.getElementById("edit-stage-prefix");
+            if (prefixEl) prefixEl.value = prefix;
+            
+            const numberEl = document.getElementById("edit-stage-number");
+            if (numberEl) numberEl.value = wbsNumber;
         }
-        
-        document.getElementById("edit-stage-name").value = baseName;
-        const numberEl = document.getElementById("edit-stage-number");
-        if (numberEl) {
-            numberEl.value = wbsNumber;
+
+        const visibilityEl = document.getElementById("edit-stage-visibility");
+        if (visibilityEl && visibility) {
+            visibilityEl.value = visibility;
         }
+
+        const wbsContainer = document.getElementById("edit-wbs-container");
+        if (wbsContainer) {
+            if (currentEditingStageDepth === 1) {
+                wbsContainer.style.display = "block";
+            } else {
+                wbsContainer.style.display = "none";
+            }
+        }
+
+        let term = "Stage";
+        if (currentEditingStageDepth === 0) term = "Root";
+        else if (currentEditingStageDepth === 1) term = "Project";
+        else if (currentEditingStageDepth > 1) term = "Task";
+
+        const titleEl = document.querySelector("#edit-stage-modal .modal-title");
+        if (titleEl) titleEl.textContent = `Edit ${term}`;
+
+        const labelEl = document.querySelector("#edit-stage-modal label[for='edit-stage-name']");
+        if (labelEl) labelEl.textContent = `${term} Name`;
+
         openModal("edit-stage-modal");
     }
+
+    async function saveStageEdit() {
+        const name = document.getElementById("edit-stage-name").value.trim();
+        const visibility = document.getElementById("edit-stage-visibility").value;
+        const prefixEl = document.getElementById("edit-stage-prefix");
+        const numberEl = document.getElementById("edit-stage-number");
+        
+        let term = "Stage";
+        if (currentEditingStageDepth === 0) term = "Root";
+        else if (currentEditingStageDepth === 1) term = "Project";
+        else if (currentEditingStageDepth > 1) term = "Task";
+
+        if (!name) {
+            toast(`${term} name is required`, "error");
+            return;
+        }
+        try {
+            const body = { stage_name: name, visibility_scope: visibility };
+            if (currentEditingStageDepth === 1) {
+                if (prefixEl !== null) {
+                    body.wbs_prefix = prefixEl.value.trim();
+                }
+                if (numberEl !== null) {
+                    const val = parseInt(numberEl.value);
+                    if (isNaN(val) || val < 1) {
+                        toast("WBS number must be a valid positive integer", "error");
+                        return;
+                    }
+                    body.wbs_number = val;
+                }
+            }
+            await apiFetch(`${API}/stages/${currentEditingStageId}`, {
+                method: "PUT",
+                body: body,
+            });
+            toast(`${term} updated`, "success");
+            closeModal("edit-stage-modal");
+            setTimeout(() => location.reload(), 600);
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
     function openMoveModal() {
         openModal("move-modal");
     }
-
-
-    // createForm is now defined below with template support
 
     async function createChildStage() {
         const name = document.getElementById("child-stage-name").value.trim();
@@ -1703,48 +2051,6 @@ Builder{% endblock %} {% block content %}
             });
             toast(`${term} created`, "success");
             closeModal("create-child-modal");
-            setTimeout(() => location.reload(), 600);
-        } catch (e) {
-            toast(e.message, "error");
-        }
-    }
-
-    async function saveStageEdit() {
-        const name = document.getElementById("edit-stage-name").value.trim();
-        const visibility = document.getElementById(
-            "edit-stage-visibility",
-        ).value;
-        const prefixEl = document.getElementById("edit-stage-prefix");
-        const numberEl = document.getElementById("edit-stage-number");
-        
-        let term = "Stage";
-        if (STAGE_DEPTH === 0) term = "Root";
-        else if (STAGE_DEPTH === 1) term = "Project";
-        else if (STAGE_DEPTH > 1) term = "Task";
-
-        if (!name) {
-            toast(`${term} name is required`, "error");
-            return;
-        }
-        try {
-            const body = { stage_name: name, visibility_scope: visibility };
-            if (prefixEl !== null) {
-                body.wbs_prefix = prefixEl.value.trim();
-            }
-            if (numberEl !== null) {
-                const val = parseInt(numberEl.value);
-                if (isNaN(val) || val < 1) {
-                    toast("WBS number must be a valid positive integer", "error");
-                    return;
-                }
-                body.wbs_number = val;
-            }
-            await apiFetch(`${API}/stages/${STAGE_ID}`, {
-                method: "PUT",
-                body: body,
-            });
-            toast(`${term} updated`, "success");
-            closeModal("edit-stage-modal");
             setTimeout(() => location.reload(), 600);
         } catch (e) {
             toast(e.message, "error");
@@ -1848,7 +2154,11 @@ Builder{% endblock %} {% block content %}
                 method: "DELETE",
             });
             toast("Stage and descendants deleted successfully", "success");
-            setTimeout(() => (window.location = `/`), 800);
+            if (pendingDeleteId === STAGE_ID) {
+                setTimeout(() => (window.location = `/`), 800);
+            } else {
+                setTimeout(() => location.reload(), 800);
+            }
         } catch (e) {
             toast(e.message, "error");
         }
