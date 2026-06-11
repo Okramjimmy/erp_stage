@@ -257,7 +257,7 @@ function toast(msg, type=''){
   document.getElementById('toast-container').appendChild(el); setTimeout(()=>el.remove(),3200);
 }
 async function apiFetch(url,opts={}){
-  const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts,
+  const r=await fetch(url,{headers:{'Content-Type':'application/json'},credentials:'include',...opts,
     body:opts.body?JSON.stringify(opts.body):undefined});
   if(!r.ok){const e=await r.json().catch(()=>({detail:r.statusText}));throw new Error(e.detail||r.statusText);}
   return r.json();

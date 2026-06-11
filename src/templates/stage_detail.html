@@ -1727,6 +1727,7 @@ Builder{% endblock %} {% block content %}
                 headers: {
                     'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({ remark: newRemark })
             });
             const data = await res.json();
@@ -1797,6 +1798,7 @@ Builder{% endblock %} {% block content %}
         try {
             const res = await fetch('/api/v1/stages/upload', {
                 method: 'POST',
+                credentials: 'include',
                 body: formData
             });
             
@@ -1836,7 +1838,8 @@ Builder{% endblock %} {% block content %}
         
         try {
             const res = await fetch(`/api/v1/stages/${encodeURIComponent(STAGE_ID)}/uploads/${encodeURIComponent(filename)}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                credentials: 'include'
             });
             const data = await res.json();
             if (res.ok && (data.status === 'success' || data.message)) {

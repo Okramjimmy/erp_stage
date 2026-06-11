@@ -127,6 +127,15 @@ async def stage_detail(
     perm_service = PermissionService(db)
     user_permissions = await perm_service.get_user_permissions(user.user_id)
 
+    is_superadmin = "superadmin" in (roles or [])
+    if not is_superadmin:
+        visible_stage_ids = set(await perm_service.get_visible_stages(user.user_id))
+        children = [s for s in children if s.stage_id in visible_stage_ids]
+        all_stages_for_move = [s for s in all_stages_for_move if s.stage_id in visible_stage_ids]
+        
+        visible_ft_ids = {ftid for ftid, perms in user_permissions["form_types"].items() if any(perms.values())}
+        form_types = [ft for ft in form_types if ft.form_type_id in visible_ft_ids]
+
     return templates.TemplateResponse(
         "stage_detail.html",
         {
