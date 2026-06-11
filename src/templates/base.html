@@ -568,16 +568,18 @@
             }
 
             async function apiFetch(url, opts = {}) {
+                const cacheKey = `stageTreeCache_${window.CURRENT_USER_ID || 'anon'}`;
+                
                 // Invalidate cache on mutations
                 if (opts.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(opts.method.toUpperCase())) {
                     if (url.includes('/stages') || url.includes('/form-types') || url.includes('/permissions')) {
-                        sessionStorage.removeItem('stageTreeCache');
+                        sessionStorage.removeItem(cacheKey);
                     }
                 }
 
                 // Return cache for /stages/tree
                 if (url.endsWith('/stages/tree') && (!opts.method || opts.method.toUpperCase() === 'GET')) {
-                    const cached = sessionStorage.getItem('stageTreeCache');
+                    const cached = sessionStorage.getItem(cacheKey);
                     if (cached) {
                         try {
                             return JSON.parse(cached);
@@ -587,6 +589,7 @@
 
                 const r = await fetch(url, {
                     headers: { "Content-Type": "application/json" },
+                    credentials: "include",
                     ...opts,
                     body: opts.body ? JSON.stringify(opts.body) : undefined,
                 });
@@ -601,7 +604,7 @@
                 
                 // Save cache for /stages/tree
                 if (url.endsWith('/stages/tree') && (!opts.method || opts.method.toUpperCase() === 'GET')) {
-                    sessionStorage.setItem('stageTreeCache', JSON.stringify(data));
+                    sessionStorage.setItem(cacheKey, JSON.stringify(data));
                 }
                 
                 return data;
@@ -910,7 +913,8 @@
             // Drive/Dash view switcher helpers
             async function getStartingStageId() {
                 let treeData = null;
-                const cached = sessionStorage.getItem('stageTreeCache');
+                const cacheKey = `stageTreeCache_${window.CURRENT_USER_ID || 'anon'}`;
+                const cached = sessionStorage.getItem(cacheKey);
                 if (cached) {
                     try {
                         treeData = JSON.parse(cached);
@@ -1005,6 +1009,7 @@
                 });
 
                 if (response.status === 204) {
+                    sessionStorage.clear();
                     window.location.href = "/login";
                 } else {
                     alert("Logout failed");

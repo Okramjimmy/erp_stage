@@ -139,8 +139,8 @@ CREATE TABLE form_records (
     status VARCHAR(20) NOT NULL DEFAULT 'Draft',
     data JSONB,
     assigned_role VARCHAR(50),
-    assigned_department VARCHAR(100),
     assigned_to VARCHAR(50),
+    assigned_at TIMESTAMP,
     schema_snapshot JSONB,
     form_version VARCHAR(10) NOT NULL,
     amended_from VARCHAR(50) REFERENCES form_records(record_id),
@@ -177,7 +177,6 @@ CREATE TABLE stage_permissions (
     can_edit BOOLEAN NOT NULL DEFAULT FALSE,
     can_delete BOOLEAN NOT NULL DEFAULT FALSE,
     can_manage_permissions BOOLEAN NOT NULL DEFAULT FALSE,
-    can_submit BOOLEAN NOT NULL DEFAULT FALSE,
 
     -- Timestamps
     granted_by VARCHAR(100),
@@ -312,6 +311,25 @@ CREATE TABLE form_actions (
 );
 
 CREATE INDEX idx_form_actions_record ON form_actions(record_id);
+
+
+-- =================================================================
+-- 5.6. WORKFLOW_ASSIGNMENTS TABLE
+-- =================================================================
+CREATE TABLE workflow_assignments (
+    assignment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stage_id VARCHAR(50) NOT NULL REFERENCES stages(stage_id) ON DELETE CASCADE,
+    form_type_id VARCHAR(50) NOT NULL REFERENCES form_types(form_type_id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL,
+    user_id VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    assigned_by VARCHAR(36) REFERENCES users(user_id),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_workflow_assignments_stage ON workflow_assignments(stage_id);
+CREATE INDEX idx_workflow_assignments_form_type ON workflow_assignments(form_type_id);
+CREATE INDEX idx_workflow_assignments_user ON workflow_assignments(user_id);
 
 
 -- =================================================================

@@ -22,8 +22,8 @@ class FormRecordResponse(BaseModel):
     docname: str
     status: str
     assigned_role: Optional[str] = None
-    assigned_department: Optional[str] = None
     assigned_to: Optional[str] = None
+    assigned_at: Optional[datetime] = None
     data: Optional[Dict[str, Any]] = None
     schema_snapshot: Optional[Dict[str, Any]] = None
     form_version: Optional[str] = None

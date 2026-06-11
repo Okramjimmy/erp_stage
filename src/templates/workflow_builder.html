@@ -236,10 +236,12 @@
                 const row = document.createElement('div');
                 row.className = 'transition-row';
                 
-                // Construct role options
-                let roleOptions = `<option value="">-- None --</option>`;
+                // Construct role options for actor_role and next_role
+                let actorRoleOptions = `<option value="">-- None --</option>`;
+                let nextRoleOptions = `<option value="">-- None (Terminal) --</option>`;
                 allRoles.forEach(r => {
-                    roleOptions += `<option value="${r.role_name}" ${t.assignment?.role === r.role_name ? 'selected' : ''}>${r.role_name}</option>`;
+                    actorRoleOptions += `<option value="${r.role_name}" ${t.actor_role === r.role_name ? 'selected' : ''}>${r.role_name}</option>`;
+                    nextRoleOptions += `<option value="${r.role_name}" ${t.next_role === r.role_name ? 'selected' : ''}>${r.role_name}</option>`;
                 });
                 
                 // Construct state options
@@ -268,14 +270,16 @@
                         </select>
                     </div>
                     <div>
-                        <label>Assign Role</label>
-                        <select class="form-control" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'assignment.role', this.value)">
-                            ${roleOptions}
+                        <label>Actor Role</label>
+                        <select class="form-control" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'actor_role', this.value)">
+                            ${actorRoleOptions}
                         </select>
                     </div>
                     <div>
-                        <label>Assign Dept</label>
-                        <input type="text" class="form-control" value="${t.assignment?.department || ''}" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'assignment.department', this.value)" placeholder="SAME_AS_CREATOR">
+                        <label>Next Role</label>
+                        <select class="form-control" ${!canEdit ? 'disabled' : ''} onchange="updateTransition(${idx}, 'next_role', this.value)">
+                            ${nextRoleOptions}
+                        </select>
                     </div>
                     <div style="text-align: right;">
                         ${canEdit ? `<button class="btn btn-sm btn-danger" style="padding: 6px 10px;" onclick="removeTransition(${idx})">🗑</button>` : ''}
@@ -313,10 +317,8 @@
             trigger: '',
             source: workflowData.initial,
             dest: workflowData.initial,
-            assignment: {
-                role: '',
-                department: ''
-            }
+            actor_role: '',
+            next_role: ''
         });
         renderUI();
     }
@@ -327,16 +329,12 @@
     }
 
     function updateTransition(idx, field, value) {
-        if (field.startsWith('assignment.')) {
-            const sub = field.split('.')[1];
-            if (!workflowData.transitions[idx].assignment) {
-                workflowData.transitions[idx].assignment = {};
-            }
-            workflowData.transitions[idx].assignment[sub] = value;
-            
-            // Clean up empty assignments
-            if (!workflowData.transitions[idx].assignment.role && !workflowData.transitions[idx].assignment.department) {
-                delete workflowData.transitions[idx].assignment;
+        if (value === '') {
+            // For actor_role and next_role, store empty as null in the JSON
+            if (field === 'actor_role' || field === 'next_role') {
+                workflowData.transitions[idx][field] = null;
+            } else {
+                workflowData.transitions[idx][field] = value;
             }
         } else {
             workflowData.transitions[idx][field] = value;

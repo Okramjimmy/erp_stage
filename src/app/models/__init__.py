@@ -6,6 +6,7 @@ from src.app.models.permission import FormTypePermission, Role, StagePermission,
 from src.app.models.stage import Stage
 from src.app.models.stage_form_type import StageFormType
 from src.app.models.form_action import FormAction
+from src.app.models.workflow_assignment import WorkflowAssignment
 
 __all__ = [
     "User",
@@ -15,6 +16,7 @@ __all__ = [
     "StageFormType",
     "FormRecord",
     "FormAction",
+    "WorkflowAssignment",
     "StagePermission",
     "FormTypePermission",
     "Role",

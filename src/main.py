@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.app.api import ui as ui_router
-from src.app.api.v1 import form_records, form_types, metadata, permissions, stages, storage, parse, departments
+from src.app.api.v1 import form_records, form_types, metadata, permissions, stages, storage, parse, departments, workflow_assignments
 from src.app.api.v1 import auth as auth_router
 from src.app.api.v1 import users as users_router
 import src.app.models  # noqa: F401 — ensures all models are registered with Base
@@ -27,10 +27,18 @@ from src.app.storage import init_storage
 from src.config import settings
 
 # Configure logging
+log_file = Path(__file__).parent / "app.log"
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler(sys.stdout)
+    ]
 )
+
+# Suppress SQLAlchemy SQL output logs
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +127,7 @@ app.include_router(metadata.router, prefix="/api/v1")
 app.include_router(storage.router, prefix="/api/v1")
 app.include_router(parse.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
+app.include_router(workflow_assignments.router, prefix="/api/v1")
 
 
 

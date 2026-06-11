@@ -20,8 +20,8 @@ class FormRecord(Base):
     docname = Column(String(255), nullable=False, index=True)
     status = Column(String(20), nullable=False, default="Draft")
     assigned_role = Column(String(50), nullable=True)
-    assigned_department = Column(String(100), nullable=True)
     assigned_to = Column(String(50), ForeignKey("users.user_id"), nullable=True, index=True)
+    assigned_at = Column(DateTime(timezone=True), nullable=True)
 
     data = Column(JSONB, nullable=True)
     schema_snapshot = Column(JSONB, nullable=True)

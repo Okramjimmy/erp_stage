@@ -494,6 +494,7 @@ class StageService:
         """Get hierarchical stage tree."""
 
         visible_stage_ids = None
+        visible_form_type_ids = None
         if user_id:
             from src.app.models.user import User
             from src.app.services.permission_service import PermissionService
@@ -594,6 +595,9 @@ class StageService:
                 .where(StageFormType.stage_id == stage.stage_id)
             )
             form_types = form_types_result.scalars().all()
+
+            if visible_form_type_ids is not None:
+                form_types = [ft for ft in form_types if ft.form_type_id in visible_form_type_ids]
 
             # Create tree node
             node = StageTreeNode(
