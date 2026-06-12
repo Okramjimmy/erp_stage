@@ -89,20 +89,24 @@ class ParsingService:
                         sections_map[q_section].append(q)
 
                     fields = []
-                    for sec_name in section_order:
-                        # Append Section Break
-                        ft_slug = slugify("Section Break")
+                    
+                    def generate_fieldname(base_slug):
+                        ft_slug = slugify(base_slug)
                         existing_fns = {f["fieldname"] for f in fields}
                         counter = 1
                         fn = f"{ft_slug}_{counter}"
                         while fn in existing_fns:
                             counter += 1
                             fn = f"{ft_slug}_{counter}"
-                            
+                        return fn
+
+                    for sec_name in section_order:
+                        # Append Section Break
+                        fn_sec = generate_fieldname("Section Break")
                         fields.append({
                             "label": sec_name,
                             "fieldtype": "Section Break",
-                            "fieldname": fn,
+                            "fieldname": fn_sec,
                             "collapsible": False
                         })
                         
@@ -110,43 +114,60 @@ class ParsingService:
                         q_idx = 1
                         for q in sections_map[sec_name]:
                             lbl = q.get("question", "")
+                            response_type = q.get("response_type", "")
                             
-                            ft_slug = slugify("Long Text")
-                            existing_fns = {f["fieldname"] for f in fields}
-                            counter = 1
-                            fn = f"{ft_slug}_{counter}"
-                            while fn in existing_fns:
-                                counter += 1
-                                fn = f"{ft_slug}_{counter}"
-                                    
-                            fields.append({
-                                "label": lbl,
-                                "fieldname": fn,
-                                "fieldtype": "Long Text",
-                                "options": "",
-                                "required": False,
-                                "unique": False,
-                                "read_only": False,
-                                "hidden": False,
-                                "bold": False,
-                                "in_list_view": False,
-                                "in_filter": False,
-                                "search_index": False,
-                                "print_hide": False,
-                                "no_copy": False,
-                                "allow_on_submit": False,
-                                "description": q.get("question_code", ""),
-                                "default": "",
-                                "placeholder": "",
-                                "field_number": q_idx,
-                                "filed_number": q_idx
-                            })
+                            def append_field(ftype, label, options="", depends_on="", description=""):
+                                fn = generate_fieldname(ftype)
+                                field_data = {
+                                    "label": label,
+                                    "fieldname": fn,
+                                    "fieldtype": ftype,
+                                    "options": options,
+                                    "required": False,
+                                    "unique": False,
+                                    "read_only": False,
+                                    "hidden": False,
+                                    "bold": False,
+                                    "in_list_view": False,
+                                    "in_filter": False,
+                                    "search_index": False,
+                                    "print_hide": False,
+                                    "no_copy": False,
+                                    "allow_on_submit": False,
+                                    "description": description if description is not None else "",
+                                    "default": "",
+                                    "placeholder": "",
+                                    "field_number": q_idx,
+                                    "filed_number": q_idx
+                                }
+                                if depends_on:
+                                    field_data["depends_on"] = depends_on
+                                fields.append(field_data)
+                                return fn
+
+                            if response_type in ("yes_or_no", "yes_no_na", "yes_no"):
+                                options = "Yes\nNo\nNA" if "na" in response_type else "Yes\nNo"
+                                select_fn = append_field("Select", lbl, options=options, description=q.get("question_code", ""))
+                                append_field("Long Text", "Remarks", depends_on=f"eval:doc.{select_fn} == 'Yes'")
+                                append_field("Attach", "Attachment", depends_on=f"eval:doc.{select_fn} == 'Yes'")
+                            else:
+                                field_type = "Long Text"
+                                if response_type:
+                                    rt_lower = response_type.lower()
+                                    if rt_lower == "date":
+                                        field_type = "Date"
+                                    elif rt_lower in ("number", "integer"):
+                                        field_type = "Int"
+                                    elif rt_lower == "text":
+                                        field_type = "Data"
+                                append_field(field_type, lbl, description=q.get("question_code", ""))
+                            
                             q_idx += 1
                         
                     return {
                         "job_id": job_id,
                         "status": "completed",
-                        "document_name": checklist.get("document_name"),
+                        "document_name": checklist.get("documengenerate_fieldnamet_name"),
                         "form_metadata": {
                             "fields": fields
                         }
