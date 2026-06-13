@@ -158,7 +158,26 @@
                 <a href="/docs" target="_blank" class="navbar-link">API Docs</a>
             </div>
         </nav>
-
+        <style>
+            .sidebar.collapsed .sidebar-profile {
+                flex-direction: column !important;
+                align-items: center !important;
+                padding: 12px 0 !important;
+            }
+            .sidebar.collapsed #user-avatar {
+                margin-right: 0 !important;
+                display: block !important;
+            }
+            .sidebar.collapsed .profile-text,
+            .sidebar.collapsed #sidebar-tree {
+                display: none !important;
+            }
+            .sidebar.collapsed .sidebar-toggle-btn {
+                margin-left: 0 !important;
+                margin-top: 12px !important;
+                transform: rotate(180deg) !important;
+            }
+        </style>
         <div class="app-layout">
             <!-- Sidebar -->
             <aside class="sidebar" id="sidebar">
@@ -213,7 +232,7 @@
                     <button
                         class="sidebar-toggle-btn"
                         id="sidebar-toggle"
-                        onclick="toggleSidebar()"
+                        onclick="event.stopPropagation(); toggleSidebar();"
                         style="
                             background: none;
                             border: 1px solid var(--border);

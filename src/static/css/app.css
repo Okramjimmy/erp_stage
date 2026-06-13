@@ -529,7 +529,11 @@ textarea.form-control { resize: vertical; min-height: 72px; }
 }
 .sidebar.collapsed .sidebar-profile {
   flex-direction: column;
-  padding: 12px 8px;
+  align-items: center;
+  padding: 12px 0;
+}
+.sidebar.collapsed #user-avatar {
+  margin-right: 0 !important;
 }
 .sidebar.collapsed .sidebar-toggle-btn {
   margin-left: 0;

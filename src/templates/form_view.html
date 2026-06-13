@@ -719,7 +719,7 @@
             <div class="sidebar-card-title">Form Type</div>
             <div class="sidebar-meta-row">
                 <span class="sidebar-meta-label">Name</span
-                ><span class="sidebar-meta-value"
+                ><span class="sidebar-meta-value" style="text-wrap:wrap;margin-left: 8px;"
                     >{{ form_type.form_name }}</span
                 >
             </div>
@@ -2161,6 +2161,28 @@
     });
 
     renderForm();
-    if(RECORD_ID) fetchAvailableActions();
+    if(RECORD_ID) {
+        fetchAvailableActions();
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            if (typeof collapseSidebar === 'function') {
+                collapseSidebar();
+            } else {
+                const sidebar = document.getElementById("sidebar");
+                const resizer = document.getElementById("sidebar-resizer");
+                const mainContent = document.querySelector(".main-content");
+                if (sidebar && !sidebar.classList.contains("collapsed")) {
+                    sidebar.classList.add("collapsed");
+                    document.body.classList.add("sidebar-collapsed");
+                    sidebar.style.width = "60px";
+                    if (resizer) resizer.style.left = "60px";
+                    if (mainContent) mainContent.style.marginLeft = "60px";
+                    sessionStorage.setItem("sidebar-collapsed", "true");
+                }
+            }
+        }, 100);
+    });
 </script>
 {% endblock %}
