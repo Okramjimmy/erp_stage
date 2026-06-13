@@ -50,6 +50,7 @@
     .field-row-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:var(--radius);border:1px solid var(--border-light);background:#fff;margin-bottom:4px;cursor:pointer;transition:var(--transition);user-select:none}
     .field-row-item:hover{border-color:var(--primary);background:#f0f7ff}
     .field-row-item.selected{border-color:var(--primary);background:#edf4fd;box-shadow:0 0 0 2px rgba(36,144,239,.15)}
+    .field-row-item.selected-drag{background:#e0f2fe;box-shadow:0 0 0 2px var(--primary)}
     .field-row-item .fi-drag{color:var(--text-light);cursor:grab;font-size:12px;flex-shrink:0}
     .field-row-item .fi-drag:active{cursor:grabbing}
     .field-row-item .fi-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
@@ -294,6 +295,11 @@ const FTYPES=[
   {cat:'Media',    type:'Attach Image',      icon:'🖼',  desc:'Image attachment'},
   {cat:'Media',    type:'Signature',         icon:'✒',  desc:'Digital signature pad'},
   {cat:'Media',    type:'Geolocation',       icon:'📍', desc:'GPS / map coordinates'},
+  {cat:'Layout',   type:'Section Break',     icon:'━',  desc:'Start a new section'},
+  {cat:'Layout',   type:'Column Break',      icon:'◫',  desc:'Start a new column'},
+  {cat:'Layout',   type:'Tab Break',         icon:'📁', desc:'Start a new tab'},
+  {cat:'Layout',   type:'Heading',           icon:'H',  desc:'Large heading text'},
+  {cat:'Layout',   type:'HTML',              icon:'< >',desc:'Custom HTML block'},
 ];
 const TMAP={};
 FTYPES.forEach(t=>TMAP[t.type]=t);
@@ -378,6 +384,100 @@ function mkSection(label=''){
 }
 function mkTab(label='New Tab'){
   return {type:'tab', _tid:mkTabId(), label};
+}
+
+function flattenCanvasWithIds() {
+  recomputeFieldNumbers();
+  const out = [];
+  canvas.forEach(block => {
+    if (block.type === 'tab') {
+      out.push({ _tid: block._tid, label: block.label, fieldtype: 'Tab Break', fieldname: snake(block.label || 'tab') + '_tb' });
+      return;
+    }
+    out.push({ _sid: block._sid, label: block.label, fieldtype: 'Section Break', fieldname: snake(block.label || 'section') + '_sb', collapsible: block.collapsible || false });
+    block.columns.forEach((col, ci) => {
+      if (ci > 0) out.push({ _cid: col._cid, label: '', fieldtype: 'Column Break', fieldname: 'col_break_' + col._cid });
+      col.fields.forEach(f => { out.push(f); });
+    });
+  });
+  return out;
+}
+
+function normalizeCanvas() {
+  const flat = flattenCanvasWithIds();
+  canvas = [];
+  let curSection = null, curColIdx = 0;
+  
+  flat.forEach(f => {
+    if (f.fieldtype === 'Tab Break') {
+      const tb = mkTab(f.label || 'Tab');
+      if (f._tid) tb._tid = f._tid;
+      canvas.push(tb);
+      curSection = null; curColIdx = 0; return;
+    }
+    if (f.fieldtype === 'Section Break') {
+      curSection = mkSection(f.label || '');
+      curSection.collapsible = f.collapsible || false;
+      if (f._sid) curSection._sid = f._sid;
+      else if (f._id && typeof f._id === 'string' && f._id.startsWith('sec_')) curSection._sid = f._id;
+      canvas.push(curSection); curColIdx = 0; return;
+    }
+    if (f.fieldtype === 'Column Break') {
+      if (!curSection) { curSection = mkSection(); canvas.push(curSection); }
+      const c = { _cid: f._cid || (typeof f._id === 'string' && f._id.startsWith('col_') ? f._id : mkColId()), fields: [] };
+      curSection.columns.push(c);
+      curColIdx++; return;
+    }
+    
+    if (!curSection) { curSection = mkSection(); canvas.push(curSection); }
+    if (!f._id) f._id = mkId();
+    curSection.columns[curColIdx].fields.push(f);
+  });
+}
+
+function rebuildCanvasFromDOM() {
+  const newCanvas = [];
+  const root = document.getElementById('form-canvas');
+  if (!root) return;
+  for (const child of root.children) {
+    if (child.classList.contains('tab-divider')) {
+      const tid = child.dataset.tid;
+      const oldTab = canvas.find(b => b.type === 'tab' && b._tid === tid);
+      if (oldTab) newCanvas.push(oldTab);
+    } else if (child.classList.contains('section-wrap')) {
+      const sid = child.dataset.sid;
+      const oldSec = canvas.find(b => b.type === 'section' && b._sid === sid);
+      if (!oldSec) continue;
+      
+      const newSec = { ...oldSec, columns: [] };
+      const colsWrap = child.querySelector('.cols-wrap');
+      if (colsWrap) {
+        for (const colEl of colsWrap.children) {
+          if (!colEl.classList.contains('col-wrap')) continue;
+          const cid = colEl.dataset.cid;
+          const newCol = { _cid: cid, fields: [] };
+          
+          const fieldEls = colEl.querySelectorAll('.field-row-item');
+          fieldEls.forEach(fEl => {
+            const fid = +fEl.dataset.fid;
+            let fObj = null;
+            for (const blk of canvas) {
+              if (blk.type !== 'section') continue;
+              for (const c of blk.columns) {
+                const found = c.fields.find(f => f._id === fid);
+                if (found) { fObj = found; break; }
+              }
+              if (fObj) break;
+            }
+            if (fObj) newCol.fields.push(fObj);
+          });
+          newSec.columns.push(newCol);
+        }
+      }
+      newCanvas.push(newSec);
+    }
+  }
+  canvas = newCanvas;
 }
 
 function importFields(flat){
@@ -519,8 +619,16 @@ function addFieldToCol(sid, cid, afterId=null, btnEl){
     } else {
       col.fields.push(field);
     }
-    renderCanvas(); selectField(field._id); markDirty();
-    setTimeout(()=>document.querySelector(`.field-row-item[data-fid="${field._id}"]`)?.scrollIntoView({behavior:'smooth',block:'nearest'}),30);
+    
+    const isLayout = type === 'Section Break' || type === 'Tab Break' || type === 'Column Break';
+    if(isLayout) normalizeCanvas();
+    
+    renderCanvas(); 
+    if(!isLayout) selectField(field._id); 
+    markDirty();
+    if(!isLayout){
+      setTimeout(()=>document.querySelector(`.field-row-item[data-fid="${field._id}"]`)?.scrollIntoView({behavior:'smooth',block:'nearest'}),30);
+    }
   });
 }
 
@@ -586,6 +694,7 @@ function renderCanvas(){
       const div=document.createElement('div');
       div.className='tab-divider'; div.dataset.tid=block._tid;
       div.innerHTML=`
+        <span class="sec-drag" style="margin-right:8px;cursor:grab;color:var(--primary)" title="Drag to reorder tab">⠿</span>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--primary);flex-shrink:0"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M3 11h18M3 17h18"/></svg>
         <input class="tab-label-inp" value="${esc(block.label)}" placeholder="Tab label" oninput="block_label_tab('${block._tid}',this.value)" onclick="event.stopPropagation()">
         <button class="btn btn-ghost btn-icon btn-xs" onclick="removeTabBreak('${block._tid}')" style="color:var(--text-muted)" title="Remove tab break">✕</button>
@@ -648,24 +757,13 @@ function renderCanvas(){
 
       const s=Sortable.create(fieldList,{
         group:'fields', handle:'.fi-drag', animation:120,
+        multiDrag: true,
+        selectedClass: 'selected-drag',
+        multiDragKey: 'ctrl',
+        fallbackTolerance: 3,
         ghostClass:'sortable-ghost', dragClass:'sortable-drag',
         onEnd(evt){
-          const fid=+evt.item.dataset.fid;
-          let field;
-          canvas.forEach(blk=>{
-            if(blk.type!=='section') return;
-            blk.columns.forEach(c=>{
-              const i=c.fields.findIndex(f=>f._id===fid);
-              if(i!==-1){field=c.fields.splice(i,1)[0];}
-            });
-          });
-          const newCid=+evt.to.closest('.col-wrap').dataset.cid;
-          let newCol;
-          canvas.forEach(blk=>{
-            if(blk.type!=='section') return;
-            blk.columns.forEach(c=>{ if(c._cid===newCid) newCol=c; });
-          });
-          if(newCol&&field) newCol.fields.splice(evt.newIndex,0,field);
+          rebuildCanvasFromDOM();
           renderCanvas();
           markDirty();
         }
@@ -678,8 +776,7 @@ function renderCanvas(){
     handle:'.sec-drag', animation:140,
     ghostClass:'sortable-ghost', dragClass:'sortable-drag',
     onEnd(evt){
-      const [m]=canvas.splice(evt.oldIndex,1);
-      canvas.splice(evt.newIndex,0,m);
+      rebuildCanvasFromDOM();
       renderCanvas();
       markDirty();
     }
