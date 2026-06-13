@@ -245,7 +245,7 @@
 
 <!-- Preview Modal -->
 <div class="modal-overlay" id="preview-modal">
-  <div class="modal" style="max-width:760px">
+  <div class="modal" style="max-width:960px; width: 95%;">
     <div class="modal-header">
       <span class="modal-title" id="preview-title">Preview</span>
       <button class="btn btn-ghost btn-icon" onclick="closePreview()">✕</button>
@@ -1235,6 +1235,12 @@ function togglePS(id){
 function fieldUpd(fid,key,val){
   const f=getField(fid); if(!f) return;
   f[key]=val;
+  if(key==='options'){
+    if(LINK_SET.has(f.fieldtype)){
+      if(val === 'Empty Table' && !f.empty_table_columns) f.empty_table_columns = 'Sl. No.';
+      renderProps(f);
+    }
+  }
   if(key==='fieldname' || key==='depends_on'){
     if(key==='fieldname'){
       const nm=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-name`);
@@ -1326,6 +1332,115 @@ async function _doSave(){
   finally{ btn.innerHTML=orig; btn.disabled=false; }
 }
 
+function getPreviewTableCellInput(c) {
+  const ft = c.fieldtype || 'Data';
+  const ph = c.placeholder || c.label || '';
+  const ro = c.read_only ? 'pointer-events:none;opacity:0.65;' : '';
+  
+  if (['Select', 'Autocomplete'].includes(ft)) {
+    const opts = (c.options || '').split('\n').filter(Boolean).map(o => `<option>${esc(o)}</option>`).join('');
+    return `<select class="form-control" style="${ro}"><option value="">— Select —</option>${opts}</select>`;
+  } else if (['Date'].includes(ft)) {
+    return `<input type="date" class="form-control" style="${ro}">`;
+  } else if (['Datetime'].includes(ft)) {
+    return `<input type="datetime-local" class="form-control" style="${ro}">`;
+  } else if (['Time'].includes(ft)) {
+    return `<input type="time" class="form-control" style="${ro}">`;
+  } else if (['Int', 'Float', 'Currency', 'Percent'].includes(ft)) {
+    return `<input type="number" class="form-control" placeholder="${esc(ph)}" style="${ro}">`;
+  } else if (['Small Text', 'Long Text', 'Text Editor', 'Code', 'JSON'].includes(ft)) {
+    return `<textarea class="form-control" rows="1" placeholder="${esc(ph)}" style="${ro}"></textarea>`;
+  } else if (['Color'].includes(ft)) {
+    return `<input type="color" style="width:100%;height:28px;border:none;padding:0;cursor:pointer;${ro}">`;
+  } else if (['Attach', 'Attach Image', 'Signature'].includes(ft)) {
+    return `<input type="file" class="form-control" style="padding:2px;font-size:11px;${ro}">`;
+  } else if (['Check'].includes(ft)) {
+    return `<input type="checkbox" style="${ro}">`;
+  } else if (['Link', 'Dynamic Link'].includes(ft)) {
+    return `<input type="text" class="form-control" placeholder="Search ${esc(c.options || ph)}…" style="${ro}">`;
+  } else {
+    return `<input type="text" class="form-control" placeholder="${esc(ph)}" style="${ro}">`;
+  }
+}
+
+let _builderPreviewChildColsCache = {};
+
+async function loadBuilderPreviewChildTableCols(fieldname, formTypeName) {
+  if (!formTypeName || formTypeName === 'Empty Table' || formTypeName === 'Users') return;
+  const wrap = document.getElementById(`preview-ct-wrap-${fieldname}`);
+  if (!wrap) return;
+
+  const safeFormTypeName = formTypeName.trim();
+  let cols = _builderPreviewChildColsCache[safeFormTypeName];
+  if (!cols) {
+    try {
+      const fts = await apiFetch(`/api/v1/form-types/search?q=${encodeURIComponent(safeFormTypeName)}&limit=5`);
+      const ft = fts.find(x => x.form_name.trim() === safeFormTypeName);
+      if (!ft) {
+        console.warn('Form type not found in search:', safeFormTypeName);
+        return;
+      }
+      const ftWithSchema = await apiFetch(`/api/v1/form-types/${ft.form_type_id}/schema`);
+      
+      cols = [];
+      const schemaObj = ftWithSchema ? (ftWithSchema.schema_reference || ftWithSchema.schema_data) : null;
+      if (schemaObj && Array.isArray(schemaObj.fields)) {
+        schemaObj.fields.forEach(cf => {
+          if (!['Section Break', 'Column Break', 'Tab Break', 'Heading', 'HTML', 'Field Group', 'Field Group End'].includes(cf.fieldtype)) {
+            cols.push({ 
+              label: cf.label, 
+              fieldname: cf.fieldname, 
+              fieldtype: cf.fieldtype,
+              options: cf.options,
+              placeholder: cf.placeholder,
+              required: cf.required,
+              read_only: cf.read_only,
+              default: cf.default,
+              min_value: cf.min_value,
+              max_value: cf.max_value,
+              description: cf.description
+            });
+          }
+        });
+      }
+      _builderPreviewChildColsCache[safeFormTypeName] = cols;
+    } catch (err) {
+      console.error('Failed to load child table cols for preview', safeFormTypeName, err);
+      // Even on error, set empty cols so it removes the placeholder
+      cols = [];
+    }
+  }
+
+  let thStyle = 'background:var(--bg);padding:7px 10px;font-size:11px;font-weight:700;text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em;white-space:normal;word-break:break-word;line-height:1.4;';
+  let colsHtml = `<th style="${thStyle}">Sl. No.</th>` + cols.map(c => {
+    let lbl = esc(c.label || c.fieldname);
+    if (c.required) lbl += `<span style="color:var(--danger);margin-left:2px">*</span>`;
+    let meta = [];
+    if (c.default) meta.push(`Default: ${c.default}`);
+    if (c.min_value) meta.push(`Min: ${c.min_value}`);
+    if (c.max_value) meta.push(`Max: ${c.max_value}`);
+    if (c.description) meta.push(`Info: ${c.description}`);
+    if (meta.length > 0) {
+      const infoHtml = esc(meta.join('\n')).replace(/\n/g, '<br>');
+      lbl += `<div style="display:inline-block;position:relative;">
+                <span onclick="const t = this.nextElementSibling; t.style.display = t.style.display === 'none' ? 'block' : 'none';" style="cursor:pointer;color:var(--primary);font-size:9px;background:var(--primary-light);border-radius:50%;width:13px;height:13px;display:inline-flex;align-items:center;justify-content:center;margin-left:5px;text-transform:none;user-select:none">?</span>
+                <div style="display:none;position:absolute;top:100%;left:0;margin-top:6px;background:#1e293b;color:#f8fafc;padding:8px 12px;border-radius:6px;font-size:11px;font-weight:500;white-space:pre-wrap;z-index:9999;box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.2);text-transform:none;min-width:140px;max-width:240px;line-height:1.5;text-align:left;">${infoHtml}</div>
+              </div>`;
+    }
+    return `<th style="${thStyle}">${lbl}</th>`;
+  }).join('');
+  let prevCellsHtml = `<td style="color:var(--text-muted);font-size:12px;padding:7px 10px;border-top:1px solid var(--border);text-align:center;">1</td>` + cols.map(c => `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput(c)}</td>`).join('');
+
+  wrap.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <thead><tr>${colsHtml}</tr></thead>
+      <tbody>
+        <tr>${prevCellsHtml}</tr>
+      </tbody>
+    </table>
+  `;
+}
+
 function previewForm(){
   const name=document.getElementById('form-name').value;
   document.getElementById('preview-title').textContent=name+' — Preview';
@@ -1408,7 +1523,32 @@ function previewForm(){
         switch(f.fieldtype){
           case 'Select':case 'Autocomplete': inp=`<select class="form-control" onchange="updatePreviewVal('${f.fieldname}',this.value)"><option value="">— Select —</option>${(f.options||'').split('\n').filter(Boolean).map(o=>`<option${o===String(curVal)?' selected':''}>${esc(o)}</option>`).join('')}</select>`;break;
           case 'Link':case 'Dynamic Link': inp=`<input type="text" class="form-control" placeholder="Search ${esc(f.options||'')}…" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Table':case 'Table MultiSelect': inp=`<div style="border:1px solid var(--border);border-radius:var(--radius);padding:10px;color:var(--text-muted);font-size:12px;text-align:center">📋 ${esc(f.options||f.fieldname)}</div>`;break;
+          case 'Table':case 'Table MultiSelect':
+            let colsHtml = '';
+            let prevCellsHtml = '';
+            let thStyle = 'background:var(--bg);padding:7px 10px;font-size:11px;font-weight:700;text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em;white-space:normal;word-break:break-word;line-height:1.4;';
+            if (f.options === 'Empty Table') {
+              const headers = (f.empty_table_columns || '').split('\n').map(c=>c.trim()).filter(Boolean).filter(h => h.toLowerCase() !== 'sl. no.');
+              colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th>` + headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('');
+              prevCellsHtml = headers.map(h => `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({label: h, fieldtype: 'Data'})}</td>`).join('');
+            } else if (f.options === 'Users') {
+              colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th><th style="${thStyle}">User</th>`;
+              prevCellsHtml = `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({label: 'User', fieldtype: 'Data'})}</td>`;
+            } else {
+              colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th><th style="${thStyle}">[Linked Columns: ${esc(f.options||'Unknown')}]</th>`;
+              prevCellsHtml = `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({label: 'Linked Columns', fieldtype: 'Data'})}</td>`;
+              setTimeout(() => loadBuilderPreviewChildTableCols(f.fieldname, f.options), 0);
+            }
+            inp = `<div class="child-table-wrap" id="preview-ct-wrap-${f.fieldname}" style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;margin-top:4px">
+                    <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+                      <thead><tr>${colsHtml}</tr></thead>
+                      <tbody>
+                        <tr><td style="color:var(--text-muted);font-size:12px;padding:7px 10px;border-top:1px solid var(--border);text-align:center;">1</td>
+                        ${prevCellsHtml}</tr>
+                      </tbody>
+                    </table>
+                  </div>`;
+            break;
           case 'Date': inp=`<input type="date" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
           case 'Datetime': inp=`<input type="datetime-local" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
           case 'Time': inp=`<input type="time" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;

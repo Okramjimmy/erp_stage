@@ -149,8 +149,14 @@
     .child-table-wrap {
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        overflow: hidden;
         margin-top: 4px;
+        overflow: visible;
+    }
+    .child-table-wrap th:first-child {
+        border-top-left-radius: var(--radius-lg);
+    }
+    .child-table-wrap th:last-child {
+        border-top-right-radius: var(--radius-lg);
     }
     .child-table-wrap table {
         width: 100%;
@@ -167,6 +173,9 @@
         color: var(--text-muted);
         border-bottom: 1px solid var(--border);
         text-align: left;
+        white-space: normal;
+        word-break: break-word;
+        line-height: 1.4;
     }
     .child-table-wrap td {
         padding: 5px 8px;
@@ -1187,11 +1196,27 @@
           <div style="padding:14px;text-align:center;color:var(--text-muted);font-size:12px">⊞ ${esc(f.options||f.fieldname)} — <a href="#" onclick="return false">configure linked form type</a></div>
         </div>`;
       }
-      const headers = cols.map(c=>`<th>${esc(c.label||c.fieldname)}</th>`).join('') + '<th style="width:32px"></th>';
+      const headers = cols.map(c=>{
+        let lbl = esc(c.label || c.fieldname);
+        if (c.required) lbl += `<span style="color:var(--danger);margin-left:2px">*</span>`;
+        let meta = [];
+        if (c.default) meta.push(`Default: ${c.default}`);
+        if (c.min_value) meta.push(`Min: ${c.min_value}`);
+        if (c.max_value) meta.push(`Max: ${c.max_value}`);
+        if (c.description) meta.push(`Info: ${c.description}`);
+        if (meta.length > 0) {
+          const infoHtml = esc(meta.join('\n')).replace(/\n/g, '<br>');
+          lbl += `<div style="display:inline-block;position:relative;">
+                    <span onclick="const t = this.nextElementSibling; t.style.display = t.style.display === 'none' ? 'block' : 'none';" style="cursor:pointer;color:var(--primary);font-size:9px;background:var(--primary-light);border-radius:50%;width:13px;height:13px;display:inline-flex;align-items:center;justify-content:center;margin-left:5px;text-transform:none;user-select:none">?</span>
+                    <div style="display:none;position:absolute;top:100%;left:0;margin-top:6px;background:#1e293b;color:#f8fafc;padding:8px 12px;border-radius:6px;font-size:11px;font-weight:500;white-space:pre-wrap;z-index:9999;box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.2);text-transform:none;min-width:140px;max-width:240px;line-height:1.5;text-align:left;">${infoHtml}</div>
+                  </div>`;
+        }
+        return `<th>${lbl}</th>`;
+      }).join('') + '<th style="width:32px"></th>';
       const bodyRows = rows.map((row,ri)=>{
         const cells = cols.map(c=>{
           if (c.fieldname === '_sl_no') {
-            return `<td style="text-align:center;color:var(--text-muted);font-size:12px;width:50px">${ri + 1}</td>`;
+            return `<td style="text-align:start !important; color:var(--text-muted);font-size:12px">${ri + 1}</td>`;
           }
           if (isUsersTable && c.fieldname === 'user') {
             setTimeout(() => loadLinkOptions(f.fieldname + '_' + ri, 'Users', row[c.fieldname]), 0);
@@ -1344,13 +1369,22 @@
         const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(f.options)}&limit=5`);
         const ft = fts.find(x => x.form_name === f.options);
         if (!ft) return;
-        const ftWithSchema = await apiFetch(`${API}/form-types/${ft.form_type_id}`);
-        if (!ftWithSchema || !ftWithSchema.schema_data) return;
+        const ftWithSchema = await apiFetch(`${API}/form-types/${ft.form_type_id}/schema`);
+        const schemaObj = ftWithSchema ? (ftWithSchema.schema_reference || ftWithSchema.schema_data) : null;
+        if (!schemaObj) return;
         
         const cols = [{label: 'Sl. No.', fieldname: '_sl_no'}];
-        (ftWithSchema.schema_data.fields || []).forEach(cf => {
+        (schemaObj.fields || []).forEach(cf => {
           if (!['Section Break', 'Column Break', 'Tab Break', 'Heading', 'HTML'].includes(cf.fieldtype)) {
-            cols.push({ label: cf.label, fieldname: cf.fieldname });
+            cols.push({ 
+              label: cf.label, 
+              fieldname: cf.fieldname,
+              required: cf.required,
+              default: cf.default,
+              min_value: cf.min_value,
+              max_value: cf.max_value,
+              description: cf.description
+            });
           }
         });
         _childColsCache[f.options] = cols;
@@ -1604,7 +1638,9 @@
                   html += `<table class="print-table" style="width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; margin-bottom: 16px;">`;
                   html += `<thead><tr>`;
                   cols.forEach(c => {
-                    html += `<th style="border: 1px solid #cbd5e1; padding: 6px 8px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; color: #475569;">${esc(c.label || c.fieldname)}</th>`;
+                    let lbl = esc(c.label || c.fieldname);
+                    if (c.required) lbl += `<span style="color:#ef4444;margin-left:2px">*</span>`;
+                    html += `<th style="border: 1px solid #cbd5e1; padding: 6px 8px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; color: #475569; white-space: normal; word-break: break-word; line-height: 1.4;">${lbl}</th>`;
                   });
                   html += `</tr></thead>`;
                   html += `<tbody>`;
@@ -1612,7 +1648,7 @@
                     html += `<tr>`;
                     cols.forEach(c => {
                       if (c.fieldname === '_sl_no') {
-                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #475569; width: 40px; text-align: center;">${ri + 1}</td>`;
+                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #475569;">${ri + 1}</td>`;
                       } else {
                         html += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #0f172a;">${esc(row[c.fieldname] || '')}</td>`;
                       }
