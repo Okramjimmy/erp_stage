@@ -129,6 +129,23 @@
         gap: 6px;
     }
 
+    .field-group-container {
+        margin-bottom: 12px;
+    }
+    .field-group-body {
+        margin-left: 12px;
+        padding-left: 12px;
+        border-left: 2px dashed var(--border-light);
+    }
+    .field-group-hdr {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
     .child-table-wrap {
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
@@ -138,6 +155,7 @@
     .child-table-wrap table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
     }
     .child-table-wrap th {
         background: var(--bg);
@@ -944,7 +962,7 @@
     }
 
     // ── render form from schema ──────────────────────────────────────────────────
-    const LAYOUT = new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
+    const LAYOUT = new Set(['Section Break','Column Break','Tab Break','Heading','HTML','Field Group','Field Group End']);
 
     function buildInput(f, val){
       if(IS_READONLY) {
@@ -1209,7 +1227,7 @@
     function applyConditionalLogic() {
       const fields = SCHEMA.fields || [];
       fields.forEach(f => {
-        if (LAYOUT.has(f.fieldtype) && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML') return;
+        if (LAYOUT.has(f.fieldtype) && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Field Group') return;
         const wrapper = document.querySelector(`.field-wrapper[data-fieldname="${f.fieldname}"]`);
         if (!wrapper) return;
 
@@ -1283,6 +1301,7 @@
     }
 
     function buildField(f) {
+      if (f._is_field_group_html) return f.html;
       if(f.hidden) return '';
       let content = '';
       if(f.fieldtype === 'Heading') {
@@ -1582,7 +1601,7 @@
                 if (rows.length === 0) {
                   html += `<div class="print-field-value" style="font-size: 13px; color: #64748b; font-style: italic;">No records</div>`;
                 } else {
-                  html += `<table class="print-table" style="width: 100%; border-collapse: collapse; margin-top: 6px; margin-bottom: 16px;">`;
+                  html += `<table class="print-table" style="width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; margin-bottom: 16px;">`;
                   html += `<thead><tr>`;
                   cols.forEach(c => {
                     html += `<th style="border: 1px solid #cbd5e1; padding: 6px 8px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; color: #475569;">${esc(c.label || c.fieldname)}</th>`;
@@ -1693,12 +1712,49 @@
         // Collect fields until next section
         const secLabel = f.label || '';
         i++;
-        let secFields = [];
         let cols = [[]];
         while(i < fields.length && fields[i].fieldtype !== 'Section Break' && fields[i].fieldtype !== 'Tab Break') {
-          if(fields[i].fieldtype === 'Column Break') { cols.push([]); }
-          else { cols[cols.length-1].push(fields[i]); }
-          i++;
+          const cf = fields[i];
+          if(cf.fieldtype === 'Column Break') { 
+            cols.push([]); 
+            i++; 
+          } else if(cf.fieldtype === 'Field Group') {
+            const grpField = cf;
+            const grpLabel = cf.label || '';
+            const grpFields = [];
+            i++;
+            while(i < fields.length && fields[i].fieldtype !== 'Field Group End' && fields[i].fieldtype !== 'Section Break' && fields[i].fieldtype !== 'Tab Break') {
+               grpFields.push(fields[i]);
+               i++;
+            }
+            if(i < fields.length && fields[i].fieldtype === 'Field Group End') i++;
+            
+            let grpCols = [[]];
+            grpFields.forEach(gf => {
+               if(gf.fieldtype === 'Column Break') grpCols.push([]);
+               else grpCols[grpCols.length-1].push(gf);
+            });
+            const gColCount = Math.min(grpCols.length, 3);
+            const gColClass = `form-cols-${gColCount}`;
+            const gColsHtml = grpCols.map(gColFields =>
+               `<div>${gColFields.map(gcf=>buildField(gcf)).join('')}</div>`
+            ).join('');
+            
+            cols[cols.length-1].push({
+               _is_field_group_html: true,
+               html: `<div class="field-wrapper" data-fieldname="${grpField.fieldname}">
+                        <div class="field-group-container">
+                          ${grpLabel ? `<div class="field-group-hdr">${esc(grpLabel)}</div>` : ''}
+                          <div class="field-group-body">
+                            <div class="form-cols ${gColClass}">${gColsHtml}</div>
+                          </div>
+                        </div>
+                      </div>`
+            });
+          } else { 
+            cols[cols.length-1].push(cf); 
+            i++; 
+          }
         }
         const colCount = Math.min(cols.length, 3);
         const colClass = `form-cols-${colCount}`;

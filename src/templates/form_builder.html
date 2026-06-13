@@ -42,6 +42,18 @@
     .section-content{transition:.15s}
     .section-content.collapsed{display:none}
 
+    .field-group-wrap{border:1px dashed var(--primary);border-radius:var(--radius);margin-bottom:8px;background:#f9fafb;overflow:hidden}
+    .group-hdr{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#fff;border-bottom:1px solid var(--border-light);cursor:pointer;user-select:none}
+    .group-hdr .grp-drag{color:var(--text-muted);cursor:grab;font-size:12px;padding:2px;flex-shrink:0}
+    .group-hdr .grp-drag:active{cursor:grabbing}
+    .group-hdr .grp-icon{font-size:14px;color:var(--text-muted);flex-shrink:0}
+    .group-hdr .grp-label-inp{border:none;outline:none;background:transparent;font-size:12px;font-weight:600;color:var(--text);flex:1}
+    .group-hdr .grp-actions{display:flex;gap:2px;flex-shrink:0}
+    .group-hdr .grp-collapsible{color:var(--text-muted);font-size:13px;transition:transform .15s;cursor:pointer}
+    .group-hdr .grp-collapsible.collapsed{transform:rotate(-90deg)}
+    .group-content{padding:4px}
+    .group-content.collapsed{display:none}
+
     .cols-wrap{display:flex;gap:0;min-height:48px}
     .col-wrap{flex:1;border-right:1px dashed var(--border);padding:6px 8px;min-height:48px;position:relative}
     .col-wrap:last-child{border-right:none}
@@ -51,6 +63,8 @@
     .field-row-item:hover{border-color:var(--primary);background:#f0f7ff}
     .field-row-item.selected{border-color:var(--primary);background:#edf4fd;box-shadow:0 0 0 2px rgba(36,144,239,.15)}
     .field-row-item.selected-drag{background:#e0f2fe;box-shadow:0 0 0 2px var(--primary)}
+    .field-row-item.indented{margin-left:24px;border-top-left-radius:0;border-bottom-left-radius:0}
+    .field-row-item.depended-on{border-top-left-radius:0;border-bottom-left-radius:0}
     .field-row-item .fi-drag{color:var(--text-light);cursor:grab;font-size:12px;flex-shrink:0}
     .field-row-item .fi-drag:active{cursor:grabbing}
     .field-row-item .fi-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0}
@@ -298,12 +312,13 @@ const FTYPES=[
   {cat:'Layout',   type:'Section Break',     icon:'━',  desc:'Start a new section'},
   {cat:'Layout',   type:'Column Break',      icon:'◫',  desc:'Start a new column'},
   {cat:'Layout',   type:'Tab Break',         icon:'📁', desc:'Start a new tab'},
+  {cat:'Layout',   type:'Field Group',       icon:'📦', desc:'Group fields visually'},
   {cat:'Layout',   type:'Heading',           icon:'H',  desc:'Large heading text'},
   {cat:'Layout',   type:'HTML',              icon:'< >',desc:'Custom HTML block'},
 ];
 const TMAP={};
 FTYPES.forEach(t=>TMAP[t.type]=t);
-const LAYOUT_SET=new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
+const LAYOUT_SET=new Set(['Section Break','Column Break','Tab Break','Heading','HTML','Field Group','Field Group End']);
 const NUMERIC_SET=new Set(['Int','Float','Currency','Percent','Rating']);
 const TEXT_SET=new Set(['Data','Small Text','Long Text','Text Editor','Code','Password']);
 const OPTIONS_SET=new Set(['Select','Autocomplete']);
@@ -397,7 +412,18 @@ function flattenCanvasWithIds() {
     out.push({ _sid: block._sid, label: block.label, fieldtype: 'Section Break', fieldname: snake(block.label || 'section') + '_sb', collapsible: block.collapsible || false });
     block.columns.forEach((col, ci) => {
       if (ci > 0) out.push({ _cid: col._cid, label: '', fieldtype: 'Column Break', fieldname: 'col_break_' + col._cid });
-      col.fields.forEach(f => { out.push(f); });
+      col.fields.forEach(f => {
+        if (f.type === 'group') {
+           out.push({ _gid: f._gid, label: f.label, fieldtype: 'Field Group', fieldname: f.fieldname || snake(f.label||'group')+'_fg', collapsible: f.collapsible || false });
+           f.columns.forEach((gcol, gci) => {
+             if (gci > 0) out.push({ _cid: gcol._cid, label: '', fieldtype: 'Column Break', fieldname: 'col_break_' + gcol._cid });
+             gcol.fields.forEach(gf => out.push(gf));
+           });
+           out.push({ fieldtype: 'Field Group End', fieldname: (f.fieldname || snake(f.label||'group')+'_fg') + '_end' });
+        } else {
+           out.push(f);
+        }
+      });
     });
   });
   return out;
@@ -407,31 +433,50 @@ function normalizeCanvas() {
   const flat = flattenCanvasWithIds();
   canvas = [];
   let curSection = null, curColIdx = 0;
+  let curGroup = null, curGrpColIdx = 0;
   
   flat.forEach(f => {
     if (f.fieldtype === 'Tab Break') {
       const tb = mkTab(f.label || 'Tab');
       if (f._tid) tb._tid = f._tid;
       canvas.push(tb);
-      curSection = null; curColIdx = 0; return;
+      curSection = null; curColIdx = 0; curGroup = null; return;
     }
     if (f.fieldtype === 'Section Break') {
       curSection = mkSection(f.label || '');
       curSection.collapsible = f.collapsible || false;
       if (f._sid) curSection._sid = f._sid;
       else if (f._id && typeof f._id === 'string' && f._id.startsWith('sec_')) curSection._sid = f._id;
-      canvas.push(curSection); curColIdx = 0; return;
+      canvas.push(curSection); curColIdx = 0; curGroup = null; return;
+    }
+    if (f.fieldtype === 'Field Group') {
+      curGroup = { type: 'group', _gid: f._gid || (f._id && typeof f._id === 'string' && f._id.startsWith('sec_') ? f._id : mkSecId()), label: f.label || '', fieldname: f.fieldname || getNextFieldName('Field Group'), collapsible: f.collapsible || false, columns: [{ _cid: mkColId(), fields: [] }] };
+      if (!curSection) { curSection = mkSection(); canvas.push(curSection); }
+      curSection.columns[curColIdx].fields.push(curGroup);
+      curGrpColIdx = 0; return;
+    }
+    if (f.fieldtype === 'Field Group End') {
+      curGroup = null; return;
     }
     if (f.fieldtype === 'Column Break') {
-      if (!curSection) { curSection = mkSection(); canvas.push(curSection); }
-      const c = { _cid: f._cid || (typeof f._id === 'string' && f._id.startsWith('col_') ? f._id : mkColId()), fields: [] };
-      curSection.columns.push(c);
-      curColIdx++; return;
+      if (curGroup) {
+         curGroup.columns.push({ _cid: f._cid || (typeof f._id === 'string' && f._id.startsWith('col_') ? f._id : mkColId()), fields: [] });
+         curGrpColIdx++; return;
+      } else {
+         if (!curSection) { curSection = mkSection(); canvas.push(curSection); }
+         const c = { _cid: f._cid || (typeof f._id === 'string' && f._id.startsWith('col_') ? f._id : mkColId()), fields: [] };
+         curSection.columns.push(c);
+         curColIdx++; return;
+      }
     }
     
     if (!curSection) { curSection = mkSection(); canvas.push(curSection); }
     if (!f._id) f._id = mkId();
-    curSection.columns[curColIdx].fields.push(f);
+    if (curGroup) {
+       curGroup.columns[curGrpColIdx].fields.push(f);
+    } else {
+       curSection.columns[curColIdx].fields.push(f);
+    }
   });
 }
 
@@ -450,27 +495,50 @@ function rebuildCanvasFromDOM() {
       if (!oldSec) continue;
       
       const newSec = { ...oldSec, columns: [] };
-      const colsWrap = child.querySelector('.cols-wrap');
+      const colsWrap = child.querySelector(':scope > .section-content > .cols-wrap');
       if (colsWrap) {
         for (const colEl of colsWrap.children) {
           if (!colEl.classList.contains('col-wrap')) continue;
           const cid = colEl.dataset.cid;
           const newCol = { _cid: cid, fields: [] };
           
-          const fieldEls = colEl.querySelectorAll('.field-row-item');
-          fieldEls.forEach(fEl => {
-            const fid = +fEl.dataset.fid;
-            let fObj = null;
-            for (const blk of canvas) {
-              if (blk.type !== 'section') continue;
-              for (const c of blk.columns) {
-                const found = c.fields.find(f => f._id === fid);
-                if (found) { fObj = found; break; }
+          const fieldList = colEl.querySelector(`:scope > #col-fields-${cid}`);
+          if (fieldList) {
+            for (const itemEl of fieldList.children) {
+              if (itemEl.classList.contains('field-row-item')) {
+                const fid = +itemEl.dataset.fid;
+                const fObj = findFieldRec(fid);
+                if (fObj) newCol.fields.push(fObj);
+              } else if (itemEl.classList.contains('field-group-wrap')) {
+                const gid = itemEl.dataset.gid;
+                const oldGrp = findGroupRec(gid);
+                if (!oldGrp) continue;
+                
+                const newGrp = { ...oldGrp, columns: [] };
+                const grpColsWrap = itemEl.querySelector(':scope > .group-content > .cols-wrap');
+                if (grpColsWrap) {
+                  for (const gColEl of grpColsWrap.children) {
+                    if (!gColEl.classList.contains('col-wrap')) continue;
+                    const gcid = gColEl.dataset.cid;
+                    const newGCol = { _cid: gcid, fields: [] };
+                    
+                    const gFieldList = gColEl.querySelector(`:scope > #col-fields-${gcid}`);
+                    if (gFieldList) {
+                      for (const fEl of gFieldList.children) {
+                        if (fEl.classList.contains('field-row-item')) {
+                          const fid = +fEl.dataset.fid;
+                          const fObj = findFieldRec(fid);
+                          if (fObj) newGCol.fields.push(fObj);
+                        }
+                      }
+                    }
+                    newGrp.columns.push(newGCol);
+                  }
+                }
+                newCol.fields.push(newGrp);
               }
-              if (fObj) break;
             }
-            if (fObj) newCol.fields.push(fObj);
-          });
+          }
           newSec.columns.push(newCol);
         }
       }
@@ -480,26 +548,76 @@ function rebuildCanvasFromDOM() {
   canvas = newCanvas;
 }
 
+function findFieldRec(fid) {
+  for (const s of canvas) {
+    if (s.type !== 'section') continue;
+    for (const c of s.columns) {
+      for (const item of c.fields) {
+        if (item.type === 'group') {
+          for (const gc of item.columns) {
+            const found = gc.fields.find(f => f._id === fid);
+            if (found) return found;
+          }
+        } else {
+          if (item._id === fid) return item;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function findGroupRec(gid) {
+  for (const s of canvas) {
+    if (s.type !== 'section') continue;
+    for (const c of s.columns) {
+      const found = c.fields.find(f => f.type === 'group' && f._gid === gid);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 function importFields(flat){
   canvas=[];
   let curSection=null, curColIdx=0;
+  let curGroup=null, curGrpColIdx=0;
+
   flat.forEach(f=>{
     if(f.fieldtype==='Tab Break'){
       canvas.push(mkTab(f.label||'Tab'));
-      curSection=null; curColIdx=0; return;
+      curSection=null; curColIdx=0; curGroup=null; return;
     }
     if(f.fieldtype==='Section Break'){
       curSection={type:'section',_sid:mkSecId(),label:f.label||'',collapsible:f.collapsible||false,columns:[{_cid:mkColId(),fields:[]}]};
-      canvas.push(curSection); curColIdx=0; return;
+      canvas.push(curSection); curColIdx=0; curGroup=null; return;
+    }
+    if(f.fieldtype==='Field Group'){
+      curGroup={type:'group',_gid:mkSecId(),label:f.label||'',fieldname:f.fieldname,collapsible:f.collapsible||false,columns:[{_cid:mkColId(),fields:[]}]};
+      if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
+      curSection.columns[curColIdx].fields.push(curGroup);
+      curGrpColIdx=0; return;
+    }
+    if(f.fieldtype==='Field Group End'){
+      curGroup=null; return;
     }
     if(f.fieldtype==='Column Break'){
-      if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
-      curSection.columns.push({_cid:mkColId(),fields:[]});
-      curColIdx++; return;
+      if(curGroup){
+         curGroup.columns.push({_cid:mkColId(),fields:[]});
+         curGrpColIdx++; return;
+      } else {
+         if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
+         curSection.columns.push({_cid:mkColId(),fields:[]});
+         curColIdx++; return;
+      }
     }
     if(!curSection){ curSection=mkSection(); canvas.push(curSection); }
     const field={...f,_id:mkId()};
-    curSection.columns[curColIdx].fields.push(field);
+    if(curGroup){
+       curGroup.columns[curGrpColIdx].fields.push(field);
+    } else {
+       curSection.columns[curColIdx].fields.push(field);
+    }
     if(field._id>=nextId) nextId=field._id+1;
   });
 }
@@ -515,7 +633,18 @@ function exportFields(){
     out.push({label:block.label,fieldtype:'Section Break',fieldname:snake(block.label||'section')+'_sb',collapsible:block.collapsible||false});
     block.columns.forEach((col,ci)=>{
       if(ci>0) out.push({label:'',fieldtype:'Column Break',fieldname:'col_break_'+col._cid});
-      col.fields.forEach(f=>{ const {_id,...rest}=f; out.push(rest); });
+      col.fields.forEach(f=>{
+        if (f.type === 'group') {
+           out.push({ label: f.label, fieldtype: 'Field Group', fieldname: f.fieldname || snake(f.label||'group')+'_fg', collapsible: f.collapsible || false });
+           f.columns.forEach((gcol, gci) => {
+             if (gci > 0) out.push({ label: '', fieldtype: 'Column Break', fieldname: 'col_break_' + gcol._cid });
+             gcol.fields.forEach(gf => { const {_id,...rest}=gf; out.push(rest); });
+           });
+           out.push({ label: '', fieldtype: 'Field Group End', fieldname: (f.fieldname || snake(f.label||'group')+'_fg') + '_end' });
+        } else {
+           const {_id,...rest}=f; out.push(rest);
+        }
+      });
     });
   });
   return out;
@@ -580,6 +709,8 @@ function showTypePicker(anchorEl, cb){
   let top=rect.bottom+4, left=rect.left;
   if(left+640>window.innerWidth) left=window.innerWidth-630;
   if(top+420>window.innerHeight) top=rect.top-424;
+  if(top < 10) top = 10;
+  if(left < 10) left = 10;
   picker.style.top=top+'px'; picker.style.left=left+'px';
   document.getElementById('tp-search').value='';
   renderTPGrid('');
@@ -609,8 +740,17 @@ function filterTP(q){ renderTPGrid(q.toLowerCase()); }
 
 function addFieldToCol(sid, cid, afterId=null, btnEl){
   showTypePicker(btnEl, type=>{
-    const sec=canvas.find(b=>b._sid===sid);
-    const col=sec?.columns.find(c=>c._cid===cid);
+    let col = null;
+    canvas.forEach(s => {
+      if(s.type==='section'){
+        s.columns.forEach(c => {
+          if(c._cid===cid) col=c;
+          c.fields.forEach(f => {
+             if(f.type==='group') f.columns.forEach(gc => { if(gc._cid===cid) col=gc; });
+          });
+        });
+      }
+    });
     if(!col) return;
     const field=mkField(type);
     if(afterId!==null){
@@ -620,7 +760,7 @@ function addFieldToCol(sid, cid, afterId=null, btnEl){
       col.fields.push(field);
     }
     
-    const isLayout = type === 'Section Break' || type === 'Tab Break' || type === 'Column Break';
+    const isLayout = type === 'Section Break' || type === 'Tab Break' || type === 'Column Break' || type === 'Field Group';
     if(isLayout) normalizeCanvas();
     
     renderCanvas(); 
@@ -635,22 +775,18 @@ function addFieldToCol(sid, cid, afterId=null, btnEl){
 function removeField(fid){
   canvas.forEach(block=>{
     if(block.type!=='section') return;
-    block.columns.forEach(col=>{ col.fields=col.fields.filter(f=>f._id!==fid); });
+    block.columns.forEach(col=>{
+      col.fields=col.fields.filter(f=>f._id!==fid);
+      col.fields.forEach(f=>{
+        if(f.type==='group') f.columns.forEach(gc=>{ gc.fields=gc.fields.filter(ff=>ff._id!==fid); });
+      });
+    });
   });
   if(selectedFieldId===fid){ selectedFieldId=null; renderProps(null); }
   renderCanvas(); markDirty();
 }
 
-function getField(fid){
-  for(const block of canvas){
-    if(block.type!=='section') continue;
-    for(const col of block.columns){
-      const f=col.fields.find(f=>f._id===fid);
-      if(f) return f;
-    }
-  }
-  return null;
-}
+function getField(fid){ return findFieldRec(fid); }
 
 function recomputeFieldNumbers() {
   canvas.forEach(block => {
@@ -674,8 +810,21 @@ function recomputeFieldNumbers() {
 let _sortables=[];
 function destroySortables(){ _sortables.forEach(s=>s.destroy()); _sortables=[]; }
 
+let DEPENDED_ON_FIELDS = new Set();
+function updateDependedOnFields() {
+  DEPENDED_ON_FIELDS.clear();
+  const flat = flattenCanvasWithIds();
+  flat.forEach(f => {
+    if (f.depends_on && typeof f.depends_on === 'string') {
+      const match = f.depends_on.match(/doc\.([a-zA-Z0-9_]+)/);
+      if (match) DEPENDED_ON_FIELDS.add(match[1]);
+    }
+  });
+}
+
 function renderCanvas(){
   recomputeFieldNumbers();
+  updateDependedOnFields();
   destroySortables();
   const root=document.getElementById('form-canvas');
   const empty=document.getElementById('empty-state');
@@ -744,7 +893,13 @@ function renderCanvas(){
 
       const fieldList=document.createElement('div');
       fieldList.id=`col-fields-${col._cid}`;
-      col.fields.forEach(f=>fieldList.appendChild(makeFieldRow(f, block._sid, col._cid)));
+      col.fields.forEach(f=>{
+        if (f.type === 'group') {
+          fieldList.appendChild(makeGroupDOM(f, block._sid));
+        } else {
+          fieldList.appendChild(makeFieldRow(f, block._sid, col._cid));
+        }
+      });
       colDiv.appendChild(fieldList);
 
       const addBtn=document.createElement('button');
@@ -756,10 +911,9 @@ function renderCanvas(){
       colsWrap.appendChild(colDiv);
 
       const s=Sortable.create(fieldList,{
-        group:'fields', handle:'.fi-drag', animation:120,
+        group:'fields', handle:'.fi-drag, .grp-drag', animation:120,
         multiDrag: true,
         selectedClass: 'selected-drag',
-        multiDragKey: 'ctrl',
         fallbackTolerance: 3,
         ghostClass:'sortable-ghost', dragClass:'sortable-drag',
         onEnd(evt){
@@ -786,11 +940,30 @@ function renderCanvas(){
   if(selectedFieldId) document.querySelector(`.field-row-item[data-fid="${selectedFieldId}"]`)?.classList.add('selected');
 }
 
+function stringToColor(str) {
+  let hash = 0;
+  for(let i=0; i<str.length; i++) hash = str.charCodeAt(i) + ((hash<<5)-hash);
+  const hue = Math.abs(hash * 137.5) % 360;
+  return `hsl(${hue}, 75%, 60%)`;
+}
+
 function makeFieldRow(f, sid, cid){
   const ti=TMAP[f.fieldtype]||{icon:'📝'};
+  const match = (f.depends_on||'').match(/doc\.([a-zA-Z0-9_]+)/);
+  const parentField = match ? match[1] : null;
+  const isIndented = !!parentField;
+  const isDependedOn = DEPENDED_ON_FIELDS.has(f.fieldname);
+  
   const div=document.createElement('div');
-  div.className='field-row-item'+(f._id===selectedFieldId?' selected':'');
+  div.className='field-row-item'+(f._id===selectedFieldId?' selected':'')+(isIndented?' indented':'')+(isDependedOn?' depended-on':'');
   div.dataset.fid=f._id;
+  
+  if(isIndented || isDependedOn) {
+    const colorKey = parentField || f.fieldname;
+    div.style.borderLeftColor = stringToColor(colorKey);
+    div.style.borderLeftWidth = '3px';
+  }
+  
   div.innerHTML=`
     <span class="fi-drag">⠿</span>
     <span class="fi-number">${f.field_number ? f.field_number + '.' : ''}</span>
@@ -806,6 +979,105 @@ function makeFieldRow(f, sid, cid){
   `;
   div.addEventListener('click',()=>selectField(f._id));
   return div;
+}
+
+function groupLabelChg(gid,v){const g=findGroupRec(gid);if(g)g.label=v;markDirty();}
+function toggleGroupCollapse(gid){
+  const g=findGroupRec(gid); if(!g)return;
+  g._collapsed=!g._collapsed;
+  const wrap=document.querySelector(`.field-group-wrap[data-gid="${gid}"]`);
+  if(wrap){
+    wrap.querySelector('.group-content')?.classList.toggle('collapsed',g._collapsed);
+    wrap.querySelector('.grp-collapsible')?.classList.toggle('collapsed',g._collapsed);
+  }
+}
+function selectFieldGroup(gid, e){
+  const g=findGroupRec(gid);
+  if(g) selectField(g._id);
+}
+function addGroupColumn(gid){
+  const g=findGroupRec(gid); if(!g)return;
+  g.columns.push({_cid:mkColId(),fields:[]});
+  renderCanvas(); markDirty();
+}
+function removeGroupColumn(gid,cid){
+  const g=findGroupRec(gid); if(!g||g.columns.length<=1)return;
+  const idx=g.columns.findIndex(c=>c._cid===cid);
+  const fields=g.columns[idx].fields;
+  g.columns.splice(idx,1);
+  if(fields.length) g.columns[Math.max(0,idx-1)].fields.push(...fields);
+  renderCanvas(); markDirty();
+}
+function removeGroup(gid){
+  const g=findGroupRec(gid); if(g) removeField(g._id);
+}
+
+function makeGroupDOM(grp, sid){
+  const colorStr = grp._gid || grp.fieldname || 'grp';
+  let hash = 0; for(let i=0; i<colorStr.length; i++) hash = colorStr.charCodeAt(i) + ((hash<<5)-hash);
+  const hue = Math.abs(hash * 137.5) % 360;
+  const color = `hsl(${hue}, 60%, 50%)`;
+  const bg = `hsl(${hue}, 60%, 97%)`;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'field-group-wrap'; wrap.dataset.gid = grp._gid;
+  wrap.style.borderColor = color;
+  wrap.innerHTML = `
+    <div class="group-hdr" onclick="selectFieldGroup('${grp._gid}', event)" style="background:${bg};border-bottom:1px solid ${color}40">
+      <span class="grp-drag" style="cursor:grab;color:${color}">⠿</span>
+      <span class="grp-icon" style="color:${color}">📦</span>
+      <input class="grp-label-inp" value="${esc(grp.label)}" placeholder="Group label"
+        oninput="groupLabelChg('${grp._gid}',this.value)" onclick="event.stopPropagation()">
+      <div class="grp-actions">
+        <button class="btn btn-ghost btn-icon btn-xs" title="Add column" onclick="event.stopPropagation();addGroupColumn('${grp._gid}')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Col
+        </button>
+        <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger)" title="Remove group" onclick="event.stopPropagation();removeGroup('${grp._gid}')">✕</button>
+      </div>
+      <svg class="grp-collapsible ${grp.collapsible?'':'hide'}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" onclick="event.stopPropagation();toggleGroupCollapse('${grp._gid}')"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+    <div class="group-content ${grp._collapsed?'collapsed':''}">
+      <div class="cols-wrap" id="grp-cols-${grp._gid}"></div>
+    </div>
+  `;
+  
+  const colsWrap = wrap.querySelector('.cols-wrap');
+  grp.columns.forEach((gcol, ci) => {
+      const colDiv = document.createElement('div');
+      colDiv.className = 'col-wrap'; colDiv.dataset.cid = gcol._cid;
+      if (grp.columns.length > 1) {
+        colDiv.innerHTML = `<div style="font-size:10px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between">
+          Col ${ci+1}
+          <button class="btn btn-ghost btn-icon btn-xs" style="color:var(--danger);opacity:.5" onclick="event.stopPropagation();removeGroupColumn('${grp._gid}','${gcol._cid}')" title="Remove column">✕</button>
+        </div>`;
+      }
+      const fieldList = document.createElement('div');
+      fieldList.id = `col-fields-${gcol._cid}`;
+      gcol.fields.forEach(f => {
+        if(f.type==='group') fieldList.appendChild(makeGroupDOM(f, sid));
+        else fieldList.appendChild(makeFieldRow(f, sid, gcol._cid));
+      });
+      colDiv.appendChild(fieldList);
+      
+      const addBtn = document.createElement('button');
+      addBtn.className = 'col-add-btn';
+      addBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add Field`;
+      addBtn.addEventListener('click', e => { e.stopPropagation(); addFieldToCol(sid, gcol._cid, null, addBtn); });
+      colDiv.appendChild(addBtn);
+      
+      colsWrap.appendChild(colDiv);
+      
+      const s = Sortable.create(fieldList, {
+        group: 'fields', handle: '.fi-drag, .grp-drag', animation: 120,
+        multiDrag: true, selectedClass: 'selected-drag', fallbackTolerance: 3,
+        ghostClass: 'sortable-ghost', dragClass: 'sortable-drag',
+        onEnd(evt) { rebuildCanvasFromDOM(); renderCanvas(); markDirty(); }
+      });
+      _sortables.push(s);
+  });
+  
+  return wrap;
 }
 
 function block_label_sec(sid,v){const b=canvas.find(b=>b._sid===sid);if(b)b.label=v;markDirty();}
@@ -963,9 +1235,12 @@ function togglePS(id){
 function fieldUpd(fid,key,val){
   const f=getField(fid); if(!f) return;
   f[key]=val;
-  if(key==='fieldname'){
-    const nm=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-name`);
-    if(nm) nm.textContent=val;
+  if(key==='fieldname' || key==='depends_on'){
+    if(key==='fieldname'){
+      const nm=document.querySelector(`.field-row-item[data-fid="${fid}"] .fi-name`);
+      if(nm) nm.textContent=val;
+    }
+    renderCanvas();
   }
   if(key==='label'){
     document.getElementById('props-title').textContent=val||f.fieldtype;
@@ -1100,6 +1375,18 @@ function previewForm(){
       if(inCols){html+='</div></div>';inCols=false;}
       html+=`<div style="border-bottom:2px solid var(--primary);padding-bottom:4px;margin:24px 0 16px;color:var(--primary);font-size:13px;font-weight:700">${esc(f.label||'Tab')}</div>`;return;
     }
+    if(f.fieldtype==='Field Group'){
+      html+=`<div class="preview-field-wrapper" data-fieldname="${f.fieldname}" style="margin-bottom:12px;">`;
+      if(f.label){
+        html+=`<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.03em">${esc(f.label)}</div>`;
+      }
+      html+=`<div style="margin-left:12px;padding-left:12px;border-left:2px dashed var(--border-light)">`;
+      return;
+    }
+    if(f.fieldtype==='Field Group End'){
+      html+=`</div></div>`;
+      return;
+    }
     
     let fieldContent = '';
     if(f.fieldtype==='Heading'){
@@ -1176,7 +1463,7 @@ function evalPreviewExpr(expr) {
 function applyPreviewConditionalLogic() {
   const flat = exportFields();
   flat.forEach(f => {
-    if (LAYOUT_SET.has(f.fieldtype) && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML') return;
+    if (LAYOUT_SET.has(f.fieldtype) && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Field Group') return;
     const wrapper = document.querySelector(`.preview-field-wrapper[data-fieldname="${f.fieldname}"]`);
     if (!wrapper) return;
 
