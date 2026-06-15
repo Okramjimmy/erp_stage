@@ -203,20 +203,6 @@
         color: var(--primary);
         background: var(--primary-light);
     }
-    .child-table-wrap td input,
-    .child-table-wrap td select {
-        border: none;
-        outline: none;
-        background: transparent;
-        width: 100%;
-        font-size: 13px;
-        padding: 2px 4px;
-        border-radius: 3px;
-    }
-    .child-table-wrap td input:focus,
-    .child-table-wrap td select:focus {
-        background: var(--primary-light);
-    }
 
     .sidebar-card {
         background: #fff;
@@ -1168,6 +1154,53 @@
       }
     }
 
+    function getChildTableCellInput(tableFieldname, ri, c, val, isReadonly) {
+      const ft = c.fieldtype || 'Data';
+      const ro = (isReadonly || c.read_only) ? 'disabled' : '';
+      const req = c.required ? 'required' : '';
+      const min = c.min_value ? `min="${esc(c.min_value)}"` : '';
+      const max = c.max_value ? `max="${esc(c.max_value)}"` : '';
+      const ph = c.placeholder ? `placeholder="${esc(c.placeholder)}"` : '';
+      
+      const oninp = `oninput="setChildVal('${tableFieldname}',${ri},'${c.fieldname}',this.value)"`;
+      const onchg = `onchange="setChildVal('${tableFieldname}',${ri},'${c.fieldname}',this.value)"`;
+      const v = esc(val || '');
+      const baseStyle = "width:100%;font-size:13px;padding:6px 8px;";
+      
+      const inputIdAttr = `id="ct-input-${tableFieldname}-${ri}-${c.fieldname}"`;
+      
+      if (['Select', 'Autocomplete'].includes(ft)) {
+        const opts = (c.options || '').split('\n').filter(Boolean).map(o => `<option value="${esc(o)}" ${val===o?'selected':''}>${esc(o)}</option>`).join('');
+        return `<select ${inputIdAttr} class="form-control" style="${baseStyle}height:auto;" ${onchg} ${ro} ${req}><option value="">— Select —</option>${opts}</select>`;
+      } else if (['Date'].includes(ft)) {
+        return `<input ${inputIdAttr} type="date" class="form-control" style="${baseStyle}" value="${v}" ${min} ${max} ${onchg} ${ro} ${req}>`;
+      } else if (['Datetime'].includes(ft)) {
+        return `<input ${inputIdAttr} type="datetime-local" class="form-control" style="${baseStyle}" value="${v}" ${min} ${max} ${onchg} ${ro} ${req}>`;
+      } else if (['Time'].includes(ft)) {
+        return `<input ${inputIdAttr} type="time" class="form-control" style="${baseStyle}" value="${v}" ${onchg} ${ro} ${req}>`;
+      } else if (['Int', 'Float', 'Currency', 'Percent'].includes(ft)) {
+        const step = ft === 'Int' ? 'step="1"' : 'step="any"';
+        return `<input ${inputIdAttr} type="number" class="form-control" style="${baseStyle}" value="${v}" ${ph} ${min} ${max} ${step} ${oninp} ${ro} ${req}>`;
+      } else if (['Small Text', 'Long Text', 'Text Editor', 'Code', 'JSON'].includes(ft)) {
+        return `<textarea ${inputIdAttr} class="form-control" rows="1" style="${baseStyle}resize:vertical;" ${ph} ${oninp} ${ro} ${req}>${v}</textarea>`;
+      } else if (['Color'].includes(ft)) {
+        return `<input ${inputIdAttr} type="color" style="width:100%;height:24px;border:none;padding:0;cursor:pointer;background:transparent;" value="${v||'#000000'}" ${onchg} ${ro} ${req}>`;
+      } else if (['Attach', 'Attach Image', 'Signature'].includes(ft)) {
+        return `<input ${inputIdAttr} type="file" class="form-control" style="${baseStyle}font-size:11px;" ${ro} ${req}>`;
+      } else if (['Check'].includes(ft)) {
+        const chk = val ? 'checked' : '';
+        return `<input ${inputIdAttr} type="checkbox" style="margin-top:4px" onchange="setChildVal('${tableFieldname}',${ri},'${c.fieldname}',this.checked)" ${chk} ${ro} ${req}>`;
+      } else if (['Link', 'Dynamic Link'].includes(ft)) {
+        setTimeout(() => loadLinkOptions(inputIdAttr.match(/"([^"]+)"/)[1], c.options, val), 0);
+        return `<select ${inputIdAttr} class="form-control" style="${baseStyle}height:auto;" ${onchg} ${ro} ${req}>
+          <option value="">⏳ Loading…</option>
+          ${val ? `<option value="${v}" selected>${v}</option>` : ''}
+        </select>`;
+      } else {
+        return `<input ${inputIdAttr} type="text" class="form-control" style="${baseStyle}" value="${v}" ${ph} ${oninp} ${ro} ${req}>`;
+      }
+    }
+
     function buildChildTable(f) {
       const rows = Array.isArray(formData[f.fieldname]) ? formData[f.fieldname] : [];
 
@@ -1203,6 +1236,8 @@
         if (c.default) meta.push(`Default: ${c.default}`);
         if (c.min_value) meta.push(`Min: ${c.min_value}`);
         if (c.max_value) meta.push(`Max: ${c.max_value}`);
+        if (c.depends_on) meta.push(`Depends On: ${c.depends_on}`);
+        if (c.mandatory_depends_on) meta.push(`Mandatory if: ${c.mandatory_depends_on}`);
         if (c.description) meta.push(`Info: ${c.description}`);
         if (meta.length > 0) {
           const infoHtml = esc(meta.join('\n')).replace(/\n/g, '<br>');
@@ -1220,12 +1255,12 @@
           }
           if (isUsersTable && c.fieldname === 'user') {
             setTimeout(() => loadLinkOptions(f.fieldname + '_' + ri, 'Users', row[c.fieldname]), 0);
-            return `<td><select id="link-sel-${f.fieldname}_${ri}" class="form-control" style="border:none;background:transparent;padding:2px 4px;height:auto" onchange="setChildVal('${f.fieldname}',${ri},'${c.fieldname}',this.value)" ${IS_READONLY?'disabled':''}>
+            return `<td><select id="link-sel-${f.fieldname}_${ri}" class="form-control" style="width:100%;font-size:13px;padding:6px 8px;height:auto" onchange="setChildVal('${f.fieldname}',${ri},'${c.fieldname}',this.value)" ${IS_READONLY?'disabled':''}>
               <option value="">⏳ Loading…</option>
               ${row[c.fieldname] ? `<option value="${esc(row[c.fieldname])}" selected>${esc(row[c.fieldname])}</option>` : ''}
             </select></td>`;
           }
-          return `<td><input class="form-control" style="border:none;background:transparent" value="${esc(row[c.fieldname]||'')}" oninput="setChildVal('${f.fieldname}',${ri},'${c.fieldname}',this.value)" ${IS_READONLY?'readonly':''}></td>`;
+          return `<td>${getChildTableCellInput(f.fieldname, ri, c, row[c.fieldname], IS_READONLY)}</td>`;
         }).join('');
         const del = IS_READONLY ? '<td></td>' : `<td><button class="btn btn-ghost btn-xs" style="color:var(--danger);padding:2px 5px" onclick="removeChildRow('${f.fieldname}',${ri})">✕</button></td>`;
         return `<tr>${cells}${del}</tr>`;
@@ -1234,13 +1269,13 @@
       return `<div class="child-table-wrap"><table><thead><tr>${headers}</tr></thead><tbody id="ct-${f.fieldname}">${bodyRows}</tbody></table>${addBtn}</div>`;
     }
 
-    function evalExpr(expr) {
+    function evalExpr(expr, contextData) {
       if (!expr) return false;
       let code = expr.trim();
       if (code.startsWith('eval:')) {
         code = code.slice(5).trim();
       }
-      const doc = Object.assign({ status: STATUS }, formData);
+      const doc = contextData || Object.assign({ status: STATUS }, formData);
       try {
         return new Function('doc', `try { return (${code}); } catch(e) { return false; }`)(doc);
       } catch(e) {
@@ -1250,6 +1285,7 @@
     }
 
     function applyConditionalLogic() {
+      const docContext = Object.assign({ status: STATUS }, formData);
       const fields = SCHEMA.fields || [];
       fields.forEach(f => {
         if (LAYOUT.has(f.fieldtype) && f.fieldtype !== 'Heading' && f.fieldtype !== 'HTML' && f.fieldtype !== 'Field Group') return;
@@ -1257,11 +1293,11 @@
         if (!wrapper) return;
 
         // 1. Visibility (Depends On)
-        const isVisible = !f.depends_on || evalExpr(f.depends_on);
+        const isVisible = !f.depends_on || evalExpr(f.depends_on, docContext);
         wrapper.style.display = isVisible ? '' : 'none';
 
         // 2. Mandatory (Mandatory Depends On)
-        const isMandatory = f.required || (f.mandatory_depends_on && evalExpr(f.mandatory_depends_on));
+        const isMandatory = f.required || (f.mandatory_depends_on && evalExpr(f.mandatory_depends_on, docContext));
         const asterisk = wrapper.querySelector('.req-asterisk');
         if (asterisk) {
           asterisk.style.display = isMandatory ? 'inline' : 'none';
@@ -1272,7 +1308,7 @@
         }
 
         // 3. Read Only (Read Only Depends On)
-        const isReadOnly = IS_READONLY || f.read_only || (f.read_only_depends_on && evalExpr(f.read_only_depends_on));
+        const isReadOnly = IS_READONLY || f.read_only || (f.read_only_depends_on && evalExpr(f.read_only_depends_on, docContext));
         if (inputEl) {
           if (isReadOnly) {
             inputEl.setAttribute('readonly', 'true');
@@ -1295,6 +1331,38 @@
             inputEl.style.pointerEvents = '';
             inputEl.style.opacity = '';
           }
+        }
+
+        // Child Table Row-level logic
+        if (f.fieldtype === 'Table' && f._childCols && Array.isArray(formData[f.fieldname])) {
+          formData[f.fieldname].forEach((row, ri) => {
+            const rowContext = Object.assign({}, row, { __parent: docContext });
+            f._childCols.forEach(c => {
+              const inputId = `ct-input-${f.fieldname}-${ri}-${c.fieldname}`;
+              const el = document.getElementById(inputId);
+              if (!el) return;
+              
+              const childVisible = !c.depends_on || evalExpr(c.depends_on, rowContext);
+              // Toggling visibility preserves table cell width
+              el.style.visibility = childVisible ? 'visible' : 'hidden';
+              
+              const childMandatory = c.required || (c.mandatory_depends_on && evalExpr(c.mandatory_depends_on, rowContext));
+              el.required = !!childMandatory;
+              
+              const childReadOnly = IS_READONLY || c.read_only || (c.read_only_depends_on && evalExpr(c.read_only_depends_on, rowContext));
+              if (childReadOnly) {
+                el.setAttribute('readonly', 'true');
+                if (el.tagName === 'SELECT' || el.type === 'checkbox') el.disabled = true;
+                el.style.pointerEvents = 'none';
+                el.style.opacity = '0.65';
+              } else {
+                el.removeAttribute('readonly');
+                if (el.tagName === 'SELECT' || el.type === 'checkbox') el.disabled = false;
+                el.style.pointerEvents = '';
+                el.style.opacity = '';
+              }
+            });
+          });
         }
         
         // Handle child table fields
@@ -1375,15 +1443,22 @@
         
         const cols = [{label: 'Sl. No.', fieldname: '_sl_no'}];
         (schemaObj.fields || []).forEach(cf => {
-          if (!['Section Break', 'Column Break', 'Tab Break', 'Heading', 'HTML'].includes(cf.fieldtype)) {
+          if (!['Section Break', 'Column Break', 'Tab Break', 'Heading', 'HTML', 'Field Group', 'Field Group End'].includes(cf.fieldtype)) {
             cols.push({ 
               label: cf.label, 
               fieldname: cf.fieldname,
+              fieldtype: cf.fieldtype,
+              options: cf.options,
+              placeholder: cf.placeholder,
               required: cf.required,
+              read_only: cf.read_only,
               default: cf.default,
               min_value: cf.min_value,
               max_value: cf.max_value,
-              description: cf.description
+              description: cf.description,
+              depends_on: cf.depends_on,
+              mandatory_depends_on: cf.mandatory_depends_on,
+              read_only_depends_on: cf.read_only_depends_on
             });
           }
         });
@@ -1841,7 +1916,16 @@
 
     function addChildRow(tableName) {
       if(!Array.isArray(formData[tableName])) formData[tableName] = [];
-      formData[tableName].push({});
+      const f = (SCHEMA.fields || []).find(x => x.fieldname === tableName);
+      let newRow = {};
+      if (f && f._childCols) {
+        f._childCols.forEach(c => {
+           if (c.default !== undefined && c.default !== null && c.default !== '') {
+              newRow[c.fieldname] = c.default;
+           }
+        });
+      }
+      formData[tableName].push(newRow);
       markDirty();
       renderForm();
     }
