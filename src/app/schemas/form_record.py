@@ -28,6 +28,9 @@ class FormRecordResponse(BaseModel):
     schema_snapshot: Optional[Dict[str, Any]] = None
     form_version: Optional[str] = None
     amended_from: Optional[str] = None
+    parent_record_id: Optional[str] = None
+    parent_form_type_id: Optional[str] = None
+    parent_field_name: Optional[str] = None
     submitted_by: Optional[str] = None
     submitted_at: Optional[datetime] = None
     created_by: Optional[str] = None

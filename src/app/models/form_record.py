@@ -30,6 +30,15 @@ class FormRecord(Base):
         String(50), ForeignKey("form_records.record_id"), nullable=True
     )
     
+    # Parent-Child Relationships
+    parent_record_id = Column(
+        String(50), ForeignKey("form_records.record_id", ondelete="CASCADE"), nullable=True
+    )
+    parent_form_type_id = Column(
+        String(50), ForeignKey("form_types.form_type_id", ondelete="CASCADE"), nullable=True
+    )
+    parent_field_name = Column(String(100), nullable=True)
+    
     submitted_by = Column(String(100), nullable=True)
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     created_by = Column(String(100), nullable=True)
@@ -39,8 +48,20 @@ class FormRecord(Base):
     )
 
     # Relationships
-    form_type = relationship("FormType", back_populates="records")
-    amended_record = relationship("FormRecord", remote_side="FormRecord.record_id")
+    form_type = relationship("FormType", back_populates="records", foreign_keys=[form_type_id])
+    amended_record = relationship("FormRecord", remote_side=[record_id], foreign_keys=[amended_from])
+    parent_record = relationship(
+        "FormRecord",
+        remote_side=[record_id],
+        foreign_keys=[parent_record_id],
+        back_populates="child_records",
+    )
+    child_records = relationship(
+        "FormRecord",
+        back_populates="parent_record",
+        cascade="all, delete-orphan",
+        foreign_keys=[parent_record_id],
+    )
     actions = relationship(
         "FormAction",
         back_populates="record",

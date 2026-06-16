@@ -1186,7 +1186,59 @@
       } else if (['Color'].includes(ft)) {
         return `<input ${inputIdAttr} type="color" style="width:100%;height:24px;border:none;padding:0;cursor:pointer;background:transparent;" value="${v||'#000000'}" ${onchg} ${ro} ${req}>`;
       } else if (['Attach', 'Attach Image', 'Signature'].includes(ft)) {
-        return `<input ${inputIdAttr} type="file" class="form-control" style="${baseStyle}font-size:11px;" ${ro} ${req}>`;
+        const pendingKey = `ct:${tableFieldname}:${ri}:${c.fieldname}`;
+        const pending = pendingFiles[pendingKey];
+        let hasFile = false;
+        let previewHtml = '';
+        const isImageField = ft === 'Attach Image';
+
+        if (pending) {
+          hasFile = true;
+          const objectUrl = URL.createObjectURL(pending);
+          const filename = pending.name;
+          const ext = filename.split('.').pop().toLowerCase();
+          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+          const isPdf = ext === 'pdf';
+          
+          let previewLink = '';
+          if (isImage || isPdf) {
+            previewLink = `<a href="javascript:void(0)" onclick="openFullPreview('${objectUrl}', '${esc(filename)}')" title="Preview" style="color:var(--primary);margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>`;
+          }
+          previewHtml = `<div style="display:flex;align-items:center;gap:4px;margin-top:2px;font-size:11px;">
+            <span style="word-break:break-all;color:var(--text-main);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(filename)}">${esc(filename)}</span>
+            <span style="color:var(--text-muted);font-size:9px;">(Pending)</span>
+            ${previewLink}
+            ${!ro ? `<a href="javascript:void(0)" style="color:var(--danger);margin-left:4px;" onclick="removeChildFile('${tableFieldname}',${ri},'${c.fieldname}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></a>` : ''}
+          </div>`;
+        } else if (val) {
+          hasFile = true;
+          const filename = val.split('/').pop();
+          const ext = filename.split('.').pop().toLowerCase();
+          const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+          const isPdf = ext === 'pdf';
+          const fileUrl = attachUrl(val, c.fieldname, 0);
+          const downloadUrl = attachUrl(val, c.fieldname, 1);
+
+          let previewLink = '';
+          if (isImage || isPdf) {
+            previewLink = `<a href="javascript:void(0)" onclick="openFullPreview('${fileUrl}', '${esc(filename)}')" title="Preview" style="color:var(--primary);margin-left:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></a>`;
+          }
+
+          previewHtml = `<div style="display:flex;align-items:center;gap:4px;margin-top:2px;font-size:11px;">
+            <a href="${downloadUrl}" target="_blank" style="word-break:break-all;color:var(--primary);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:underline;" title="${esc(filename)}">${esc(filename)}</a>
+            ${previewLink}
+            ${!ro ? `<a href="javascript:void(0)" style="color:var(--danger);margin-left:4px;" onclick="removeChildFile('${tableFieldname}',${ri},'${c.fieldname}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></a>` : ''}
+          </div>`;
+        }
+
+        let inputHtml = '';
+        if (!hasFile && !ro) {
+          inputHtml = `<input ${inputIdAttr} type="file" class="form-control" style="${baseStyle}font-size:11px;padding:2px 4px;" onchange="handleChildFile('${tableFieldname}',${ri},'${c.fieldname}',this)"${isImageField?' accept="image/*"':''}>`;
+        }
+        return `<div>
+          ${inputHtml}
+          ${previewHtml}
+        </div>`;
       } else if (['Check'].includes(ft)) {
         const chk = val ? 'checked' : '';
         return `<input ${inputIdAttr} type="checkbox" style="margin-top:4px" onchange="setChildVal('${tableFieldname}',${ri},'${c.fieldname}',this.checked)" ${chk} ${ro} ${req}>`;
@@ -1933,6 +1985,22 @@
     function removeChildRow(tableName, idx) {
       if(!Array.isArray(formData[tableName])) return;
       formData[tableName].splice(idx, 1);
+      
+      // Shift/cleanup pendingFiles keys for child table attachments
+      const prefix = `ct:${tableName}:`;
+      const keys = Object.keys(pendingFiles).filter(k => k.startsWith(prefix));
+      for (const key of keys) {
+        const parts = key.split(':');
+        const ri = parseInt(parts[2]);
+        if (ri === idx) {
+          delete pendingFiles[key];
+        } else if (ri > idx) {
+          const newKey = `ct:${tableName}:${ri - 1}:${parts[3]}`;
+          pendingFiles[newKey] = pendingFiles[key];
+          delete pendingFiles[key];
+        }
+      }
+      
       markDirty();
       renderForm();
     }
@@ -1958,13 +2026,34 @@
       renderForm();
     }
 
+    function handleChildFile(tableName, ri, fieldname, input) {
+      const file = input.files[0];
+      if(!file) return;
+      const pendingKey = `ct:${tableName}:${ri}:${fieldname}`;
+      pendingFiles[pendingKey] = file;
+      markDirty();
+      renderForm();
+    }
+
+    function removeChildFile(tableName, ri, fieldname) {
+      const pendingKey = `ct:${tableName}:${ri}:${fieldname}`;
+      if (pendingFiles[pendingKey]) {
+        delete pendingFiles[pendingKey];
+      }
+      if (Array.isArray(formData[tableName]) && formData[tableName][ri]) {
+        formData[tableName][ri][fieldname] = '';
+      }
+      markDirty();
+      renderForm();
+    }
+
     async function saveRecord() {
       const btn = document.getElementById('save-btn');
       btn.disabled = true;
       const saveSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save';
       try {
         // ── Step 1: build payload with ALL schema fields (null for untouched ones) ──
-        const dataToSave = Object.assign({}, formData);
+        const dataToSave = JSON.parse(JSON.stringify(formData));
         // Ensure every non-layout field defined in the schema is present in the payload,
         // even if the user never interacted with it (so the backend receives explicit nulls).
         const LAYOUT_TYPES = new Set(['Section Break','Column Break','Tab Break','Heading','HTML']);
@@ -1976,7 +2065,19 @@
         }
         // Set pending attach fields to null in the initial payload (field must be present);
         // the actual MinIO path will be written back in Step 3 after upload.
-        for (const fn of Object.keys(pendingFiles)) dataToSave[fn] = null;
+        for (const key of Object.keys(pendingFiles)) {
+          if (key.startsWith('ct:')) {
+            const parts = key.split(':');
+            const tableName = parts[1];
+            const ri = parseInt(parts[2]);
+            const fieldname = parts[3];
+            if (dataToSave[tableName] && dataToSave[tableName][ri]) {
+              dataToSave[tableName][ri][fieldname] = null;
+            }
+          } else {
+            dataToSave[key] = null;
+          }
+        }
 
         // ── Step 2: create or update the record ──
         let rec;
@@ -2064,11 +2165,27 @@
         if (fileEntries.length > 0) {
           btn.innerHTML = `⏳ Uploading files (0/${fileEntries.length})…`;
           let uploaded = 0;
-          for (const [fieldName, file] of fileEntries) {
-            rec = await uploadFile(currentRecordId, fieldName, file);
-            // Update formData with the path returned by the server
-            formData[fieldName] = (rec.data || {})[fieldName] || '';
-            delete pendingFiles[fieldName];
+          for (const [key, file] of fileEntries) {
+            if (key.startsWith('ct:')) {
+              // Format: ct:tableName:ri:fieldname
+              const parts = key.split(':');
+              const tableName = parts[1];
+              const ri = parseInt(parts[2]);
+              const fieldname = parts[3];
+              
+              const childRow = (rec.data[tableName] || [])[ri];
+              if (childRow && childRow.record_id) {
+                const childRec = await uploadFile(childRow.record_id, fieldname, file);
+                if (formData[tableName] && formData[tableName][ri]) {
+                  formData[tableName][ri][fieldname] = (childRec.data || {})[fieldname] || '';
+                }
+              }
+            } else {
+              const fieldName = key;
+              rec = await uploadFile(currentRecordId, fieldName, file);
+              formData[fieldName] = (rec.data || {})[fieldName] || '';
+            }
+            delete pendingFiles[key];
             uploaded++;
             btn.innerHTML = `⏳ Uploading files (${uploaded}/${fileEntries.length})…`;
           }

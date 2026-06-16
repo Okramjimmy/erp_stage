@@ -40,7 +40,10 @@ class FormType(Base):
         "FormTypePermission", back_populates="form_type", cascade="all, delete-orphan"
     )
     records = relationship(
-        "FormRecord", back_populates="form_type", cascade="all, delete-orphan"
+        "FormRecord",
+        back_populates="form_type",
+        cascade="all, delete-orphan",
+        foreign_keys="[FormRecord.form_type_id]",
     )
 
     def __repr__(self):

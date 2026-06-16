@@ -145,6 +145,11 @@ CREATE TABLE form_records (
     form_version VARCHAR(10) NOT NULL,
     amended_from VARCHAR(50) REFERENCES form_records(record_id),
     
+    -- Parent-Child Relationships
+    parent_record_id VARCHAR(50) REFERENCES form_records(record_id) ON DELETE CASCADE,
+    parent_form_type_id VARCHAR(50) REFERENCES form_types(form_type_id) ON DELETE CASCADE,
+    parent_field_name VARCHAR(100),
+    
     -- Timestamps and Users
     submitted_by VARCHAR(100),
     submitted_at TIMESTAMP,
@@ -157,6 +162,7 @@ CREATE INDEX idx_form_records_form_type ON form_records(form_type_id);
 CREATE INDEX idx_form_records_stage ON form_records(stage_id);
 CREATE INDEX idx_form_records_docname ON form_records(docname);
 CREATE INDEX idx_form_records_assigned_to ON form_records(assigned_to);
+CREATE INDEX idx_form_records_parent ON form_records(parent_record_id);
 
 
 -- =================================================================

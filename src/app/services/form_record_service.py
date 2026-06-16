@@ -51,13 +51,10 @@ class FormRecordService:
         count = result.scalar() or 0
         return f"{self._abbrev(form_name)}-{count + 1:05d}"
 
-    def _parse(self, record: FormRecord) -> FormRecordResponse:
-        parsed_data = None
-        if record.data:
-            try:
-                parsed_data = record.data
-            except Exception:
-                parsed_data = {}
+    def _parse(self, record: FormRecord, populated_data: Optional[dict] = None) -> FormRecordResponse:
+        parsed_data = populated_data if populated_data is not None else record.data
+        if parsed_data is None:
+            parsed_data = {}
         return FormRecordResponse.model_validate({
             "record_id": record.record_id,
             "form_type_id": record.form_type_id,
@@ -71,12 +68,287 @@ class FormRecordService:
             "schema_snapshot": record.schema_snapshot,
             "form_version": record.form_version,
             "amended_from": record.amended_from,
+            "parent_record_id": record.parent_record_id,
+            "parent_form_type_id": record.parent_form_type_id,
+            "parent_field_name": record.parent_field_name,
             "submitted_by": record.submitted_by,
             "submitted_at": record.submitted_at,
             "created_by": record.created_by,
             "created_at": record.created_at,
             "updated_at": record.updated_at,
         })
+
+    async def _get_form_type_by_name(self, form_name: str) -> Optional[FormType]:
+        result = await self.db.execute(
+            select(FormType).where(FormType.form_name == form_name)
+        )
+        return result.scalars().first()
+
+    async def _save_child_records(
+        self,
+        parent_record: FormRecord,
+        data: dict,
+        schema_fields: list,
+        created_by: str,
+        is_update: bool = False
+    ) -> dict:
+        """
+        Recursively process Table and Link fields to create/update independent child records,
+        and return the parent's data dict with children fully populated (with record_id and docname).
+        """
+        cleaned_data = {}
+        
+        # If it's an update, fetch all existing children for this parent
+        existing_children = []
+        if is_update:
+            result = await self.db.execute(
+                select(FormRecord).where(FormRecord.parent_record_id == parent_record.record_id)
+            )
+            existing_children = result.scalars().all()
+            
+        # Group existing children by field name
+        existing_by_field = {}
+        for child in existing_children:
+            existing_by_field.setdefault(child.parent_field_name, []).append(child)
+
+        for field in schema_fields:
+            fieldname = field.get("fieldname")
+            fieldtype = field.get("fieldtype")
+            options = field.get("options")
+            
+            if not fieldname:
+                continue
+                
+            val = data.get(fieldname)
+            
+            if fieldtype in ("Table", "Table MultiSelect") and options:
+                # Resolve child FormType
+                child_ft = await self._get_form_type_by_name(options)
+                if not child_ft:
+                    cleaned_data[fieldname] = []
+                    continue
+                
+                new_rows = val if isinstance(val, list) else []
+                processed_rows = []
+                
+                # List of existing child records for this field
+                field_existing = existing_by_field.get(fieldname, [])
+                field_existing_by_id = {c.record_id: c for c in field_existing}
+                field_existing_by_docname = {c.docname: c for c in field_existing if c.docname}
+                
+                kept_ids = set()
+                
+                for row in new_rows:
+                    if not isinstance(row, dict):
+                        continue
+                        
+                    # Check if this row matches an existing child record
+                    child_id = row.get("record_id") or row.get("name")
+                    child_docname = row.get("docname")
+                    
+                    matched_child = None
+                    if child_id and child_id in field_existing_by_id:
+                        matched_child = field_existing_by_id[child_id]
+                    elif child_docname and child_docname in field_existing_by_docname:
+                        matched_child = field_existing_by_docname[child_docname]
+                        
+                    if matched_child:
+                        # Update existing child
+                        kept_ids.add(matched_child.record_id)
+                        
+                        # Process nested children first
+                        child_schema = child_ft.schema_reference or {}
+                        child_fields = child_schema.get("fields", [])
+                        processed_row_data = await self._save_child_records(
+                            parent_record=matched_child,
+                            data=row,
+                            schema_fields=child_fields,
+                            created_by=created_by,
+                            is_update=True
+                        )
+                        # Process attachments for the child row
+                        processed_row_data = self._process_attachments(child_ft, processed_row_data, matched_child.record_id)
+                        matched_child.data = processed_row_data
+                        matched_child.updated_at = datetime.now(timezone.utc)
+                        
+                        processed_row_data["record_id"] = matched_child.record_id
+                        processed_row_data["docname"] = matched_child.docname
+                        processed_rows.append(processed_row_data)
+                    else:
+                        # Create new child
+                        child_record_id = self._new_id()
+                        child_docname = await self._next_docname(child_ft.form_type_id, child_ft.form_name)
+                        
+                        new_child = FormRecord(
+                            record_id=child_record_id,
+                            form_type_id=child_ft.form_type_id,
+                            stage_id=parent_record.stage_id,
+                            docname=child_docname,
+                            status="Draft",
+                            assigned_role="worker",
+                            assigned_to=created_by,
+                            assigned_at=datetime.now(timezone.utc),
+                            created_by=created_by,
+                            form_version=child_ft.version,
+                            schema_snapshot=child_ft.schema_reference,
+                            parent_record_id=parent_record.record_id,
+                            parent_form_type_id=parent_record.form_type_id,
+                            parent_field_name=fieldname,
+                        )
+                        self.db.add(new_child)
+                        
+                        # Process nested children
+                        child_schema = child_ft.schema_reference or {}
+                        child_fields = child_schema.get("fields", [])
+                        processed_row_data = await self._save_child_records(
+                            parent_record=new_child,
+                            data=row,
+                            schema_fields=child_fields,
+                            created_by=created_by,
+                            is_update=False
+                        )
+                        # Process attachments for the child row
+                        processed_row_data = self._process_attachments(child_ft, processed_row_data, child_record_id)
+                        new_child.data = processed_row_data
+                        
+                        processed_row_data["record_id"] = child_record_id
+                        processed_row_data["docname"] = child_docname
+                        processed_rows.append(processed_row_data)
+                        
+                # Delete any existing children that were not in the new list
+                for c in field_existing:
+                    if c.record_id not in kept_ids:
+                        await self.db.delete(c)
+                
+                cleaned_data[fieldname] = processed_rows
+                        
+            elif fieldtype in ("Link", "Dynamic Link") and options:
+                child_ft = await self._get_form_type_by_name(options)
+                if not child_ft:
+                    cleaned_data[fieldname] = val
+                    continue
+                    
+                if isinstance(val, dict):
+                    # Inline creation of a new child record!
+                    child_record_id = self._new_id()
+                    child_docname = await self._next_docname(child_ft.form_type_id, child_ft.form_name)
+                    
+                    new_child = FormRecord(
+                        record_id=child_record_id,
+                        form_type_id=child_ft.form_type_id,
+                        stage_id=parent_record.stage_id,
+                        docname=child_docname,
+                        status="Draft",
+                        assigned_role="worker",
+                        assigned_to=created_by,
+                        assigned_at=datetime.now(timezone.utc),
+                        created_by=created_by,
+                        form_version=child_ft.version,
+                        schema_snapshot=child_ft.schema_reference,
+                        parent_record_id=parent_record.record_id,
+                        parent_form_type_id=parent_record.form_type_id,
+                        parent_field_name=fieldname,
+                    )
+                    self.db.add(new_child)
+                    
+                    child_schema = child_ft.schema_reference or {}
+                    child_fields = child_schema.get("fields", [])
+                    processed_child_data = await self._save_child_records(
+                        parent_record=new_child,
+                        data=val,
+                        schema_fields=child_fields,
+                        created_by=created_by,
+                        is_update=False
+                    )
+                    # Process attachments for the child row
+                    processed_child_data = self._process_attachments(child_ft, processed_child_data, child_record_id)
+                    new_child.data = processed_child_data
+                    
+                    # Parent field now points to the new child's docname
+                    cleaned_data[fieldname] = child_docname
+                else:
+                    cleaned_data[fieldname] = val
+                    # If it's an existing docname string, we can update the existing record
+                    if isinstance(val, str) and val:
+                        result = await self.db.execute(
+                            select(FormRecord).where(
+                                FormRecord.docname == val,
+                                FormRecord.form_type_id == child_ft.form_type_id
+                            )
+                        )
+                        existing_child = result.scalars().first()
+                        if existing_child:
+                            existing_child.parent_record_id = parent_record.record_id
+                            existing_child.parent_form_type_id = parent_record.form_type_id
+                            existing_child.parent_field_name = fieldname
+            else:
+                cleaned_data[fieldname] = val
+                
+        return cleaned_data
+
+    async def _populate_child_records(self, record: FormRecord) -> dict:
+        """
+        Recursively query and populate child records into the record's data dict.
+        """
+        if not record:
+            return {}
+            
+        data = dict(record.data) if record.data else {}
+        
+        # Fetch all child records of this record
+        result = await self.db.execute(
+            select(FormRecord).where(FormRecord.parent_record_id == record.record_id)
+        )
+        children = result.scalars().all()
+        
+        if not children:
+            return data
+            
+        # Group children by parent_field_name
+        children_by_field = {}
+        for child in children:
+            children_by_field.setdefault(child.parent_field_name, []).append(child)
+            
+        # Resolve parent form type schema to see field types
+        ft = await self.db.get(FormType, record.form_type_id)
+        schema = ft.schema_reference if ft else {}
+        fields = schema.get("fields", []) if isinstance(schema, dict) else []
+        field_types = {f.get("fieldname"): f.get("fieldtype") for f in fields if f.get("fieldname")}
+        
+        for fieldname, child_list in children_by_field.items():
+            fieldtype = field_types.get(fieldname)
+            
+            if fieldtype in ("Table", "Table MultiSelect"):
+                populated_rows = []
+                for child in child_list:
+                    # Recursively populate child's own children
+                    child_data = await self._populate_child_records(child)
+                    # Add child record identifiers for reference in frontend/updates
+                    child_data["record_id"] = child.record_id
+                    child_data["docname"] = child.docname
+                    populated_rows.append(child_data)
+                data[fieldname] = populated_rows
+            elif fieldtype in ("Link", "Dynamic Link"):
+                if child_list:
+                    data[fieldname] = child_list[0].docname
+                    
+        return data
+
+    def _strip_child_records(self, data: dict, schema_fields: list) -> dict:
+        """
+        Strip child Table and Link dictionary values from data dictionary
+        before saving to DB, keeping only references or empty values.
+        """
+        stripped_data = dict(data)
+        for field in schema_fields:
+            fieldname = field.get("fieldname")
+            fieldtype = field.get("fieldtype")
+            if not fieldname or fieldname not in stripped_data:
+                continue
+                
+            if fieldtype in ("Table", "Table MultiSelect"):
+                stripped_data[fieldname] = []
+        return stripped_data
 
     def _get_attach_field(self, ft: FormType, field_name: str) -> Optional[dict]:
         """Look up a field definition by name; return it only if it is an Attach type."""
@@ -169,7 +441,8 @@ class FormRecordService:
         logger.debug(f"------Updated record data: {data}")
         await self.db.commit()
         await self.db.refresh(record)
-        return self._parse(record)
+        populated_data = await self._populate_child_records(record)
+        return self._parse(record, populated_data)
 
     async def create(
         self,
@@ -195,19 +468,36 @@ class FormRecordService:
             assigned_role="worker",
             assigned_to=created_by,
             assigned_at=datetime.now(timezone.utc),
-            data=processed_data,
+            data=processed_data, # Temporary, to be replaced by stripped data
             created_by=created_by,
             form_version=ft.version,
             schema_snapshot=ft.schema_reference,
         )
         self.db.add(record)
+
+        # Save child records recursively
+        schema = ft.schema_reference or {}
+        fields = schema.get("fields", []) if isinstance(schema, dict) else []
+        
+        cleaned_data = await self._save_child_records(
+            parent_record=record,
+            data=processed_data,
+            schema_fields=fields,
+            created_by=created_by,
+            is_update=False
+        )
+
+        record.data = self._strip_child_records(cleaned_data, fields)
         await self.db.commit()
         await self.db.refresh(record)
-        return self._parse(record)
+        return self._parse(record, cleaned_data)
 
     async def get(self, record_id: str) -> Optional[FormRecordResponse]:
         record = await self.db.get(FormRecord, record_id)
-        return self._parse(record) if record else None
+        if not record:
+            return None
+        populated_data = await self._populate_child_records(record)
+        return self._parse(record, populated_data)
 
     async def list_by_form_type(
         self, form_type_id: str, skip: int = 0, limit: int = 50
@@ -220,7 +510,13 @@ class FormRecordService:
         res = await self.db.execute(
             q.order_by(FormRecord.created_at.desc()).offset(skip).limit(limit)
         )
-        items = [self._parse(r) for r in res.scalars().all()]
+        records = res.scalars().all()
+        
+        items = []
+        for r in records:
+            populated_data = await self._populate_child_records(r)
+            items.append(self._parse(r, populated_data))
+            
         return items, total
 
     async def update(
@@ -235,10 +531,21 @@ class FormRecordService:
         ft = await self.db.get(FormType, record.form_type_id)
         processed_data = self._process_attachments(ft, payload.data, record_id)
 
-        record.data = processed_data
+        schema = ft.schema_reference or {}
+        fields = schema.get("fields", []) if isinstance(schema, dict) else []
+        
+        cleaned_data = await self._save_child_records(
+            parent_record=record,
+            data=processed_data,
+            schema_fields=fields,
+            created_by=record.created_by or "system",
+            is_update=True
+        )
+
+        record.data = self._strip_child_records(cleaned_data, fields)
         await self.db.commit()
         await self.db.refresh(record)
-        return self._parse(record)
+        return self._parse(record, cleaned_data)
 
     def _build_machine(self, workflow_data: dict, current_state: str) -> tuple[Machine, RecordContext]:
         if not workflow_data:
@@ -417,7 +724,8 @@ class FormRecordService:
              
         await self.db.commit()
         await self.db.refresh(record)
-        return self._parse(record)
+        populated_data = await self._populate_child_records(record)
+        return self._parse(record, populated_data)
 
     async def delete(self, record_id: str) -> None:
         record = await self.db.get(FormRecord, record_id)
@@ -426,6 +734,14 @@ class FormRecordService:
         if record.status != "Draft":
             raise ValueError("Only Draft records can be deleted")
 
+        # Recursively delete all child records
+        result = await self.db.execute(
+            select(FormRecord).where(FormRecord.parent_record_id == record.record_id)
+        )
+        children = result.scalars().all()
+        for child in children:
+            await self.delete(child.record_id)
+
         # FormType lookup
         form_type = await self.db.get(FormType, record.form_type_id)
         if not form_type:
@@ -433,9 +749,10 @@ class FormRecordService:
 
         # Minio delete folder
         record_path = f"{form_type.form_type_id}/{record.record_id}"
-        condition = storage_service.delete_file(record_path)
-        if not condition:
-            raise ValueError(f"Failed to delete record {record_id}")
+        try:
+            storage_service.delete_file(record_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete storage path {record_path}: {e}")
             
         await self.db.delete(record)
         await self.db.commit()
