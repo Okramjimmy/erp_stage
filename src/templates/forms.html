@@ -25,46 +25,98 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <div class="card-title">All Forms</div>
+<div class="card" style="border: 1px solid var(--border); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); overflow: hidden;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding: 18px 24px;">
+        <div class="card-title" style="margin: 0; font-size: 16px; font-weight: 700;">All Forms</div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <label for="form-filter" style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 0;">Filter:</label>
+                <select id="form-filter" class="form-control form-control-sm" style="width: 140px; padding: 4px 8px; font-size: 12px; height: auto;" onchange="filterAndSortFormsList()">
+                    <option value="all">All Forms</option>
+                    <option value="submittable">Submittable Only</option>
+                    <option value="child">Child Tables Only</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <label for="form-sort" style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 0;">Sort by:</label>
+                <select id="form-sort" class="form-control form-control-sm" style="width: 140px; padding: 4px 8px; font-size: 12px; height: auto;" onchange="filterAndSortFormsList()">
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                </select>
+            </div>
+        </div>
     </div>
-    <div class="table-wrap">
-        <table>
+    <div class="table-wrap" style="overflow-x: auto; margin: 0;">
+        <table style="width: 100%; border-collapse: collapse; margin: 0;">
             <thead>
-                <tr>
-                    <th>Form Name</th>
-                    <th>ID</th>
-                    <th>Version</th>
-                    <th style="width: 120px;">Actions</th>
+                <tr style="background: #f8fafc; border-bottom: 1px solid var(--border);">
+                    <th style="padding: 14px 24px; text-align: start; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">Form Name</th>
+                    <th style="padding: 14px 24px; text-align: center; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 200px;">ID</th>
+                    <th style="padding: 14px 24px; text-align: center; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 100px;">Version</th>
+                    <th style="padding: 14px 24px; text-align: center; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; width: 380px;">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="forms-table-body">
                 {% for ft in form_types %}
-                <tr>
-                    <td style="font-weight: 500;">{{ ft.form_name }}</td>
-                    <td><code style="font-size: 11px;">{{ ft.form_type_id }}</code></td>
-                    <td><span class="badge badge-blue">v{{ ft.version or '1.0.0' }}</span></td>
-                    <td>
-                        <div class="d-flex gap-1">
-                            <a href="/forms/{{ ft.form_type_id }}?from_forms=true" class="btn btn-xs btn-primary">View Records</a>
-                            <a href="/form-builder/{{ ft.form_type_id }}?return_to=/forms" class="btn btn-xs btn-secondary">Edit Form</a>
-                            <a href="/workflow-builder/{{ ft.form_type_id }}" class="btn btn-xs btn-secondary">⚙ Workflow</a>
+                {% set settings = ft.schema_reference.settings if ft.schema_reference and ft.schema_reference.settings else {} %}
+                {% set is_submittable = 'true' if settings.is_submittable else 'false' %}
+                {% set is_child = 'true' if settings.is_child_table else 'false' %}
+                <tr class="forms-list-row" data-submittable="{{ is_submittable }}" data-child="{{ is_child }}" data-created="{{ ft.created_at.isoformat() }}"
+                    style="
+                        border-bottom: 1px solid var(--border);
+                        transition: var(--transition);
+                    "
+                    onmouseover="this.style.background = '#f8fafc';"
+                    onmouseout="this.style.background = '';"
+                >
+                    <td style="padding: 16px 24px; text-align: start; vertical-align: middle; font-size: 15px; font-weight: 800; color: #334155;">
+                        {{ ft.form_name }}
+                        {% if settings.is_submittable %}
+                        <span class="badge badge-green" style="font-size: 10px; margin-left: 6px; padding: 2px 6px;">Submittable</span>
+                        {% endif %}
+                        {% if settings.is_child_table %}
+                        <span class="badge badge-orange" style="font-size: 10px; margin-left: 6px; padding: 2px 6px; background-color: #fff4e5; color: var(--warning); border: 1px solid #fed7aa;">Child Table</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 16px 24px; text-align: center; vertical-align: middle; font-family: var(--font-mono); font-size: 12px; color: #475569;">
+                        {{ ft.form_type_id }}
+                    </td>
+                    <td style="padding: 16px 24px; text-align: center; vertical-align: middle;">
+                        <span class="badge badge-blue" style="font-size: 11px; padding: 4px 8px; font-weight: 600;">v{{ ft.version or '1.0.0' }}</span>
+                    </td>
+                    <td style="padding: 16px 24px; text-align: center; vertical-align: middle;">
+                        <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                            <a href="/forms/{{ ft.form_type_id }}?from_forms=true" class="btn btn-primary btn-sm" style="font-size: 12px; padding: 6px 12px; border-radius: var(--radius);">View Records</a>
+                            <a href="/form-builder/{{ ft.form_type_id }}?return_to=/forms" class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 6px 12px; border-radius: var(--radius); background: white; border: 1px solid var(--border); color: var(--text);">Edit Form</a>
+                            <a href="/workflow-builder/{{ ft.form_type_id }}" class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 6px 12px; border-radius: var(--radius); background: white; border: 1px solid var(--border); color: var(--text); display: flex; align-items: center; gap: 4px;">
+                                <span>⚙</span> Workflow
+                            </a>
                             {% if user_permissions and user_permissions.form_types.get(ft.form_type_id) and user_permissions.form_types[ft.form_type_id].delete %}
-                            <button class="btn btn-xs btn-danger" onclick="deleteFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')">Delete</button>
+                            <button class="btn btn-sm" 
+                                    style="font-size: 12px; padding: 6px 12px; border-radius: var(--radius); background: #fef2f2; border: 1px solid #fecaca; color: #ef4444; transition: var(--transition);"
+                                    onmouseover="this.style.background = '#fee2e2';"
+                                    onmouseout="this.style.background = '#fef2f2';"
+                                    onclick="deleteFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')">
+                                Delete
+                            </button>
                             {% endif %}
                         </div>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" style="text-align: center; padding: 32px; color: var(--text-muted);">
-                        <div style="margin-bottom:12px;font-size:18px">📋</div>
-                        <div style="font-size:14px;font-weight:600;margin-bottom:6px">No form types available</div>
+                    <td colspan="4" style="text-align: center; padding: 48px; color: var(--text-muted);">
+                        <div style="margin-bottom:12px;font-size:24px">📋</div>
+                        <div style="font-size:16px;font-weight:700;margin-bottom:6px">No form types available</div>
                         <div style="font-size:13px">Create your first form using the button above</div>
                     </td>
                 </tr>
                 {% endfor %}
+                <tr id="empty-filter-row" style="display: none;">
+                    <td colspan="4" style="text-align: center; padding: 48px; color: var(--text-muted);">
+                        <div style="font-size: 14px; font-weight: 600;">No form types match the selected filter</div>
+                    </td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -214,47 +266,74 @@
 <!-- Create Form Modal -->
 <div class="modal-overlay" id="create-form-modal">
     <div class="modal">
-        <div class="modal-header">
+        <div class="modal-header" style="display: flex; align-items: center; gap: 8px;">
+            <button
+                id="create-form-back-btn"
+                class="btn btn-ghost btn-icon"
+                style="display: none; padding: 0; font-size: 16px; font-weight: bold; width: 30px; height: 30px; justify-content: center; align-items: center; margin: 0;"
+                onclick="goBackToTemplates()"
+                title="Back to templates"
+            >
+                &lt;
+            </button>
             <span class="modal-title" id="create-form-modal-title"
                 >Create Form Type</span
             >
             <button
                 class="btn btn-ghost btn-icon"
+                style="margin-left: auto;"
                 onclick="closeModal('create-form-modal')"
             >
                 ✕
             </button>
         </div>
-        <div
-            id="template-indicator"
-            style="
-                display: none;
-                background: var(--primary-light);
-                padding: 12px 16px;
-                border-bottom: 1px solid var(--border);
-            "
-        >
+        <div class="modal-body">
             <div
+                id="template-indicator"
                 style="
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    color: var(--primary);
+                    display: none;
+                    background: #f8fafc;
+                    border: 1px dashed #cbd5e1;
+                    border-radius: var(--radius-lg);
+                    padding: 14px 16px;
+                    margin-bottom: 20px;
                 "
             >
-                <span>📋</span>
-                <strong>Selected Template:</strong>
-                <span id="selected-template-name">-</span>
-                <button
-                    class="btn btn-sm btn-secondary"
-                    onclick="clearTemplateSelection()"
-                    style="margin-left: auto; font-size: 11px; padding: 4px 8px"
+                <div
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                    "
                 >
-                    ✕ Clear
-                </button>
+                    <div style="
+                        width: 38px;
+                        height: 38px;
+                        background: var(--primary-light);
+                        border-radius: var(--radius);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 18px;
+                        color: var(--primary);
+                        flex-shrink: 0;
+                    ">
+                        📋
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Duplicating Template</div>
+                        <div id="selected-template-name" style="font-size: 14px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">-</div>
+                    </div>
+                    <button
+                        class="btn btn-ghost btn-icon btn-sm"
+                        onclick="clearTemplateSelection()"
+                        style="width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); padding: 0;"
+                        title="Clear selection"
+                    >
+                        ✕
+                    </button>
+                </div>
             </div>
-        </div>
-        <div class="modal-body">
             <div class="form-group">
                 <label class="form-label required">Form Name</label>
                 <input
@@ -537,6 +616,80 @@
         }
     }
 
+    function filterAndSortFormsList() {
+        const filterVal = document.getElementById("form-filter").value;
+        const sortVal = document.getElementById("form-sort").value;
+        const tbody = document.getElementById("forms-table-body");
+        const rows = Array.from(tbody.querySelectorAll(".forms-list-row"));
+        
+        let visibleCount = 0;
+        
+        // 1. Filter
+        rows.forEach(row => {
+            const isSubmittable = row.dataset.submittable === "true";
+            const isChild = row.dataset.child === "true";
+            
+            let show = false;
+            if (filterVal === "all") {
+                show = true;
+            } else if (filterVal === "submittable") {
+                show = isSubmittable;
+            } else if (filterVal === "child") {
+                show = isChild;
+            }
+            
+            if (show) {
+                row.style.display = "";
+                visibleCount++;
+            } else {
+                row.style.display = "none";
+            }
+        });
+        
+        // 2. Sort
+        rows.sort((a, b) => {
+            const dateA = new Date(a.dataset.created);
+            const dateB = new Date(b.dataset.created);
+            
+            if (sortVal === "newest") {
+                return dateB - dateA;
+            } else if (sortVal === "oldest") {
+                return dateA - dateB;
+            }
+            return 0;
+        });
+        
+        // Re-append sorted rows to tbody
+        rows.forEach(row => tbody.appendChild(row));
+        
+        // 3. Empty State
+        const emptyRow = document.getElementById("empty-filter-row");
+        if (visibleCount === 0) {
+            emptyRow.style.display = "";
+            tbody.appendChild(emptyRow);
+        } else {
+            emptyRow.style.display = "none";
+        }
+    }
+
+    function filterTemplates() {
+        const searchTerm = document
+            .getElementById("template-search")
+            .value.toLowerCase()
+            .trim();
+        if (!searchTerm) {
+            renderTemplateList(window.allTemplates);
+            return;
+        }
+
+        const filtered = window.allTemplates.filter(
+            (ft) =>
+                ft.form_name.toLowerCase().includes(searchTerm) ||
+                ft.form_type_id.toLowerCase().includes(searchTerm),
+        );
+        renderTemplateList(filtered);
+    }
+
     function renderTemplateList(formTypes) {
         const templateList = document.getElementById("template-list");
 
@@ -548,16 +701,23 @@
 
         const html = formTypes
             .map(
-                (ft) => `
+                (ft) => {
+                    const isSelected = ft.form_type_id === selectedTemplateFormTypeId;
+                    const btnText = isSelected ? "✓ Selected" : "✓ Select";
+                    const btnClass = isSelected ? "btn-success" : "btn-primary";
+                    const itemStyle = isSelected 
+                        ? "background: var(--primary-light); border-bottom: none;" 
+                        : "border-bottom: 1px solid var(--border);";
+                    return `
             <div class="template-item" data-form-type-id="${ft.form_type_id}"
                  style="
                     padding: 12px 16px;
-                    border-bottom: 1px solid var(--border);
                     cursor: pointer;
                     transition: var(--transition);
                     display: flex;
                     align-items: center;
                     gap: 12px;
+                    ${itemStyle}
                  "
                  onclick="selectTemplate('${ft.form_type_id}')">
                 <div style="
@@ -579,12 +739,12 @@
                         font-size: 14px;
                         color: var(--text);
                         margin-bottom: 2px;
-                    ">${ft.form_name}</div>
+                    ">${esc(ft.form_name)}</div>
                     <div style="
                         font-size: 11px;
                         color: var(--text-muted);
                         font-family: monospace;
-                    ">${ft.form_type_id}</div>
+                    ">${esc(ft.form_type_id)}</div>
                 </div>
                 <div style="
                     display: flex;
@@ -598,60 +758,63 @@
                         👁 Preview
                     </button>
                     <button
-                        class="btn btn-primary btn-sm select-template-btn"
+                        class="btn ${btnClass} btn-sm select-template-btn"
                         data-id="${ft.form_type_id}"
                         onclick="event.stopPropagation(); selectTemplate('${ft.form_type_id}')"
                         style="font-size: 11px; padding: 4px 10px;"
                     >
-                        ✓ Select
+                        ${btnText}
                     </button>
                 </div>
             </div>
-        `,
+        `;
+                }
             )
             .join("");
 
         templateList.innerHTML = html;
     }
 
-    function filterTemplates() {
-        const searchTerm = document
-            .getElementById("template-search")
-            .value.toLowerCase()
-            .trim();
-        if (!searchTerm) {
-            renderTemplateList(window.allTemplates);
-            return;
-        }
-
-        const filtered = window.allTemplates.filter(
-            (ft) =>
-                ft.form_name.toLowerCase().includes(searchTerm) ||
-                ft.form_type_id.toLowerCase().includes(searchTerm),
-        );
-        renderTemplateList(filtered);
-    }
-
     function selectTemplate(formTypeId) {
         document.querySelectorAll(".template-item").forEach((item) => {
             item.style.background = "";
+            item.style.borderBottom = "1px solid var(--border)";
+        });
+        document.querySelectorAll(".select-template-btn").forEach((btn) => {
+            btn.textContent = "✓ Select";
+            btn.classList.remove("btn-success");
+            btn.classList.add("btn-primary");
         });
 
         const selectedItem = document.querySelector(
-            `.template-item[data-form-type-id="${formTypeId}"]`,
+            `.template-item[data-form-type-id="${formTypeId}"]`
         );
         if (selectedItem) {
             selectedItem.style.background = "var(--primary-light)";
-            selectedItem.style.borderColor = "var(--primary)";
+            selectedItem.style.borderBottom = "none";
+        }
+
+        const selectedBtn = document.querySelector(
+            `.select-template-btn[data-id="${formTypeId}"]`
+        );
+        if (selectedBtn) {
+            selectedBtn.textContent = "✓ Selected";
+            selectedBtn.classList.remove("btn-primary");
+            selectedBtn.classList.add("btn-success");
         }
 
         selectedTemplateFormTypeId = formTypeId;
         selectedTemplateData = window.allTemplates.find(
-            (ft) => ft.form_type_id === formTypeId,
+            (ft) => ft.form_type_id === formTypeId
         );
 
         const dupBtn = document.getElementById("duplicate-template-btn");
         if (dupBtn) dupBtn.disabled = false;
+    }
+
+    function goBackToTemplates() {
+        closeModal("create-form-modal");
+        openModal("template-modal");
     }
 
     async function duplicateSelectedTemplate() {
@@ -663,10 +826,66 @@
         openCreateFormModal("template");
     }
 
+    function getPreviewChildTableHtml(fieldname, options, emptyTableColumns) {
+        let cols = [];
+        if (options === 'Empty Table') {
+            const headers = (emptyTableColumns || '').split('\n').map(c=>c.trim()).filter(Boolean).filter(h => h.toLowerCase() !== 'sl. no.');
+            cols = headers.map(h => ({ label: h, fieldtype: 'Data' }));
+        } else if (options === 'Users') {
+            cols = [{ label: 'User', fieldtype: 'Data' }];
+        } else {
+            const childFt = window.allTemplates ? window.allTemplates.find(t => t.form_name === options || t.form_type_id === options) : null;
+            if (childFt && (childFt.schema_data || childFt.schema_reference)) {
+                const sch = childFt.schema_data || childFt.schema_reference;
+                if (sch.fields) {
+                    cols = sch.fields.filter(cf => !['Section Break', 'Column Break', 'Tab Break', 'Heading', 'HTML', 'Field Group', 'Field Group End'].includes(cf.fieldtype || cf.type));
+                }
+            }
+            if (cols.length === 0) {
+                cols = [{ label: 'Linked Columns', fieldtype: 'Data' }];
+            }
+        }
+
+        let thStyle = 'background:var(--bg);padding:7px 10px;font-size:11px;font-weight:700;text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em;white-space:normal;word-break:break-word;line-height:1.4;';
+        let colsHtml = `<th style="${thStyle}text-align:center;width:60px;">Sl. No.</th>` + cols.map(c => {
+            let lbl = esc(c.label || c.fieldname);
+            if (c.required) lbl += `<span style="color:var(--danger);margin-left:2px">*</span>`;
+            return `<th style="${thStyle}">${lbl}</th>`;
+        }).join('');
+
+        let prevCellsHtml = `<td style="color:var(--text-muted);font-size:12px;padding:7px 10px;border-top:1px solid var(--border);text-align:center;">1</td>` + cols.map(c => `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput(c)}</td>`).join('');
+
+        return `
+            <div class="child-table-wrap" style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;margin-top:4px">
+                <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+                    <thead><tr>${colsHtml}</tr></thead>
+                    <tbody>
+                        <tr>${prevCellsHtml}</tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function getPreviewTableCellInput(c) {
+        const type = c.fieldtype || 'Data';
+        const style = 'width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--border-light);border-radius:var(--radius);outline:none;background:#fff;box-sizing:border-box;';
+        if (type === 'Check') {
+            return `<div style="text-align:center;padding:4px 0;"><input type="checkbox" disabled style="width:14px;height:14px;cursor:pointer"></div>`;
+        }
+        if (type === 'Select' || type === 'Autocomplete') {
+            return `<select class="form-control form-control-sm" disabled style="${style}"><option>— Select —</option></select>`;
+        }
+        if (type === 'Date') return `<input type="date" disabled style="${style}">`;
+        if (type === 'Datetime') return `<input type="datetime-local" disabled style="${style}">`;
+        if (type === 'Time') return `<input type="time" disabled style="${style}">`;
+        return `<input type="text" placeholder="${esc(c.label || '')}" disabled style="${style}">`;
+    }
+
     async function previewTemplate(formTypeId) {
         try {
             const ft = window.allTemplates.find(
-                (f) => f.form_type_id === formTypeId,
+                (f) => f.form_type_id === formTypeId
             );
 
             if (!ft) {
@@ -687,7 +906,7 @@
                 previewContent.innerHTML =
                     '<p style="padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 14px;">This template has no fields defined yet.</p>';
             } else {
-                let html = '<form style="padding: 24px; background: #fff; text-align: left;">';
+                let html = '<form style="padding: 24px; background: #fff; text-align: left; font-size:13px;">';
                 html += `
                     <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--border);">
                         <h2 style="margin: 0 0 8px 0; font-size: 20px;">${esc(ft.form_name)}</h2>
@@ -697,72 +916,152 @@
                     </div>
                 `;
 
+                let inCols = false;
                 schema.fields.forEach((field) => {
+                    if (field.hidden) return;
                     const FieldType = field.fieldtype || field.type || "Data";
                     const label = field.label || field.name || "Unnamed Field";
-                    const required = field.required ? " *" : "";
-                    const readonly = field.read_only ? "readonly" : "";
-                    const placeholder = field.placeholder || "";
-                    const description = field.description || "";
-                    const defaultValue = field.default || "";
 
-                    const hint = description
-                        ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${esc(description)}</div>`
-                        : "";
-
-                    if (
-                        [
-                            "Section Break",
-                            "Column Break",
-                            "Tab Break",
-                        ].includes(FieldType)
-                    ) {
-                        if (FieldType === "Section Break") {
-                            html += `
-                                <div style="margin: 32px 0 20px 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-weight: 700; font-size: 15px; color: var(--text);">
-                                    ${esc(label)}
-                                </div>
-                            `;
+                    if (FieldType === "Section Break") {
+                        if (inCols) { html += '</div></div>'; inCols = false; }
+                        html += `
+                            <div style="border-bottom: 2px solid var(--border); padding-bottom: 4px; margin: 18px 0 14px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em">
+                                ${esc(label) || 'Section'}
+                            </div>
+                        `;
+                        return;
+                    }
+                    if (FieldType === "Column Break") {
+                        if (!inCols) {
+                            html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;"><div>';
+                            inCols = true;
+                        } else {
+                            html += '</div><div>';
                         }
                         return;
                     }
-
-                    const labelText = `<label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text-dark);">${esc(label)}${required}</label>`;
-                    let inputHtml = "";
-
-                    switch (FieldType) {
-                        case "Check":
-                            inputHtml = `<div style="margin-bottom: 12px;"><label style="display: flex; align-items: center; gap: 8px;"><input type="checkbox" disabled> <span>${esc(label)}</span></label></div>`;
-                            break;
-                        case "Select":
-                        case "Autocomplete":
-                            inputHtml = `<select class="form-control" disabled><option>— Select —</option></select>`;
-                            break;
-                        case "Small Text":
-                            inputHtml = `<textarea class="form-control" rows="2" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
-                            break;
-                        case "Long Text":
-                        case "Text Editor":
-                        case "Code":
-                        case "JSON":
-                            inputHtml = `<textarea class="form-control" rows="4" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
-                            break;
-                        case "Signature":
-                            inputHtml = `<div style="height: 80px; border: 2px dashed var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; background: var(--bg);">✒ Click to sign</div>`;
-                            break;
-                        case "Duration":
-                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="HH:MM:SS" value="${esc(defaultValue)}">`;
-                            break;
-                        case "Geolocation":
-                            inputHtml = `<div style="height: 44px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; padding: 0 16px; color: var(--text-muted); font-size: 13px; background: var(--bg);">📍 Click to pick location</div>`;
-                            break;
-                        default:
-                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+                    if (FieldType === "Tab Break") {
+                        if (inCols) { html += '</div></div>'; inCols = false; }
+                        html += `
+                            <div style="border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin: 24px 0 16px; color: var(--primary); font-size: 13px; font-weight: 700">
+                                ${esc(label || 'Tab')}
+                            </div>
+                        `;
+                        return;
+                    }
+                    if (FieldType === "Field Group") {
+                        html += `<div style="margin-bottom:12px;">`;
+                        if (label) {
+                            html += `<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.03em">${esc(label)}</div>`;
+                        }
+                        html += `<div style="margin-left:12px;padding-left:12px;border-left:2px dashed var(--border-light)">`;
+                        return;
+                    }
+                    if (FieldType === "Field Group End") {
+                        html += `</div></div>`;
+                        return;
                     }
 
-                    html += `<div style="margin-bottom: 20px;">${labelText}${inputHtml}${hint}</div>`;
+                    let fieldContent = '';
+                    if (FieldType === 'Heading') {
+                        fieldContent = `<h3 style="font-size:15px;font-weight:700;margin:16px 0 10px">${esc(label)}</h3>`;
+                    } else if (FieldType === 'HTML') {
+                        fieldContent = `<div style="margin-bottom:12px">${field.options || ''}</div>`;
+                    } else {
+                        const required = field.required ? " *" : "";
+                        const description = field.description || "";
+                        const placeholder = field.placeholder || "";
+                        const defaultValue = field.default || "";
+                        const hint = description
+                            ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${esc(description)}</div>`
+                            : "";
+                        const labelText = `<label style="display: block; font-size: 13px; font-weight: ${field.bold ? '700' : '600'}; margin-bottom: 6px; color: var(--text-dark);">${esc(label)}${required}</label>`;
+
+                        if (FieldType === "Check") {
+                            const isChecked = defaultValue === "1" || defaultValue === 1 || defaultValue === true || defaultValue === "true";
+                            fieldContent = `
+                                <div style="margin-bottom: 12px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="checkbox" ${isChecked ? 'checked' : ''} disabled>
+                                        <span>${esc(label)}</span>
+                                    </label>
+                                    ${hint}
+                                </div>
+                            `;
+                        } else {
+                            let inp = '';
+                            switch (FieldType) {
+                                case 'Select':
+                                case 'Autocomplete':
+                                    inp = `<select class="form-control" disabled><option value="">— Select —</option>${(field.options || '').split('\n').filter(Boolean).map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+                                    break;
+                                case 'Link':
+                                case 'Dynamic Link':
+                                    inp = `<input type="text" class="form-control" placeholder="Search ${esc(field.options || '')}…" disabled>`;
+                                    break;
+                                case 'Table':
+                                case 'Table MultiSelect':
+                                    inp = getPreviewChildTableHtml(field.fieldname, field.options, field.empty_table_columns);
+                                    break;
+                                case 'Date':
+                                    inp = `<input type="date" class="form-control" disabled>`;
+                                    break;
+                                case 'Datetime':
+                                    inp = `<input type="datetime-local" class="form-control" disabled>`;
+                                    break;
+                                case 'Time':
+                                    inp = `<input type="time" class="form-control" disabled>`;
+                                    break;
+                                case 'Int':
+                                    inp = `<input type="number" class="form-control" placeholder="${esc(placeholder)}" value="${esc(defaultValue)}" disabled>`;
+                                    break;
+                                case 'Float':
+                                case 'Currency':
+                                case 'Percent':
+                                    inp = `<input type="number" step="any" class="form-control" placeholder="${esc(placeholder)}" value="${esc(defaultValue)}" disabled>`;
+                                    break;
+                                case 'Small Text':
+                                    inp = `<textarea class="form-control" rows="2" placeholder="${esc(placeholder)}" disabled>${esc(defaultValue)}</textarea>`;
+                                    break;
+                                case 'Long Text':
+                                case 'Text Editor':
+                                case 'Code':
+                                case 'JSON':
+                                    inp = `<textarea class="form-control" rows="4" placeholder="${esc(placeholder)}" disabled>${esc(defaultValue)}</textarea>`;
+                                    break;
+                                case 'Password':
+                                    inp = `<input type="password" class="form-control" placeholder="${esc(placeholder)}" disabled>`;
+                                    break;
+                                case 'Color':
+                                    inp = `<input type="color" style="width:60px;height:40px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;" disabled>`;
+                                    break;
+                                case 'Rating':
+                                    inp = `<div style="font-size:28px;letter-spacing:4px;color:#ffd700;">⭐⭐⭐⭐⭐</div>`;
+                                    break;
+                                case 'Attach':
+                                case 'Attach Image':
+                                    inp = `<input type="file" class="form-control" style="padding:8px;" disabled>`;
+                                    break;
+                                case 'Signature':
+                                    inp = `<div style="height:80px;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;background:var(--bg);">✒ Click to sign</div>`;
+                                    break;
+                                case 'Duration':
+                                    inp = `<input type="text" class="form-control" placeholder="HH:MM:SS" value="${esc(defaultValue)}" disabled>`;
+                                    break;
+                                case 'Geolocation':
+                                    inp = `<div style="height:44px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;padding:0 16px;color:var(--text-muted);font-size:13px;background:var(--bg);">📍 Click to pick location</div>`;
+                                    break;
+                                default:
+                                    inp = `<input type="text" class="form-control" placeholder="${esc(placeholder)}" value="${esc(defaultValue)}" disabled>`;
+                            }
+                            fieldContent = `<div style="margin-bottom: 20px;">${labelText}${inp}${hint}</div>`;
+                        }
+                    }
+
+                    html += fieldContent;
                 });
 
+                if (inCols) { html += '</div></div>'; inCols = false; }
                 addPreviewActions(html, formTypeId);
             }
         } catch (e) {
@@ -799,15 +1098,18 @@
         const indicator = document.getElementById("template-indicator");
         const templateName = document.getElementById("selected-template-name");
         const modalTitle = document.getElementById("create-form-modal-title");
+        const backBtn = document.getElementById("create-form-back-btn");
 
         if (selectedTemplateData) {
             indicator.style.display = "block";
             templateName.textContent = selectedTemplateData.form_name;
             modalTitle.textContent = "Create Form from Template";
+            if (backBtn) backBtn.style.display = "inline-flex";
         } else {
             indicator.style.display = "none";
             templateName.textContent = "-";
             modalTitle.textContent = "Create Form Type";
+            if (backBtn) backBtn.style.display = "none";
         }
 
         closeModal("build-modal");
@@ -821,6 +1123,8 @@
         document.getElementById("selected-template-name").textContent = "-";
         document.getElementById("create-form-modal-title").textContent =
             "Create Form Type";
+        const backBtn = document.getElementById("create-form-back-btn");
+        if (backBtn) backBtn.style.display = "none";
     }
 
     async function createForm() {
@@ -872,7 +1176,7 @@
             closeModal("create-form-modal");
 
             setTimeout(() => {
-                window.location = `/form-builder/${ft.form_type_id}?return_to=/forms`;
+                window.location = `/form-builder/${ft.form_type_id}?return_to=/forms&is_new=true`;
             }, 500);
         } catch (e) {
             console.error("Error creating form:", e);

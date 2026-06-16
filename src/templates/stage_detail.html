@@ -3145,7 +3145,7 @@ Builder{% endblock %} {% block content %}
 
             // Small delay to ensure data is saved before redirecting
             setTimeout(() => {
-                window.location = `/form-builder/${ft.form_type_id}?return_to=/stages/${STAGE_ID}`;
+                window.location = `/form-builder/${ft.form_type_id}?return_to=/stages/${STAGE_ID}&is_new=true`;
             }, 500);
         } catch (e) {
             console.error("Error creating form:", e);

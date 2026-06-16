@@ -1300,8 +1300,13 @@ let formSettings = Object.assign({is_submittable:false}, window.FORM_DATA.settin
 function saveForm(){
   const name=document.getElementById('form-name').value.trim();
   if(!name){toast('Form name is required','error');return;}
-  // First save of a new form → show settings dialog
-  if(!window.FORM_META.id){
+  const urlParams = new URLSearchParams(window.location.search);
+  const isNew = !window.FORM_META.id || 
+                urlParams.get('is_new') === 'true' || 
+                (!window.FORM_DATA.settings || (window.FORM_DATA.settings.is_submittable === undefined && window.FORM_DATA.settings.is_child_table === undefined));
+  if(isNew){
+    document.getElementById('set-submittable').checked = !!formSettings.is_submittable;
+    document.getElementById('set-childtable').checked = !!formSettings.is_child_table;
     document.getElementById('settings-modal').classList.add('open');
   } else {
     _doSave();
@@ -1318,6 +1323,11 @@ async function _doSave(){
   try{
     if(window.FORM_META.id){
       await apiFetch(`${API}/form-types/${window.FORM_META.id}`,{method:'PUT',body:{form_name:name,version,schema}});
+      const url = new URL(window.location);
+      if (url.searchParams.has('is_new')) {
+        url.searchParams.delete('is_new');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }
     } else {
       const ft=await apiFetch(`${API}/form-types`,{method:'POST',body:{form_name:name,version,schema}});
       if(window.FORM_META.stage_id && window.FORM_META.stage_id !== 'null' && window.FORM_META.stage_id !== 'None' && window.FORM_META.stage_id !== '') {
@@ -1326,6 +1336,7 @@ async function _doSave(){
       window.FORM_META.id = ft.form_type_id;
       window.history.replaceState({}, '', `/form-builder/${ft.form_type_id}`);
     }
+    window.FORM_DATA.settings = Object.assign({}, formSettings);
     toast('Saved successfully','success');
     dirty=false; document.getElementById('dirty-dot').style.display='none';
   } catch(e){ toast(e.message,'error'); }
