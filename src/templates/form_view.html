@@ -496,26 +496,100 @@
         margin: 20mm;
     }
     @media print {
-        body {
-            background: #fff !important;
-            color: #000 !important;
+        html, body {
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            color: #000000 !important;
         }
-        body * {
-            visibility: hidden;
+
+        /* Hide layout elements from base.html layout */
+        .navbar, .sidebar, .sidebar-resizer, .modal-overlay, #toast-container {
+            display: none !important;
         }
-        #print-preview-document, #print-preview-document * {
-            visibility: visible;
+        
+        /* Hide standard page wrappers in form_view.html */
+        .fv-bar, .fv-body, .modal {
+            display: none !important;
         }
-        #print-preview-document {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
+        
+        /* Make sure layouts containing our print modal don't restrict visibility or sizing */
+        .app-layout, .main-content {
+            display: block !important;
+            position: static !important;
             margin: 0 !important;
-            padding: 20px !important;
+            padding: 0 !important;
+            border: none !important;
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+        }
+
+        #print-preview-modal {
+            display: block !important;
+            position: static !important;
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+        #print-preview-modal .print-modal-container {
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
-            background: #fff !important;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        #print-preview-modal .print-modal-header,
+        #print-preview-modal .print-modal-sidebar,
+        #print-preview-modal .print-modal-footer {
+            display: none !important;
+        }
+        #print-preview-modal .print-modal-body {
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        #print-preview-modal .print-modal-preview-area {
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            height: auto !important;
+            overflow: visible !important;
+        }
+        #print-preview-document {
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background-color: #ffffff !important;
+            background: #ffffff !important;
+            height: auto !important;
+            overflow: visible !important;
         }
         .print-image-preview {
             max-height: 600px !important; /* Larger in print format as requested */
@@ -804,15 +878,8 @@
             </div>
         </div>
         
-        <!-- Modal Footer -->
         <div class="print-modal-footer">
             <button type="button" class="btn-taste btn-taste-secondary" onclick="closePrintPreview()" style="padding: 10px 20px;">Cancel</button>
-            <button type="button" class="btn-taste btn-taste-secondary" onclick="triggerBrowserPrint('pdf')" style="padding: 10px 20px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-                </svg>
-                Save as PDF
-            </button>
             <button type="button" class="btn-taste btn-taste-primary" onclick="triggerBrowserPrint('print')" style="padding: 10px 20px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;">
                     <polyline points="6 9 6 2 18 2 18 9" />
@@ -1588,16 +1655,29 @@
         
         const div = document.createElement('div');
         div.style.display = 'flex';
-        div.style.alignItems = 'center';
-        div.style.gap = '8px';
+        div.style.flexDirection = 'column';
+        div.style.gap = '4px';
         div.style.padding = '4px 0';
+        
+        const mainRow = document.createElement('div');
+        mainRow.style.display = 'flex';
+        mainRow.style.alignItems = 'center';
+        mainRow.style.gap = '8px';
         
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.id = `print-cb-${f.fieldname}`;
         checkbox.style.cursor = 'pointer';
-        checkbox.checked = !isFieldEmpty(f);
-        checkbox.onchange = renderPrintDocument;
+        const isFEmpty = isFieldEmpty(f);
+        checkbox.checked = !isFEmpty;
+        
+        checkbox.onchange = () => {
+          const colCbs = div.querySelectorAll('.print-col-cb');
+          colCbs.forEach(cb => {
+            cb.disabled = !checkbox.checked;
+          });
+          renderPrintDocument();
+        };
         
         const label = document.createElement('label');
         label.htmlFor = `print-cb-${f.fieldname}`;
@@ -1606,8 +1686,60 @@
         label.style.cursor = 'pointer';
         label.style.userSelect = 'none';
         
-        div.appendChild(checkbox);
-        div.appendChild(label);
+        mainRow.appendChild(checkbox);
+        mainRow.appendChild(label);
+        div.appendChild(mainRow);
+        
+        // Indented checkboxes for child table columns
+        if (['Table', 'Table MultiSelect'].includes(f.fieldtype)) {
+          let cols = [];
+          if (f.options === 'Empty Table') {
+            const colHeaders = (f.empty_table_columns || '').split('\n').map(c => c.trim()).filter(Boolean);
+            cols = colHeaders.map((header, idx) => ({ label: header, fieldname: 'col_' + idx }));
+          } else if (f.options === 'Users') {
+            cols = [{label: 'User', fieldname: 'user'}];
+          } else {
+            cols = (f._childCols || _childColsCache[f.options] || []);
+          }
+          
+          const rows = Array.isArray(formData[f.fieldname]) ? formData[f.fieldname] : [];
+          
+          cols.forEach(c => {
+            const isColEmpty = rows.length === 0 || rows.every(row => {
+              const val = row[c.fieldname];
+              return val === undefined || val === null || String(val).trim() === '';
+            });
+            
+            const colRow = document.createElement('div');
+            colRow.style.display = 'flex';
+            colRow.style.alignItems = 'center';
+            colRow.style.gap = '8px';
+            colRow.style.paddingLeft = '20px';
+            colRow.style.marginTop = '2px';
+            
+            const colCb = document.createElement('input');
+            colCb.type = 'checkbox';
+            colCb.className = 'print-col-cb';
+            colCb.checked = !isColEmpty && !isFEmpty;
+            colCb.disabled = isFEmpty;
+            colCb.id = `print-cb-${f.fieldname}-${c.fieldname}`;
+            colCb.style.cursor = 'pointer';
+            colCb.onchange = renderPrintDocument;
+            
+            const colLabel = document.createElement('label');
+            colLabel.htmlFor = `print-cb-${f.fieldname}-${c.fieldname}`;
+            colLabel.textContent = c.label || c.fieldname;
+            colLabel.style.fontSize = '11px';
+            colLabel.style.color = 'var(--text-muted)';
+            colLabel.style.cursor = 'pointer';
+            colLabel.style.userSelect = 'none';
+            
+            colRow.appendChild(colCb);
+            colRow.appendChild(colLabel);
+            div.appendChild(colRow);
+          });
+        }
+        
         checkboxContainer.appendChild(div);
       });
       
@@ -1631,6 +1763,9 @@
       const checkboxes = document.querySelectorAll('#print-field-checkboxes input[type="checkbox"]');
       checkboxes.forEach(cb => {
         cb.checked = checked;
+        if (cb.classList.contains('print-col-cb')) {
+          cb.disabled = !checked;
+        }
       });
       renderPrintDocument();
     }
@@ -1704,39 +1839,7 @@
               html += `<div class="print-doc-section-title" style="font-size: 14px; font-weight: 700; text-transform: uppercase; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-bottom: 12px;">${esc(secLabel)}</div>`;
             }
             
-            let gridFields = [];
-            let fullWidthFields = [];
-            
-            fieldsToPrint.forEach(pf => {
-              const isLarge = ['Long Text', 'Text Editor', 'Code', 'JSON', 'Table', 'Table MultiSelect', 'Attach', 'Attach Image'].includes(pf.fieldtype);
-              if (isLarge) {
-                fullWidthFields.push(pf);
-              } else {
-                gridFields.push(pf);
-              }
-            });
-            
-            if (gridFields.length > 0) {
-              html += `<div class="print-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin-bottom: 16px;">`;
-              gridFields.forEach(gf => {
-                let val = formData[gf.fieldname];
-                if (gf.fieldtype === 'Check') {
-                  val = val ? 'Yes' : 'No';
-                }
-                if (val === undefined || val === null || val === '') {
-                  val = '—';
-                }
-                html += `
-                  <div class="print-field-row">
-                    <div class="print-field-label" style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 2px;">${esc(gf.label)}</div>
-                    <div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${esc(val)}</div>
-                  </div>
-                `;
-              });
-              html += `</div>`;
-            }
-            
-            fullWidthFields.forEach(ff => {
+            fieldsToPrint.forEach(ff => {
               let val = formData[ff.fieldname];
               html += `<div class="print-field-row" style="margin-bottom: 16px; width: 100%;">`;
               html += `<div class="print-field-label" style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">${esc(ff.label)}</div>`;
@@ -1759,6 +1862,13 @@
                   cols = (ff._childCols || _childColsCache[ff.options] || []);
                 }
                 
+                // Filter columns based on checkbox settings
+                cols = cols.filter(c => {
+                  if (c.fieldname === '_sl_no') return true;
+                  const cb = document.getElementById(`print-cb-${ff.fieldname}-${c.fieldname}`);
+                  return cb ? cb.checked : true;
+                });
+                
                 if (rows.length === 0) {
                   html += `<div class="print-field-value" style="font-size: 13px; color: #64748b; font-style: italic;">No records</div>`;
                 } else {
@@ -1767,7 +1877,11 @@
                   cols.forEach(c => {
                     let lbl = esc(c.label || c.fieldname);
                     if (c.required) lbl += `<span style="color:#ef4444;margin-left:2px">*</span>`;
-                    html += `<th style="border: 1px solid #cbd5e1; padding: 6px 8px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; color: #475569; white-space: normal; word-break: break-word; line-height: 1.4;">${lbl}</th>`;
+                    const isSl = c.fieldname === '_sl_no';
+                    const thStyle = isSl 
+                      ? 'border: 1px solid #cbd5e1; padding: 6px 4px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; color: #475569; width: 55px; line-height: 1.4; white-space: normal; word-break: break-word; overflow-wrap: anywhere;'
+                      : 'border: 1px solid #cbd5e1; padding: 6px 8px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; color: #475569; white-space: normal; word-break: break-word; overflow-wrap: anywhere; line-height: 1.4;';
+                    html += `<th style="${thStyle}">${lbl}</th>`;
                   });
                   html += `</tr></thead>`;
                   html += `<tbody>`;
@@ -1775,9 +1889,18 @@
                     html += `<tr>`;
                     cols.forEach(c => {
                       if (c.fieldname === '_sl_no') {
-                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #475569;">${ri + 1}</td>`;
+                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 4px; font-size: 12px; color: #475569; text-align: center; width: 55px; white-space: normal; word-break: break-word; overflow-wrap: anywhere;">${ri + 1}</td>`;
                       } else {
-                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #0f172a;">${esc(row[c.fieldname] || '')}</td>`;
+                        let cellVal = row[c.fieldname];
+                        if (cellVal === undefined || cellVal === null) {
+                          cellVal = '';
+                        }
+                        const isAttach = ['Attach', 'Attach Image', 'Signature'].includes(c.fieldtype) ||
+                          (typeof cellVal === 'string' && cellVal.includes('/') && !cellVal.includes(' ') && cellVal.split('/').length > 2);
+                        if (isAttach && cellVal) {
+                          cellVal = cellVal.split('/').pop();
+                        }
+                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #0f172a; word-break: break-word; overflow-wrap: anywhere;">${esc(cellVal)}</td>`;
                       }
                     });
                     html += `</tr>`;
@@ -1801,9 +1924,16 @@
                     html += `<div style="margin-top: 12px;"><img src="${imgUrl}" class="print-image-preview"></div>`;
                   }
                 }
+              } else if (ff.fieldtype === 'Check') {
+                const checkVal = val ? 'Yes' : 'No';
+                html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${checkVal}</div>`;
               } else {
                 const displayVal = val !== undefined && val !== null && val !== '' ? val : '—';
-                html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; white-space: pre-wrap; background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 4px;">${esc(displayVal)}</div>`;
+                if (['Long Text', 'Text Editor', 'Code', 'JSON'].includes(ff.fieldtype)) {
+                  html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; white-space: pre-wrap; background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere;">${esc(displayVal)}</div>`;
+                } else {
+                  html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${esc(displayVal)}</div>`;
+                }
               }
               html += `</div>`;
             });
