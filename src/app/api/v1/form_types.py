@@ -185,6 +185,48 @@ async def update_form_type(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.patch("/{form_type_id}/settings", response_model=FormTypeResponse)
+async def update_form_settings_only(
+    form_type_id: str,
+    settings_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update only the settings (is_submittable / is_child_table) of a form type."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    if not await perm_service.check_form_type_permission(current_user.user_id, form_type_id, "can_edit"):
+        raise HTTPException(status_code=403, detail="Permission denied to edit this form type.")
+
+    from src.app.models.form_type import FormType
+    form_type_obj = await db.get(FormType, form_type_id)
+    if not form_type_obj:
+        raise HTTPException(status_code=404, detail="Form type not found")
+
+    schema_ref = form_type_obj.schema_reference or {}
+    if not isinstance(schema_ref, dict):
+        schema_ref = {}
+    
+    settings_dict = schema_ref.setdefault("settings", {})
+    if not isinstance(settings_dict, dict):
+        settings_dict = {}
+        schema_ref["settings"] = settings_dict
+
+    if "is_submittable" in settings_data:
+        settings_dict["is_submittable"] = bool(settings_data["is_submittable"])
+    if "is_child_table" in settings_data:
+        settings_dict["is_child_table"] = bool(settings_data["is_child_table"])
+
+    from sqlalchemy.orm.attributes import flag_modified
+    form_type_obj.schema_reference = schema_ref
+    flag_modified(form_type_obj, "schema_reference")
+    
+    await db.commit()
+    await db.refresh(form_type_obj)
+    return form_type_obj
+
+
+
 @router.delete("/{form_type_id}")
 async def delete_form_type(
     form_type_id: str,
