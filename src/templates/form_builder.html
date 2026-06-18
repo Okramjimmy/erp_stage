@@ -369,6 +369,9 @@ function getNextFieldName(type) {
           maxNum = num;
         }
       }
+      if (f.type === 'group' && f.columns) {
+        f.columns.forEach(gc => scanFields(gc.fields));
+      }
     });
   };
 
@@ -792,8 +795,9 @@ function recomputeFieldNumbers() {
   canvas.forEach(block => {
     if (block.type !== 'section') return;
     let count = 1;
-    block.columns.forEach(col => {
-      col.fields.forEach(f => {
+    
+    const processFields = (fields) => {
+      fields.forEach(f => {
         if (!LAYOUT_SET.has(f.fieldtype)) {
           f.field_number = count;
           f.filed_number = count;
@@ -802,7 +806,15 @@ function recomputeFieldNumbers() {
           delete f.field_number;
           delete f.filed_number;
         }
+        
+        if (f.type === 'group' && f.columns) {
+          f.columns.forEach(gc => processFields(gc.fields));
+        }
       });
+    };
+
+    block.columns.forEach(col => {
+      processFields(col.fields);
     });
   });
 }
