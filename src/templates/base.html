@@ -619,7 +619,12 @@
                     throw new Error(err.detail || r.statusText);
                 }
                 
-                const data = await r.json();
+                if (r.status === 204) {
+                    return null;
+                }
+                
+                const text = await r.text();
+                const data = text ? JSON.parse(text) : null;
                 
                 // Save cache for /stages/tree
                 if (url.endsWith('/stages/tree') && (!opts.method || opts.method.toUpperCase() === 'GET')) {

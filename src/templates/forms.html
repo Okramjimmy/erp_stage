@@ -89,6 +89,17 @@ input:disabled + .slider {
     <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding: 18px 24px;">
         <div class="card-title" style="margin: 0; font-size: 16px; font-weight: 700;">All Forms</div>
         <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="position: relative;">
+                <input
+                    type="text"
+                    id="form-search"
+                    class="form-control form-control-sm"
+                    placeholder="Search forms..."
+                    style="width: 200px; padding: 4px 8px 4px 28px; font-size: 12px; height: auto;"
+                    oninput="filterAndSortFormsList()"
+                />
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
             <div style="display: flex; gap: 6px; align-items: center;">
                 <label for="form-filter" style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 0;">Filter:</label>
                 <select id="form-filter" class="form-control form-control-sm" style="width: 140px; padding: 4px 8px; font-size: 12px; height: auto;" onchange="filterAndSortFormsList()">
@@ -472,7 +483,7 @@ input:disabled + .slider {
             <div
                 id="template-list"
                 style="
-                    max-height: 400px;
+                    height: 400px;
                     overflow-y: auto;
                     border: 1px solid var(--border);
                     border-radius: var(--radius);
@@ -689,26 +700,39 @@ input:disabled + .slider {
     function filterAndSortFormsList() {
         const filterVal = document.getElementById("form-filter").value;
         const sortVal = document.getElementById("form-sort").value;
+        const searchInput = document.getElementById("form-search");
+        const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : "";
         const tbody = document.getElementById("forms-table-body");
         const rows = Array.from(tbody.querySelectorAll(".forms-list-row"));
         
         let visibleCount = 0;
         
-        // 1. Filter
+        // 1. Filter and Search
         rows.forEach(row => {
             const isSubmittable = row.dataset.submittable === "true";
             const isChild = row.dataset.child === "true";
             
-            let show = false;
+            // Get form name and ID text for search comparison
+            const nameCell = row.cells[0];
+            const idCell = row.cells[2];
+            const formName = nameCell ? nameCell.textContent.toLowerCase() : "";
+            const formId = idCell ? idCell.textContent.toLowerCase() : "";
+            
+            let matchesFilter = false;
             if (filterVal === "all") {
-                show = true;
+                matchesFilter = true;
             } else if (filterVal === "submittable") {
-                show = isSubmittable;
+                matchesFilter = isSubmittable;
             } else if (filterVal === "child") {
-                show = isChild;
+                matchesFilter = isChild;
             }
             
-            if (show) {
+            let matchesSearch = true;
+            if (searchVal) {
+                matchesSearch = formName.includes(searchVal) || formId.includes(searchVal);
+            }
+            
+            if (matchesFilter && matchesSearch) {
                 row.style.display = "";
                 visibleCount++;
             } else {

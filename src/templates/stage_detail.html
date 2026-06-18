@@ -131,6 +131,27 @@ Builder{% endblock %} {% block content %}
                     href="#"
                     class="dropdown-item"
                     onclick="
+                        openTemplateModal(true);
+                        toggleNewDropdown();
+                        return false;
+                    "
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        padding: 8px 12px;
+                        color: var(--text);
+                        text-decoration: none;
+                        font-size: 13px;
+                    "
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted)"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    Link Formtype
+                </a>
+                <a
+                    href="#"
+                    class="dropdown-item"
+                    onclick="
                         openBuildModal('new-form');
                         toggleNewDropdown();
                         return false;
@@ -199,6 +220,9 @@ Builder{% endblock %} {% block content %}
         Permissions
     </button>
     <button class="tab-btn" onclick="switchTab('meta', this)">Metadata</button>
+    <button class="tab-btn" onclick="switchTab('assignments', this)">
+        Workflow Assignments
+    </button>
 </div>
 
 <div class="tab-pane active" id="tab-forms">
@@ -265,6 +289,12 @@ Builder{% endblock %} {% block content %}
                     onclick="exportFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')"
                 >
                     Export
+                </button>
+                <button
+                    class="btn btn-sm btn-danger"
+                    onclick="unlinkFormType('{{ ft.form_type_id }}','{{ ft.form_name }}')"
+                >
+                    Unlink
                 </button>
                 {% if user_permissions and user_permissions.form_types.get(ft.form_type_id) and user_permissions.form_types[ft.form_type_id].delete %}
                 <button
@@ -461,6 +491,29 @@ Builder{% endblock %} {% block content %}
       'updated_at': stage.updated_at | string
     } | tojson(indent=2) }}</pre
         >
+    </div>
+</div>
+
+<div class="tab-pane" id="tab-assignments">
+    <div class="card card-sm">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-title">Workflow Assignments</div>
+            <button class="btn btn-sm btn-secondary" onclick="loadAssignments()">
+                Refresh
+            </button>
+        </div>
+        <div style="padding: 16px;">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                Configure specific user assignments for workflow roles (e.g. Worker, Manager, Reviewer) on this stage.
+            </p>
+            <div id="assignments-loading" style="padding: 32px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                <div class="spinner" style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 8px;"></div>
+                <div>Loading assignments...</div>
+            </div>
+            <div id="assignments-content" style="display: none;">
+                <!-- Dynamically loaded assignments -->
+            </div>
+        </div>
     </div>
 </div>
 
@@ -779,6 +832,21 @@ Builder{% endblock %} {% block content %}
                             class="dropdown-item"
                             onclick="
                                 event.preventDefault();
+                                openWorkflowAssignmentsModal('{{ ft.form_type_id }}');
+                                closeAllCardDropdowns();
+                            "
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            Assignments
+                        </a>
+                        <a
+                            href="#"
+                            class="dropdown-item"
+                            onclick="
+                                event.preventDefault();
                                 exportFormType('{{ ft.form_type_id }}', {{ ft.form_name | tojson | safe }});
                                 closeAllCardDropdowns();
                             "
@@ -788,6 +856,21 @@ Builder{% endblock %} {% block content %}
                         >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             Export
+                        </a>
+                        <a
+                            href="#"
+                            class="dropdown-item text-danger"
+                            onclick="
+                                event.preventDefault();
+                                unlinkFormType('{{ ft.form_type_id }}', {{ ft.form_name | tojson | safe }});
+                                closeAllCardDropdowns();
+                            "
+                            style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--danger); text-decoration: none; font-size: 13px; transition: background 0.15s;"
+                            onmouseover="this.style.background='var(--bg)'"
+                            onmouseout="this.style.background='transparent'"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/></svg>
+                            Unlink
                         </a>
                         {% if user_permissions and user_permissions.form_types.get(ft.form_type_id) and user_permissions.form_types[ft.form_type_id].delete %}
                         <a
@@ -1004,7 +1087,7 @@ Builder{% endblock %} {% block content %}
         </div>
         <div class="modal-body">
             <p style="color: var(--text-muted); margin-bottom: 16px">
-                Choose how you want to create your form:
+                Choose how you want to create or link your form:
             </p>
             <div class="row" style="display: flex; gap: 16px">
                 <div
@@ -1059,7 +1142,7 @@ Builder{% endblock %} {% block content %}
                     </div>
                 </div>
                 <div
-                    class="col-6"
+                    class="col-4"
                     style="
                         flex: 1;
                         cursor: pointer;
@@ -1150,7 +1233,7 @@ Builder{% endblock %} {% block content %}
             <div
                 id="template-list"
                 style="
-                    max-height: 400px;
+                    height: 400px;
                     overflow-y: auto;
                     border: 1px solid var(--border);
                     border-radius: var(--radius);
@@ -1611,6 +1694,36 @@ Builder{% endblock %} {% block content %}
     </div>
 </div>
 
+<!-- Workflow Assignments Modal -->
+<div class="modal-overlay" id="workflow-assignments-modal" style="z-index: 1100;">
+    <div class="modal" style="max-width: 700px; width: 95%;">
+        <div class="modal-header">
+            <span class="modal-title" id="workflow-assignments-title">Workflow Assignments</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('workflow-assignments-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                Configure specific user assignments for workflow roles (e.g. Worker, Manager, Reviewer) for this form type.
+            </p>
+            <div id="modal-assignments-loading" style="padding: 32px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                <div class="spinner" style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 8px;"></div>
+                <div>Loading assignments...</div>
+            </div>
+            <div id="modal-assignments-content" style="display: none;">
+                <!-- Dynamically loaded role table -->
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end;">
+            <button class="btn btn-secondary btn-sm" onclick="closeModal('workflow-assignments-modal')">Close</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %} {% block extra_js %}
 <script>
     const STAGE_ID = "{{ stage.stage_id }}";
@@ -1618,6 +1731,16 @@ Builder{% endblock %} {% block content %}
     const STAGE_PREFIX = "{{ stage.wbs_prefix or '' }}";
     const STAGE_DEPTH = {{ stage.depth_level }};
     const STAGE_FILES = {{ stage.model_dump(mode="json")["filenames"] | tojson if stage.filenames else [] }};
+    const formTypes = [
+        {% for ft in form_types %}
+        {
+            form_type_id: "{{ ft.form_type_id }}",
+            form_name: "{{ ft.form_name | escape }}",
+            workflow_data: {{ ft.workflow_data | tojson | safe if ft.workflow_data else 'null' }}
+        },
+        {% endfor %}
+    ];
+    let cachedUsers = null;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -1893,6 +2016,7 @@ Builder{% endblock %} {% block content %}
         document.getElementById("tab-" + name).classList.add("active");
         btn.classList.add("active");
         if (name === "permissions") loadPermissions();
+        if (name === "assignments") loadAssignments();
     }
 
     function openModal(id) {
@@ -2565,6 +2689,301 @@ Builder{% endblock %} {% block content %}
         }
     }
 
+    async function openWorkflowAssignmentsModal(formTypeId) {
+        const ft = formTypes.find(f => f.form_type_id === formTypeId);
+        if (!ft) {
+            alert("Form type not found");
+            return;
+        }
+        
+        document.getElementById("workflow-assignments-title").innerText = `Workflow Assignments - ${ft.form_name}`;
+        openModal('workflow-assignments-modal');
+        
+        const loadingDiv = document.getElementById("modal-assignments-loading");
+        const contentDiv = document.getElementById("modal-assignments-content");
+        
+        loadingDiv.style.display = "block";
+        contentDiv.style.display = "none";
+        contentDiv.innerHTML = "";
+        
+        try {
+            if (!cachedUsers) {
+                const usersResponse = await apiFetch(`${API}/users?limit=200`);
+                cachedUsers = usersResponse.items || usersResponse || [];
+            }
+            
+            const res = await apiFetch(`${API}/workflow-assignments?stage_id=${STAGE_ID}&form_type_id=${formTypeId}`);
+            const activeAssignments = res.items || [];
+            
+            const canManage = {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].manage_permissions %}true{% else %}false{% endif %};
+            const sortedUsers = [...cachedUsers].sort((a, b) => a.full_name.localeCompare(b.full_name));
+            
+            const roles = getRolesFromWorkflow(ft.workflow_data);
+            
+            let html = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--bg-hover);">
+                            <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 30%;">Workflow Role</th>
+                            <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 45%;">Target Assigned User</th>
+                            <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 25%;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            roles.forEach(role => {
+                const assignment = activeAssignments.find(a => a.role === role);
+                const assignedUserId = assignment ? assignment.user_id : '';
+                const assignmentId = assignment ? assignment.assignment_id : '';
+                
+                let optionsHtml = `<option value="">-- Unassigned (No target user) --</option>`;
+                sortedUsers.forEach(u => {
+                    const selected = u.user_id === assignedUserId ? 'selected' : '';
+                    optionsHtml += `<option value="${escapeHtml(u.user_id)}" ${selected}>${escapeHtml(u.full_name)} (${escapeHtml(u.username)})</option>`;
+                });
+                
+                const statusBadge = assignedUserId 
+                    ? `<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">✓ Assigned</span>`
+                    : `<span style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">⚠ Unassigned</span>`;
+                
+                html += `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 12px 16px; font-weight: 500; color: var(--text-color);">${escapeHtml(role)}</td>
+                        <td style="padding: 12px 16px;">
+                            <select class="form-control" style="width: 100%; padding: 6px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg);" 
+                                    data-assignment-id="${escapeHtml(assignmentId)}"
+                                    onfocus="this.oldValue = this.value;"
+                                    onchange="handleAssignmentChange('${escapeHtml(formTypeId)}', '${escapeHtml(role)}', this)"
+                                    ${canManage ? '' : 'disabled'}>
+                                ${optionsHtml}
+                            </select>
+                        </td>
+                        <td style="padding: 12px 16px;" id="status-${escapeHtml(formTypeId)}-${escapeHtml(role)}">
+                            ${statusBadge}
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
+            
+            contentDiv.innerHTML = html;
+            loadingDiv.style.display = "none";
+            contentDiv.style.display = "block";
+            
+        } catch (e) {
+            console.error(e);
+            contentDiv.innerHTML = `<p style="color:var(--danger);font-size:13px;text-align:center;padding:16px;">Could not load assignments: ${escapeHtml(e.message)}</p>`;
+            loadingDiv.style.display = "none";
+            contentDiv.style.display = "block";
+        }
+    }
+
+    async function loadAssignments() {
+        const loadingDiv = document.getElementById("assignments-loading");
+        const contentDiv = document.getElementById("assignments-content");
+        
+        loadingDiv.style.display = "block";
+        contentDiv.style.display = "none";
+        contentDiv.innerHTML = "";
+        
+        try {
+            // 1. Fetch system users if not cached
+            if (!cachedUsers) {
+                const usersResponse = await apiFetch(`${API}/users?limit=200`);
+                cachedUsers = usersResponse.items || usersResponse || [];
+            }
+            
+            if (formTypes.length === 0) {
+                contentDiv.innerHTML = `
+                    <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                        No form types are currently linked to this stage. Link form types under the "Form Types" tab first.
+                    </div>`;
+                loadingDiv.style.display = "none";
+                contentDiv.style.display = "block";
+                return;
+            }
+            
+            // 2. Fetch assignments for each form type in parallel
+            const assignmentPromises = formTypes.map(ft => 
+                apiFetch(`${API}/workflow-assignments?stage_id=${STAGE_ID}&form_type_id=${ft.form_type_id}`)
+            );
+            const assignmentResults = await Promise.all(assignmentPromises);
+            
+            const activeAssignments = [];
+            assignmentResults.forEach(res => {
+                if (res && res.items) {
+                    activeAssignments.push(...res.items);
+                }
+            });
+            
+            const canManage = {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].manage_permissions %}true{% else %}false{% endif %};
+            
+            // Sort active users by name for cleaner dropdowns
+            const sortedUsers = [...cachedUsers].sort((a, b) => a.full_name.localeCompare(b.full_name));
+            
+            let html = '';
+            for (let i = 0; i < formTypes.length; i++) {
+                const ft = formTypes[i];
+                const roles = getRolesFromWorkflow(ft.workflow_data);
+                
+                html += `
+                    <div style="margin-bottom: 24px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
+                        <div style="padding: 12px 16px; background-color: var(--background-sidebar); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: 600; color: var(--text-color); font-size: 14px;">
+                                ${escapeHtml(ft.form_name)} <span style="font-weight: normal; color: var(--text-muted); font-size: 12px; margin-left: 8px;">(${escapeHtml(ft.form_type_id)})</span>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--bg-hover);">
+                                        <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 30%;">Workflow Role</th>
+                                        <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 45%;">Target Assigned User</th>
+                                        <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 25%;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                roles.forEach(role => {
+                    const assignment = activeAssignments.find(a => a.form_type_id === ft.form_type_id && a.role === role);
+                    const assignedUserId = assignment ? assignment.user_id : '';
+                    const assignmentId = assignment ? assignment.assignment_id : '';
+                    
+                    let optionsHtml = `<option value="">-- Unassigned (No target user) --</option>`;
+                    sortedUsers.forEach(u => {
+                        const selected = u.user_id === assignedUserId ? 'selected' : '';
+                        optionsHtml += `<option value="${escapeHtml(u.user_id)}" ${selected}>${escapeHtml(u.full_name)} (${escapeHtml(u.username)})</option>`;
+                    });
+                    
+                    const statusBadge = assignedUserId 
+                        ? `<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">✓ Assigned</span>`
+                        : `<span style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">⚠ Unassigned</span>`;
+                    
+                    html += `
+                        <tr style="border-bottom: 1px solid var(--border-color);">
+                            <td style="padding: 12px 16px; font-weight: 500; color: var(--text-color);">${escapeHtml(role)}</td>
+                            <td style="padding: 12px 16px;">
+                                <select class="form-control" style="width: 100%; padding: 6px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg);" 
+                                        data-assignment-id="${escapeHtml(assignmentId)}"
+                                        onfocus="this.oldValue = this.value;"
+                                        onchange="handleAssignmentChange('${escapeHtml(ft.form_type_id)}', '${escapeHtml(role)}', this)"
+                                        ${canManage ? '' : 'disabled'}>
+                                    ${optionsHtml}
+                                </select>
+                            </td>
+                            <td style="padding: 12px 16px;" id="status-${escapeHtml(ft.form_type_id)}-${escapeHtml(role)}">
+                                ${statusBadge}
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            contentDiv.innerHTML = html;
+            loadingDiv.style.display = "none";
+            contentDiv.style.display = "block";
+            
+        } catch (e) {
+            console.error(e);
+            contentDiv.innerHTML = `<p style="color:var(--danger);font-size:13px;text-align:center;padding:16px;">Could not load assignments: ${escapeHtml(e.message)}</p>`;
+            loadingDiv.style.display = "none";
+            contentDiv.style.display = "block";
+        }
+    }
+    
+    function getRolesFromWorkflow(workflowData) {
+        if (!workflowData || !workflowData.transitions) {
+            return ['worker', 'manager', 'reviewer'];
+        }
+        const roles = new Set();
+        workflowData.transitions.forEach(t => {
+            if (t.actor_role && typeof t.actor_role === 'string') {
+                const r = t.actor_role.trim();
+                if (r) roles.add(r);
+            }
+            if (t.next_role && typeof t.next_role === 'string') {
+                const r = t.next_role.trim();
+                if (r) roles.add(r);
+            }
+        });
+        return roles.size > 0 ? Array.from(roles) : ['worker', 'manager', 'reviewer'];
+    }
+    
+    async function handleAssignmentChange(formTypeId, role, selectElem) {
+        const newUserId = selectElem.value;
+        const previousValue = selectElem.oldValue || "";
+        const previousAssignmentId = selectElem.dataset.assignmentId || "";
+        
+        selectElem.disabled = true;
+        const statusTd = document.getElementById(`status-${formTypeId}-${role}`);
+        statusTd.innerHTML = `<span style="color: var(--text-muted); font-size: 11px;">Saving...</span>`;
+        
+        try {
+            if (newUserId === "") {
+                if (previousAssignmentId) {
+                    await apiFetch(`${API}/workflow-assignments/${previousAssignmentId}`, {
+                        method: "DELETE"
+                    });
+                    
+                    selectElem.dataset.assignmentId = "";
+                    selectElem.oldValue = "";
+                    statusTd.innerHTML = `<span style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">⚠ Unassigned</span>`;
+                    toast(`Workflow role '${role}' unassigned`, "success");
+                }
+            } else {
+                if (previousAssignmentId) {
+                    const res = await apiFetch(`${API}/workflow-assignments/${previousAssignmentId}`, {
+                        method: "PUT",
+                        body: { user_id: newUserId }
+                    });
+                    
+                    selectElem.oldValue = newUserId;
+                    statusTd.innerHTML = `<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">✓ Assigned</span>`;
+                    toast(`Workflow role '${role}' updated successfully`, "success");
+                } else {
+                    const res = await apiFetch(`${API}/workflow-assignments`, {
+                        method: "POST",
+                        body: {
+                            stage_id: STAGE_ID,
+                            form_type_id: formTypeId,
+                            role: role,
+                            user_id: newUserId
+                        }
+                    });
+                    
+                    selectElem.dataset.assignmentId = res.assignment_id;
+                    selectElem.oldValue = newUserId;
+                    statusTd.innerHTML = `<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">✓ Assigned</span>`;
+                    toast(`Workflow role '${role}' assigned successfully`, "success");
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            toast(`Failed to update assignment: ${e.message}`, "error");
+            selectElem.value = previousValue;
+            
+            const hasAssignment = !!selectElem.dataset.assignmentId;
+            statusTd.innerHTML = hasAssignment
+                ? `<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">✓ Assigned</span>`
+                : `<span style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">⚠ Unassigned</span>`;
+        } finally {
+            selectElem.disabled = false;
+        }
+    }
+
     function copyMeta() {
         const txt = document.getElementById("meta-json").textContent;
         navigator.clipboard.writeText(txt);
@@ -2587,13 +3006,45 @@ Builder{% endblock %} {% block content %}
         openModal("build-modal");
     }
 
-    function openTemplateModal() {
+    let onlyLinkMode = false;
+
+    function openTemplateModal(onlyLink = false) {
+        onlyLinkMode = onlyLink;
         closeModal("build-modal");
         openModal("template-modal");
         loadAllFormTypes();
         selectedTemplateFormTypeId = null;
         selectedTemplateData = null;
-        document.getElementById("use-template-btn").disabled = true;
+        
+        const linkBtn = document.getElementById("link-template-btn");
+        const dupBtn = document.getElementById("duplicate-template-btn");
+        if (linkBtn) linkBtn.disabled = true;
+        if (dupBtn) {
+            dupBtn.disabled = true;
+            if (onlyLink) {
+                dupBtn.style.display = "none";
+            } else {
+                dupBtn.style.display = "";
+            }
+        }
+    }
+
+    async function unlinkFormType(formTypeId, formName) {
+        if (!confirm(`Are you sure you want to unlink the form type "${formName}" from this stage?`)) {
+            return;
+        }
+        try {
+            await apiFetch(`${API}/form-types/${formTypeId}/link-stage/${STAGE_ID}`, {
+                method: "DELETE"
+            });
+            toast("Form unlinked successfully!", "success");
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } catch (e) {
+            console.error("Error unlinking form:", e);
+            toast("Failed to unlink form: " + e.message, "error");
+        }
     }
 
     async function loadAllFormTypes() {
@@ -2668,7 +3119,7 @@ Builder{% endblock %} {% block content %}
                         font-size: 11px;
                         color: var(--text-muted);
                         font-family: monospace;
-                    ">${ft.form_path}</div>
+                    ">${ft.form_path || ft.form_type_id}</div>
                 </div>
                 <div style="
                     display: flex;
@@ -2710,8 +3161,9 @@ Builder{% endblock %} {% block content %}
 
         const filtered = window.allTemplates.filter(
             (ft) =>
-                ft.form_name.toLowerCase().includes(searchTerm) ||
-                ft.form_path.toLowerCase().includes(searchTerm),
+                (ft.form_name && ft.form_name.toLowerCase().includes(searchTerm)) ||
+                (ft.form_type_id && ft.form_type_id.toLowerCase().includes(searchTerm)) ||
+                (ft.form_path && ft.form_path.toLowerCase().includes(searchTerm)),
         );
         renderTemplateList(filtered);
     }
@@ -2746,7 +3198,7 @@ Builder{% endblock %} {% block content %}
         const linkBtn = document.getElementById("link-template-btn");
         const dupBtn = document.getElementById("duplicate-template-btn");
         if (linkBtn) linkBtn.disabled = false;
-        if (dupBtn) dupBtn.disabled = false;
+        if (dupBtn && !onlyLinkMode) dupBtn.disabled = false;
     }
 
 
@@ -2777,6 +3229,62 @@ Builder{% endblock %} {% block content %}
         }
         closeModal("template-modal");
         openCreateFormModal("template");
+    }
+
+    function getPreviewChildTableHtml(fieldname, options, emptyTableColumns) {
+        let cols = [];
+        if (options === 'Empty Table') {
+            const headers = (emptyTableColumns || '').split('\n').map(c=>c.trim()).filter(Boolean).filter(h => h.toLowerCase() !== 'sl. no.');
+            cols = headers.map(h => ({ label: h, fieldtype: 'Data' }));
+        } else if (options === 'Users') {
+            cols = [{ label: 'User', fieldtype: 'Data' }];
+        } else {
+            const childFt = window.allTemplates ? window.allTemplates.find(t => t.form_name === options || t.form_type_id === options) : null;
+            if (childFt && (childFt.schema_data || childFt.schema_reference)) {
+                const sch = childFt.schema_data || childFt.schema_reference;
+                if (sch.fields) {
+                    cols = sch.fields.filter(cf => !['Section Break', 'Column Break', 'Tab Break', 'Heading', 'HTML', 'Field Group', 'Field Group End'].includes(cf.fieldtype || cf.type));
+                }
+            }
+            if (cols.length === 0) {
+                cols = [{ label: 'Linked Columns', fieldtype: 'Data' }];
+            }
+        }
+
+        let thStyle = 'background:var(--bg);padding:7px 10px;font-size:11px;font-weight:700;text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em;white-space:normal;word-break:break-word;line-height:1.4;';
+        let colsHtml = `<th style="${thStyle}text-align:center;width:60px;">Sl. No.</th>` + cols.map(c => {
+            let lbl = esc(c.label || c.fieldname);
+            if (c.required) lbl += `<span style="color:var(--danger);margin-left:2px">*</span>`;
+            return `<th style="${thStyle}">${lbl}</th>`;
+        }).join('');
+
+        let prevCellsHtml = `<td style="color:var(--text-muted);font-size:12px;padding:7px 10px;border-top:1px solid var(--border);text-align:center;">1</td>` + cols.map(c => `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput(c)}</td>`).join('');
+
+        return `
+            <div class="child-table-wrap" style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow-x:auto;margin-top:4px">
+                <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+                    <thead><tr>${colsHtml}</tr></thead>
+                    <tbody>
+                        <tr>${prevCellsHtml}</tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function getPreviewTableCellInput(c) {
+        const type = c.fieldtype || c.type || 'Data';
+        const style = 'width:100%;padding:4px 8px;font-size:12px;border:1px solid var(--border-light);border-radius:var(--radius);outline:none;background:#fff;box-sizing:border-box;';
+        if (type === 'Check') {
+            return `<div style="text-align:center;padding:4px 0;"><input type="checkbox" disabled style="width:14px;height:14px;cursor:pointer"></div>`;
+        }
+        if (type === 'Select' || type === 'Autocomplete') {
+            return `<select class="form-control form-control-sm" disabled style="${style}"><option>— Select —</option></select>`;
+        }
+        if (type === 'Date') return `<input type="date" disabled style="${style}">`;
+        if (type === 'Datetime') return `<input type="datetime-local" disabled style="${style}">`;
+        if (type === 'Time') return `<input type="time" disabled style="${style}">`;
+        return `<input type="text" placeholder="${esc(c.label || c.fieldname || '')}" disabled style="${style}">`;
     }
 
     async function previewTemplate(formTypeId) {
@@ -2813,7 +3321,7 @@ Builder{% endblock %} {% block content %}
                     <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid var(--border);">
                         <h2 style="margin: 0 0 8px 0; font-size: 20px;">${esc(ft.form_name)}</h2>
                         <div style="color: var(--text-muted); font-size: 12px;">
-                            <strong>Path:</strong> <code style="background: var(--bg); padding: 2px 6px; border-radius: 3px;">${esc(ft.form_path)}</code>
+                            <strong>Path:</strong> <code style="background: var(--bg); padding: 2px 6px; border-radius: 3px;">${esc(ft.form_path || ft.form_type_id)}</code>
                             <span style="margin: 0 8px;">|</span>
                             <strong>Version:</strong> <code>${esc(ft.version)}</code>
                         </div>
@@ -2899,7 +3407,7 @@ Builder{% endblock %} {% block content %}
                             break;
                         case "Table":
                         case "Table MultiSelect":
-                            inputHtml = `<div style="border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; color: var(--text-muted); font-size: 13px; text-align: center; background: var(--bg);">📋 ${esc(options)} <br><small>No child records yet</small></div>`;
+                            inputHtml = getPreviewChildTableHtml(fieldname, options, field.empty_table_columns);
                             break;
                         case "Date":
                             inputHtml = `<input type="date" class="form-control" ${readonly}>`;
@@ -2959,19 +3467,19 @@ Builder{% endblock %} {% block content %}
                     html += `<div style="margin-bottom: 20px;">${labelText}${inputHtml}${hint}</div>`;
                 });
 
-                addPreviewActions(html);
+                addPreviewActions(html, formTypeId);
             }
         } catch (e) {
             toast(e.message, "error");
         }
     }
 
-    function addPreviewActions(html) {
+    function addPreviewActions(html, formTypeId) {
         const previewContent = document.getElementById("preview-content");
         // Add form actions
         html += `
             <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px;">
-                <button class="btn btn-secondary" onclick="closeModal('template-preview-modal')">Close Preview</button>
+                <!-- <button class="btn btn-secondary" onclick="closeModal('template-preview-modal')">Close Preview</button> -->
             </div>
         </form>
         `;
@@ -2979,11 +3487,18 @@ Builder{% endblock %} {% block content %}
 
         // Set up the use button
         const useBtn = document.getElementById("use-preview-template-btn");
-        useBtn.onclick = function () {
-            closeModal("template-preview-modal");
-            selectTemplate(formTypeId);
-            openCreateFormModal("template");
-        };
+        if (useBtn) {
+            if (onlyLinkMode) {
+                useBtn.style.display = "none";
+            } else {
+                useBtn.style.display = "";
+                useBtn.onclick = function () {
+                    closeModal("template-preview-modal");
+                    selectTemplate(formTypeId);
+                    openCreateFormModal("template");
+                };
+            }
+        }
 
         openModal("template-preview-modal");
     }

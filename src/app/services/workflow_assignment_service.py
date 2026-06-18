@@ -8,6 +8,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.models.workflow_assignment import WorkflowAssignment
+from src.app.models.stage import Stage
 from src.app.schemas.workflow_assignment import (
     WorkflowAssignmentCreate,
     WorkflowAssignmentResponse,
@@ -87,20 +88,47 @@ class WorkflowAssignmentService:
     ) -> Optional[str]:
         """Resolve the user_id assigned to a specific role for a stage+form_type.
 
-        Returns None if no active assignment is found.
+        Checks the target stage first, then recursively walks up the parent stages
+        to inherit workflow assignments if not overridden.
         """
-        result = await self.db.execute(
-            select(WorkflowAssignment.user_id).where(
-                and_(
-                    WorkflowAssignment.stage_id == stage_id,
-                    WorkflowAssignment.form_type_id == form_type_id,
-                    WorkflowAssignment.role == role,
-                    WorkflowAssignment.active == True,
+        current_stage_id = stage_id
+        visited = set()
+        
+        while current_stage_id and current_stage_id not in visited:
+            visited.add(current_stage_id)
+            
+            result = await self.db.execute(
+                select(WorkflowAssignment.user_id).where(
+                    and_(
+                        WorkflowAssignment.stage_id == current_stage_id,
+                        WorkflowAssignment.form_type_id == form_type_id,
+                        WorkflowAssignment.role == role,
+                        WorkflowAssignment.active == True,
+                    )
                 )
             )
-        )
-        row = result.scalar_one_or_none()
-        return row
+            user_id = result.scalar_one_or_none()
+            if user_id:
+                logger.info(f"Resolved role={role} to user={user_id} on stage={current_stage_id} (requested={stage_id})")
+                return user_id
+                
+            if current_stage_id == "stage_system":
+                break
+                
+            stage_result = await self.db.execute(
+                select(Stage.parent_stage_id).where(Stage.stage_id == current_stage_id)
+            )
+            parent_id = stage_result.scalar_one_or_none()
+            if not parent_id:
+                if current_stage_id != "stage_system":
+                    current_stage_id = "stage_system"
+                else:
+                    break
+            else:
+                current_stage_id = parent_id
+                
+        logger.warning(f"Could not resolve role={role} on stage={stage_id} or any ancestors")
+        return None
 
     async def update_assignment(
         self,
