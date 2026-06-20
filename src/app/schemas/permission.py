@@ -8,6 +8,8 @@ class StagePermissionCreate(BaseModel):
     """Schema for creating Stage permission."""
 
     role_name: str = Field(..., min_length=1, max_length=100)
+    location_id: Optional[str] = None
+    department_id: Optional[str] = None
     can_view: bool = False
     can_create: bool = False
     can_edit: bool = False
@@ -31,6 +33,8 @@ class StagePermissionResponse(BaseModel):
     permission_id: int
     stage_id: str
     role_name: str
+    location_id: Optional[str] = None
+    department_id: Optional[str] = None
     can_view: bool
     can_create: bool
     can_edit: bool
@@ -47,6 +51,8 @@ class FormTypePermissionCreate(BaseModel):
     """Schema for creating Form Type permission."""
 
     role_name: str = Field(..., min_length=1, max_length=100)
+    location_id: Optional[str] = None
+    department_id: Optional[str] = None
     can_view: bool = False
     can_create: bool = False
     can_edit: bool = False
@@ -78,6 +84,8 @@ class FormTypePermissionResponse(BaseModel):
     permission_id: int
     form_type_id: str
     role_name: str
+    location_id: Optional[str] = None
+    department_id: Optional[str] = None
     can_view: bool
     can_create: bool
     can_edit: bool

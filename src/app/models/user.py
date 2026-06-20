@@ -27,6 +27,7 @@ class User(Base):
 
     # Profile fields
     dept = Column(String(36), ForeignKey("departments.department_id"), nullable=True)
+    location_id = Column(String(36), ForeignKey("locations.location_id"), nullable=True)
     phone = Column(String(50), nullable=True)
 
     # Photo stored as a MinIO object key: "users/{user_id}_{department}/photo.{ext}"
@@ -52,10 +53,15 @@ class User(Base):
     # One user → one UserRole row (role_ids stored as JSONB integer array)
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan", uselist=False)
     department_rel = relationship("Department", foreign_keys=[dept], lazy="selectin")
+    location_rel = relationship("Location", foreign_keys=[location_id], lazy="selectin")
 
     @property
     def department(self) -> Optional[str]:
         return self.department_rel.name if self.department_rel else None
+
+    @property
+    def location(self) -> Optional[str]:
+        return self.location_rel.name if self.location_rel else None
 
     def __repr__(self):
         return f"<User(id={self.user_id}, username={self.username})>"
@@ -69,6 +75,8 @@ class User(Base):
             "full_name": self.full_name,
             "dept": self.dept,
             "department": self.department,
+            "location_id": self.location_id,
+            "location": self.location,
             "phone": self.phone,
             "profile_photo_url": self.profile_photo_url,
             "is_active": self.is_active,

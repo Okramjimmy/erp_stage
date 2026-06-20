@@ -45,6 +45,8 @@ class PermissionService:
                 and_(
                     StagePermission.stage_id == stage_id,
                     StagePermission.role_name == permission_data.role_name,
+                    StagePermission.location_id == permission_data.location_id,
+                    StagePermission.department_id == permission_data.department_id,
                 )
             )
         )
@@ -73,6 +75,8 @@ class PermissionService:
         new_permission = StagePermission(
             stage_id=stage_id,
             role_name=permission_data.role_name,
+            location_id=permission_data.location_id,
+            department_id=permission_data.department_id,
             can_view=permission_data.can_view,
             can_create=permission_data.can_create,
             can_edit=permission_data.can_edit,
@@ -91,7 +95,11 @@ class PermissionService:
         return StagePermissionResponse.model_validate(new_permission)
 
     async def revoke_stage_permission(
-        self, stage_id: str, role_name: str
+        self,
+        stage_id: str,
+        role_name: str,
+        location_id: Optional[str] = None,
+        department_id: Optional[str] = None,
     ) -> Dict[str, str]:
         """Revoke stage permission from a role."""
         result = await self.db.execute(
@@ -99,6 +107,8 @@ class PermissionService:
                 and_(
                     StagePermission.stage_id == stage_id,
                     StagePermission.role_name == role_name,
+                    StagePermission.location_id == location_id,
+                    StagePermission.department_id == department_id,
                 )
             )
         )
@@ -118,7 +128,11 @@ class PermissionService:
         return {"revoked": f"{role_name} on {stage_id}"}
 
     async def revoke_form_type_permission(
-        self, form_type_id: str, role_name: str
+        self,
+        form_type_id: str,
+        role_name: str,
+        location_id: Optional[str] = None,
+        department_id: Optional[str] = None,
     ) -> Dict[str, str]:
         """Revoke form type permission from a role."""
         result = await self.db.execute(
@@ -126,6 +140,8 @@ class PermissionService:
                 and_(
                     FormTypePermission.form_type_id == form_type_id,
                     FormTypePermission.role_name == role_name,
+                    FormTypePermission.location_id == location_id,
+                    FormTypePermission.department_id == department_id,
                 )
             )
         )
@@ -157,6 +173,8 @@ class PermissionService:
                 and_(
                     FormTypePermission.form_type_id == form_type_id,
                     FormTypePermission.role_name == permission_data.role_name,
+                    FormTypePermission.location_id == permission_data.location_id,
+                    FormTypePermission.department_id == permission_data.department_id,
                 )
             )
         )
@@ -189,6 +207,8 @@ class PermissionService:
         new_permission = FormTypePermission(
             form_type_id=form_type_id,
             role_name=permission_data.role_name,
+            location_id=permission_data.location_id,
+            department_id=permission_data.department_id,
             can_view=permission_data.can_view,
             can_create=permission_data.can_create,
             can_edit=permission_data.can_edit,
@@ -301,14 +321,30 @@ class PermissionService:
         if cached:
             return cached
 
+        # Get user details
+        user_stmt = select(User).where(User.user_id == user_id)
+        user_res = await self.db.execute(user_stmt)
+        user = user_res.scalar_one_or_none()
+        if not user:
+            return []
+
+        user_location_id = user.location_id
+        user_department_id = user.dept
+
         # Get user roles
         roles = await self.get_user_roles(user_id)
         if not roles:
             return []
 
-        # Get all stage permissions for user's roles
+        # Get all stage permissions for user's roles matching location/department
         result = await self.db.execute(
-            select(StagePermission).where(StagePermission.role_name.in_(roles))
+            select(StagePermission).where(
+                and_(
+                    StagePermission.role_name.in_(roles),
+                    or_(StagePermission.location_id.is_(None), StagePermission.location_id == user_location_id),
+                    or_(StagePermission.department_id.is_(None), StagePermission.department_id == user_department_id),
+                )
+            )
         )
         permissions = result.scalars().all()
 
@@ -348,11 +384,20 @@ class PermissionService:
         Check if user has specific permission on a stage.
 
         Superadmins always have all permissions.
-        Regular users: uses lineage-based visibility.
         """
         # Superadmins have all permissions
         if await self.is_superadmin(user_id):
             return True
+
+        # Get user details
+        user_stmt = select(User).where(User.user_id == user_id)
+        user_res = await self.db.execute(user_stmt)
+        user = user_res.scalar_one_or_none()
+        if not user:
+            return False
+
+        user_location_id = user.location_id
+        user_department_id = user.dept
 
         # Get user roles
         roles = await self.get_user_roles(user_id)
@@ -379,6 +424,8 @@ class PermissionService:
                     StagePermission.role_name.in_(roles),
                     StagePermission.stage_id.in_(ancestor_ids),
                     getattr(StagePermission, permission_type) == True,
+                    or_(StagePermission.location_id.is_(None), StagePermission.location_id == user_location_id),
+                    or_(StagePermission.department_id.is_(None), StagePermission.department_id == user_department_id),
                 )
             )
         )
@@ -411,23 +458,45 @@ class PermissionService:
         )
 
     async def list_stage_permissions(
-        self, role_name: Optional[str] = None
+        self,
+        role_name: Optional[str] = None,
+        location_id: Optional[str] = None,
+        department_id: Optional[str] = None,
     ) -> List[StagePermissionResponse]:
-        """List all stage permissions, optionally filtered by role."""
+        """List all stage permissions, optionally filtered by role, location, and department."""
         query = select(StagePermission)
         if role_name:
             query = query.where(StagePermission.role_name == role_name)
+        if location_id == "null" or location_id is None:
+            query = query.where(StagePermission.location_id.is_(None))
+        else:
+            query = query.where(StagePermission.location_id == location_id)
+        if department_id == "null" or department_id is None:
+            query = query.where(StagePermission.department_id.is_(None))
+        else:
+            query = query.where(StagePermission.department_id == department_id)
         result = await self.db.execute(query)
         permissions = result.scalars().all()
         return [StagePermissionResponse.model_validate(p) for p in permissions]
 
     async def list_form_type_permissions(
-        self, role_name: Optional[str] = None
+        self,
+        role_name: Optional[str] = None,
+        location_id: Optional[str] = None,
+        department_id: Optional[str] = None,
     ) -> List[FormTypePermissionResponse]:
-        """List all form type permissions, optionally filtered by role."""
+        """List all form type permissions, optionally filtered by role, location, and department."""
         query = select(FormTypePermission)
         if role_name:
             query = query.where(FormTypePermission.role_name == role_name)
+        if location_id == "null" or location_id is None:
+            query = query.where(FormTypePermission.location_id.is_(None))
+        else:
+            query = query.where(FormTypePermission.location_id == location_id)
+        if department_id == "null" or department_id is None:
+            query = query.where(FormTypePermission.department_id.is_(None))
+        else:
+            query = query.where(FormTypePermission.department_id == department_id)
         result = await self.db.execute(query)
         permissions = result.scalars().all()
         return [FormTypePermissionResponse.model_validate(p) for p in permissions]
@@ -652,6 +721,16 @@ class PermissionService:
         if await self.is_superadmin(user_id):
             return True
 
+        # Get user details
+        user_stmt = select(User).where(User.user_id == user_id)
+        user_res = await self.db.execute(user_stmt)
+        user = user_res.scalar_one_or_none()
+        if not user:
+            return False
+
+        user_location_id = user.location_id
+        user_department_id = user.dept
+
         roles = await self.get_user_roles(user_id)
         if not roles:
             return False
@@ -661,7 +740,9 @@ class PermissionService:
             and_(
                 FormTypePermission.role_name.in_(roles),
                 FormTypePermission.form_type_id == form_type_id,
-                getattr(FormTypePermission, permission_type) == True
+                getattr(FormTypePermission, permission_type) == True,
+                or_(FormTypePermission.location_id.is_(None), FormTypePermission.location_id == user_location_id),
+                or_(FormTypePermission.department_id.is_(None), FormTypePermission.department_id == user_department_id),
             )
         )
         direct_res = await self.db.execute(direct_stmt)
@@ -725,6 +806,17 @@ class PermissionService:
             return {"stages": stages_perms, "form_types": form_types_perms}
 
         roles = await self.get_user_roles(user_id)
+
+        # Get user details
+        user_stmt = select(User).where(User.user_id == user_id)
+        user_res = await self.db.execute(user_stmt)
+        user = user_res.scalar_one_or_none()
+        if not user:
+            return {"stages": {}, "form_types": {}}
+
+        user_location_id = user.location_id
+        user_department_id = user.dept
+
         if not roles:
             stages_perms = {
                 s.stage_id: {
@@ -754,7 +846,13 @@ class PermissionService:
 
         # 2. Get direct Stage permissions
         stage_perms_res = await self.db.execute(
-            select(StagePermission).where(StagePermission.role_name.in_(roles))
+            select(StagePermission).where(
+                and_(
+                    StagePermission.role_name.in_(roles),
+                    or_(StagePermission.location_id.is_(None), StagePermission.location_id == user_location_id),
+                    or_(StagePermission.department_id.is_(None), StagePermission.department_id == user_department_id),
+                )
+            )
         )
         direct_stage_perms = stage_perms_res.scalars().all()
 
@@ -803,7 +901,13 @@ class PermissionService:
 
         # 4. Get direct FormType permissions
         ft_perms_res = await self.db.execute(
-            select(FormTypePermission).where(FormTypePermission.role_name.in_(roles))
+            select(FormTypePermission).where(
+                and_(
+                    FormTypePermission.role_name.in_(roles),
+                    or_(FormTypePermission.location_id.is_(None), FormTypePermission.location_id == user_location_id),
+                    or_(FormTypePermission.department_id.is_(None), FormTypePermission.department_id == user_department_id),
+                )
+            )
         )
         direct_ft_perms = ft_perms_res.scalars().all()
 

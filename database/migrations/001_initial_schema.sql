@@ -178,6 +178,10 @@ CREATE TABLE stage_permissions (
     -- Role-based
     role_name VARCHAR(100) NOT NULL,
 
+    -- Scoping
+    location_id VARCHAR(36) REFERENCES locations(location_id) ON DELETE CASCADE,
+    department_id VARCHAR(36) REFERENCES departments(department_id) ON DELETE CASCADE,
+
     -- Permissions
     can_view BOOLEAN NOT NULL DEFAULT FALSE,
     can_create BOOLEAN NOT NULL DEFAULT FALSE,
@@ -187,15 +191,27 @@ CREATE TABLE stage_permissions (
 
     -- Timestamps
     granted_by VARCHAR(100),
-    granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    -- Constraints
-    CONSTRAINT uq_stage_role UNIQUE (stage_id, role_name)
+    granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for stage_permissions
 CREATE INDEX idx_stage_permissions_stage ON stage_permissions(stage_id);
 CREATE INDEX idx_stage_permissions_role ON stage_permissions(role_name);
+CREATE INDEX idx_stage_permissions_location_id ON stage_permissions(location_id);
+CREATE INDEX idx_stage_permissions_department_id ON stage_permissions(department_id);
+
+-- Partial unique indexes to handle NULL values in location_id and department_id
+CREATE UNIQUE INDEX uq_stage_role_global ON stage_permissions (stage_id, role_name)
+WHERE location_id IS NULL AND department_id IS NULL;
+
+CREATE UNIQUE INDEX uq_stage_role_location ON stage_permissions (stage_id, role_name, location_id)
+WHERE department_id IS NULL;
+
+CREATE UNIQUE INDEX uq_stage_role_department ON stage_permissions (stage_id, role_name, department_id)
+WHERE location_id IS NULL;
+
+CREATE UNIQUE INDEX uq_stage_role_location_dept ON stage_permissions (stage_id, role_name, location_id, department_id)
+WHERE location_id IS NOT NULL AND department_id IS NOT NULL;
 
 
 -- =================================================================
@@ -210,6 +226,10 @@ CREATE TABLE form_type_permissions (
     -- Role-based
     role_name VARCHAR(100) NOT NULL,
 
+    -- Scoping
+    location_id VARCHAR(36) REFERENCES locations(location_id) ON DELETE CASCADE,
+    department_id VARCHAR(36) REFERENCES departments(department_id) ON DELETE CASCADE,
+
     -- Permissions
     can_view BOOLEAN NOT NULL DEFAULT FALSE,
     can_create BOOLEAN NOT NULL DEFAULT FALSE,
@@ -223,15 +243,27 @@ CREATE TABLE form_type_permissions (
 
     -- Timestamps
     granted_by VARCHAR(100),
-    granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    -- Constraints
-    CONSTRAINT uq_form_type_role UNIQUE (form_type_id, role_name)
+    granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for form_type_permissions
 CREATE INDEX idx_form_type_permissions_form ON form_type_permissions(form_type_id);
 CREATE INDEX idx_form_type_permissions_role ON form_type_permissions(role_name);
+CREATE INDEX idx_form_type_permissions_location_id ON form_type_permissions(location_id);
+CREATE INDEX idx_form_type_permissions_department_id ON form_type_permissions(department_id);
+
+-- Partial unique indexes to handle NULL values in location_id and department_id
+CREATE UNIQUE INDEX uq_form_type_role_global ON form_type_permissions (form_type_id, role_name)
+WHERE location_id IS NULL AND department_id IS NULL;
+
+CREATE UNIQUE INDEX uq_form_type_role_location ON form_type_permissions (form_type_id, role_name, location_id)
+WHERE department_id IS NULL;
+
+CREATE UNIQUE INDEX uq_form_type_role_department ON form_type_permissions (form_type_id, role_name, department_id)
+WHERE location_id IS NULL;
+
+CREATE UNIQUE INDEX uq_form_type_role_location_dept ON form_type_permissions (form_type_id, role_name, location_id, department_id)
+WHERE location_id IS NOT NULL AND department_id IS NOT NULL;
 
 
 -- =================================================================
@@ -246,6 +278,19 @@ CREATE TABLE departments (
 );
 
 CREATE INDEX idx_departments_name ON departments(name);
+
+-- =================================================================
+-- 4.4.5. LOCATIONS TABLE
+-- =================================================================
+CREATE TABLE locations (
+    location_id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_locations_name ON locations(name);
 
 -- =================================================================
 -- 4.5. ROLES TABLE
@@ -270,6 +315,7 @@ CREATE TABLE users (
     full_name VARCHAR(255) NOT NULL,
     manager_id VARCHAR(36) REFERENCES users(user_id),
     dept VARCHAR(36) REFERENCES departments(department_id),
+    location_id VARCHAR(36) REFERENCES locations(location_id),
     phone VARCHAR(50),
     profile_photo_url TEXT,
     hashed_password TEXT NOT NULL,
@@ -280,6 +326,7 @@ CREATE TABLE users (
 
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_location_id ON users(location_id);
 
 -- =================================================================
 -- 5. USER_ROLES TABLE
@@ -816,6 +863,11 @@ EXECUTE FUNCTION trg_update_timestamp();
 
 CREATE TRIGGER t_departments_update_timestamp
 BEFORE UPDATE ON departments
+FOR EACH ROW
+EXECUTE FUNCTION trg_update_timestamp();
+
+CREATE TRIGGER t_locations_update_timestamp
+BEFORE UPDATE ON locations
 FOR EACH ROW
 EXECUTE FUNCTION trg_update_timestamp();
 

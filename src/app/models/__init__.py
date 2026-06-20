@@ -1,5 +1,6 @@
 from src.app.models.user import User  # must be imported before UserRole
 from src.app.models.department import Department
+from src.app.models.location import Location
 from src.app.models.form_record import FormRecord
 from src.app.models.form_type import FormType
 from src.app.models.permission import FormTypePermission, Role, StagePermission, UserRole
@@ -11,6 +12,7 @@ from src.app.models.workflow_assignment import WorkflowAssignment
 __all__ = [
     "User",
     "Department",
+    "Location",
     "Stage",
     "FormType",
     "StageFormType",

@@ -54,12 +54,18 @@ async def grant_stage_permission(
 
 @router.delete("/stages/{stage_id}/roles/{role_name}")
 async def revoke_stage_permission(
-    stage_id: str, role_name: str, db: AsyncSession = Depends(get_db)
+    stage_id: str,
+    role_name: str,
+    location_id: Optional[str] = Query(None),
+    department_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """Revoke stage permission from a role."""
     service = PermissionService(db)
     try:
-        result = await service.revoke_stage_permission(stage_id, role_name)
+        result = await service.revoke_stage_permission(
+            stage_id, role_name, location_id, department_id
+        )
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -129,12 +135,18 @@ async def grant_form_type_permission(
 
 @router.delete("/form-types/{form_type_id}/roles/{role_name}")
 async def revoke_form_type_permission(
-    form_type_id: str, role_name: str, db: AsyncSession = Depends(get_db)
+    form_type_id: str,
+    role_name: str,
+    location_id: Optional[str] = Query(None),
+    department_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """Revoke form type permission from a role."""
     service = PermissionService(db)
     try:
-        result = await service.revoke_form_type_permission(form_type_id, role_name)
+        result = await service.revoke_form_type_permission(
+            form_type_id, role_name, location_id, department_id
+        )
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -227,21 +239,25 @@ async def check_stage_permission(
 @router.get("/stages", response_model=List[StagePermissionResponse])
 async def list_stage_permissions(
     role_name: Optional[str] = Query(None),
+    location_id: Optional[str] = Query(None),
+    department_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all stage permissions, optionally filtered by role."""
+    """List all stage permissions, optionally filtered by role, location, and department."""
     service = PermissionService(db)
-    return await service.list_stage_permissions(role_name)
+    return await service.list_stage_permissions(role_name, location_id, department_id)
 
 
 @router.get("/form-types", response_model=List[FormTypePermissionResponse])
 async def list_form_type_permissions(
     role_name: Optional[str] = Query(None),
+    location_id: Optional[str] = Query(None),
+    department_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all form type permissions, optionally filtered by role."""
+    """List all form type permissions, optionally filtered by role, location, and department."""
     service = PermissionService(db)
-    return await service.list_form_type_permissions(role_name)
+    return await service.list_form_type_permissions(role_name, location_id, department_id)
 
 
 @router.get("/roles/{role_name}")

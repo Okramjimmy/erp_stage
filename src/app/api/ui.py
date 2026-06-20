@@ -447,6 +447,14 @@ async def permissions_page(request: Request, db: AsyncSession = Depends(get_db))
     stages_data = [stage.model_dump(mode="json") for stage in stages]
     form_types_data = [ft.model_dump(mode="json") for ft in form_types]
 
+    from src.app.services.department_service import DepartmentService
+    dept_service = DepartmentService(db)
+    departments = await dept_service.list_departments(limit=100)
+
+    from src.app.services.location_service import LocationService
+    loc_service = LocationService(db)
+    locations = await loc_service.list_locations(limit=100)
+
     return templates.TemplateResponse(
         "permissions.html",
         {
@@ -455,6 +463,8 @@ async def permissions_page(request: Request, db: AsyncSession = Depends(get_db))
             "form_types": form_types_data,
             "current_user": user,
             "current_user_roles": roles,
+            "departments": departments,
+            "locations": locations,
         },
     )
 
@@ -541,6 +551,10 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
     dept_service = DepartmentService(db)
     all_departments = await dept_service.list_departments(limit=50)
 
+    from src.app.services.location_service import LocationService
+    loc_service = LocationService(db)
+    all_locations = await loc_service.list_locations(limit=50)
+
     users_data = [
         {**u.to_dict(), "roles": r}
         for u, r in all_users_with_roles
@@ -555,5 +569,6 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
             "users": users_data,
             "all_roles": all_roles,
             "departments": all_departments,
+            "locations": all_locations,
         },
     )

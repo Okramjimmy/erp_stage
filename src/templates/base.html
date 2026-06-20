@@ -557,6 +557,17 @@
                             </div>
                         </div>
 
+                        <div class="form-group">
+                            <label class="form-label">Location</label>
+                            <select class="form-control" id="profileLocationSelect" onchange="toggleProfileNewLocationInput()">
+                                <option value="">-- None / Select --</option>
+                                <option value="__new__">+ Create New Location...</option>
+                            </select>
+                            <div id="profileNewLocationTextInputWrapper" style="display:none; margin-top:8px;">
+                                <input type="text" class="form-control" id="profileNewLocationText" maxlength="100" placeholder="Enter new location name" />
+                            </div>
+                        </div>
+
                         <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px;">
                             <button type="button" class="btn btn-secondary" onclick="closeProfileModal()">Cancel</button>
                             <button type="submit" class="btn btn-primary" id="saveProfileSubmitBtn">Save Changes</button>
@@ -1097,11 +1108,13 @@
             function openProfileModal() {
                 document.getElementById("profile-modal").classList.add("open");
                 loadDepartmentsForProfile();
+                loadLocationsForProfile();
             }
 
             function closeProfileModal() {
                 document.getElementById("profile-modal").classList.remove("open");
                 document.getElementById("profileNewDepartmentTextInputWrapper").style.display = "none";
+                document.getElementById("profileNewLocationTextInputWrapper").style.display = "none";
             }
 
             function toggleProfileNewDepartmentInput() {
@@ -1110,6 +1123,17 @@
                 if (select.value === "__new__") {
                     wrapper.style.display = "block";
                     document.getElementById("profileNewDepartmentText").focus();
+                } else {
+                    wrapper.style.display = "none";
+                }
+            }
+
+            function toggleProfileNewLocationInput() {
+                const select = document.getElementById("profileLocationSelect");
+                const wrapper = document.getElementById("profileNewLocationTextInputWrapper");
+                if (select.value === "__new__") {
+                    wrapper.style.display = "block";
+                    document.getElementById("profileNewLocationText").focus();
                 } else {
                     wrapper.style.display = "none";
                 }
@@ -1159,6 +1183,38 @@
                 }
             }
 
+            async function loadLocationsForProfile() {
+                try {
+                    const response = await fetch('/api/v1/locations');
+                    if (response.ok) {
+                        const locs = await response.json();
+                        
+                        // Populate Profile modal select (if it exists)
+                        const profileSelect = document.getElementById("profileLocationSelect");
+                        if (profileSelect) {
+                            const currentLoc = "{% if current_user %}{{ current_user.location }}{% endif %}";
+                            profileSelect.innerHTML = '<option value="">-- None / Select --</option>';
+                            let foundCurrent = false;
+                            locs.forEach(l => {
+                                const selected = l.name === currentLoc ? 'selected' : '';
+                                if (l.name === currentLoc) foundCurrent = true;
+                                profileSelect.innerHTML += `<option value="${l.name}" ${selected}>${l.name}</option>`;
+                            });
+                            profileSelect.innerHTML += '<option value="__new__">+ Create New Location...</option>';
+                            if (currentLoc && !foundCurrent && currentLoc !== "None" && currentLoc !== "") {
+                                const opt = document.createElement("option");
+                                opt.value = currentLoc;
+                                opt.textContent = currentLoc;
+                                opt.selected = true;
+                                profileSelect.insertBefore(opt, profileSelect.lastChild);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to load locations", e);
+                }
+            }
+
             async function uploadProfilePhoto(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -1199,6 +1255,14 @@
                     department = deptSelect;
                 }
 
+                let location = null;
+                const locSelect = document.getElementById("profileLocationSelect").value;
+                if (locSelect === "__new__") {
+                    location = document.getElementById("profileNewLocationText").value.trim() || null;
+                } else if (locSelect) {
+                    location = locSelect;
+                }
+
                 const submitBtn = document.getElementById("saveProfileSubmitBtn");
                 submitBtn.disabled = true;
                 submitBtn.textContent = "Saving...";
@@ -1207,7 +1271,7 @@
                     const response = await fetch(`/api/v1/users/${window.CURRENT_USER_ID}`, {
                         method: "PUT",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ full_name: fullName, email, phone, department })
+                        body: JSON.stringify({ full_name: fullName, email, phone, department, location })
                     });
 
                     if (response.ok) {

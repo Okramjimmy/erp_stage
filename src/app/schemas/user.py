@@ -17,6 +17,7 @@ class UserCreate(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=255)
     password: str = Field(..., min_length=8, max_length=128)
     department: Optional[str] = Field(None, max_length=100)
+    location: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=50)
     manager_id: Optional[str] = None
     roles: Optional[List[str]] = None
@@ -50,6 +51,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=255)
     email: Optional[EmailStr] = None
     department: Optional[str] = Field(None, max_length=100)
+    location: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=50)
     manager_id: Optional[str] = None
     is_active: Optional[bool] = None
@@ -115,6 +117,8 @@ class UserResponse(BaseModel):
     full_name: str
     dept: Optional[str] = None
     department: Optional[str] = None
+    location_id: Optional[str] = None
+    location: Optional[str] = None
     phone: Optional[str] = None
     manager_id: Optional[str] = None
     profile_photo_url: Optional[str] = None
@@ -137,6 +141,8 @@ class UserListItem(BaseModel):
     full_name: str
     dept: Optional[str] = None
     department: Optional[str] = None
+    location_id: Optional[str] = None
+    location: Optional[str] = None
     phone: Optional[str] = None
     manager_id: Optional[str] = None
     profile_photo_url: Optional[str] = None

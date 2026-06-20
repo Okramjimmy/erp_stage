@@ -13,14 +13,15 @@ content %}
     </div>
 </div>
 
-<!-- Role Selector -->
+<!-- Scope Selector (Role, Location, Department) -->
 <div class="card" style="margin-bottom: 20px">
     <div class="card-header">
-        <div class="card-title">Select Role</div>
+        <div class="card-title">Select Scope (Role + Location + Department)</div>
     </div>
     <div class="card-body">
-        <div style="display: flex; gap: 12px; align-items: center">
-            <div style="flex: 1">
+        <div class="scope-selector-grid">
+            <div class="form-group" style="margin-bottom: 0">
+                <label class="form-label" style="display: block; margin-bottom: 4px; font-weight: 600">Role</label>
                 <select
                     id="roleSelect"
                     class="form-control"
@@ -29,14 +30,23 @@ content %}
                     <option value="">-- Select a Role --</option>
                 </select>
             </div>
-            <div style="flex: 1">
-                <input
-                    type="text"
-                    id="newRoleName"
-                    class="form-control"
-                    placeholder="Or enter new role name"
-                    oninput="handleNewRoleInput()"
-                />
+            <div class="form-group" style="margin-bottom: 0">
+                <label class="form-label" style="display: block; margin-bottom: 4px; font-weight: 600">Location Scope</label>
+                <select id="locationSelect" class="form-control" onchange="loadPermissions()">
+                    <option value="">-- Global Location (All Locations) --</option>
+                    {% for loc in locations %}
+                    <option value="{{ loc.location_id }}">{{ loc.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0">
+                <label class="form-label" style="display: block; margin-bottom: 4px; font-weight: 600">Department Scope</label>
+                <select id="departmentSelect" class="form-control" onchange="loadPermissions()">
+                    <option value="">-- Global Department (All Departments) --</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept.department_id }}">{{ dept.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
     </div>
@@ -222,8 +232,19 @@ content %}
 
     async function loadStagePermissions(roleName) {
       try {
-        const response = await apiFetch(`/api/v1/permissions/stages`);
-        const stagePerms = response.filter(p => p.role_name === roleName);
+        const locId = document.getElementById('locationSelect').value || '';
+        const deptId = document.getElementById('departmentSelect').value || '';
+        let url = `/api/v1/permissions/stages?role_name=${encodeURIComponent(roleName)}`;
+        if (locId) url += `&location_id=${encodeURIComponent(locId)}`;
+        if (deptId) url += `&department_id=${encodeURIComponent(deptId)}`;
+
+        const response = await apiFetch(url);
+        const stagePerms = response.filter(p => {
+          const matchRole = p.role_name === roleName;
+          const matchLoc = (!locId && !p.location_id) || (p.location_id === locId);
+          const matchDept = (!deptId && !p.department_id) || (p.department_id === deptId);
+          return matchRole && matchLoc && matchDept;
+        });
         renderStagePermissions(stagePerms);
       } catch (error) {
         console.error('Error loading stage permissions:', error);
@@ -233,8 +254,19 @@ content %}
 
     async function loadFormTypePermissions(roleName) {
       try {
-        const response = await apiFetch(`/api/v1/permissions/form-types`);
-        const ftPerms = response.filter(p => p.role_name === roleName);
+        const locId = document.getElementById('locationSelect').value || '';
+        const deptId = document.getElementById('departmentSelect').value || '';
+        let url = `/api/v1/permissions/form-types?role_name=${encodeURIComponent(roleName)}`;
+        if (locId) url += `&location_id=${encodeURIComponent(locId)}`;
+        if (deptId) url += `&department_id=${encodeURIComponent(deptId)}`;
+
+        const response = await apiFetch(url);
+        const ftPerms = response.filter(p => {
+          const matchRole = p.role_name === roleName;
+          const matchLoc = (!locId && !p.location_id) || (p.location_id === locId);
+          const matchDept = (!deptId && !p.department_id) || (p.department_id === deptId);
+          return matchRole && matchLoc && matchDept;
+        });
         renderFormTypePermissions(ftPerms);
       } catch (error) {
         console.error('Error loading form type permissions:', error);
@@ -324,8 +356,13 @@ content %}
 
     async function updateStagePermission(stageId) {
       const checkboxes = document.querySelectorAll(`#stages-content input[data-id="${stageId}"]`);
+      const locId = document.getElementById('locationSelect').value || null;
+      const deptId = document.getElementById('departmentSelect').value || null;
+
       const permissionData = {
         role_name: currentRole,
+        location_id: locId,
+        department_id: deptId,
         can_view: false,
         can_create: false,
         can_edit: false,
@@ -355,8 +392,18 @@ content %}
     async function deleteStagePermission(stageId) {
       if (!confirm('Are you sure you want to revoke this permission?')) return;
 
+      const locId = document.getElementById('locationSelect').value || '';
+      const deptId = document.getElementById('departmentSelect').value || '';
+      let url = `/api/v1/permissions/stages/${stageId}/roles/${encodeURIComponent(currentRole)}`;
+      let params = [];
+      if (locId) params.push(`location_id=${encodeURIComponent(locId)}`);
+      if (deptId) params.push(`department_id=${encodeURIComponent(deptId)}`);
+      if (params.length > 0) {
+        url += '?' + params.join('&');
+      }
+
       try {
-        await apiFetch(`/api/v1/permissions/stages/${stageId}/roles/${encodeURIComponent(currentRole)}`, {
+        await apiFetch(url, {
           method: 'DELETE'
         });
         toast('Permission revoked successfully', 'success');
@@ -369,8 +416,13 @@ content %}
 
     async function updateFormTypePermission(formTypeId) {
       const checkboxes = document.querySelectorAll(`#formtypes-content input[data-id="${formTypeId}"]`);
+      const locId = document.getElementById('locationSelect').value || null;
+      const deptId = document.getElementById('departmentSelect').value || null;
+
       const permissionData = {
         role_name: currentRole,
+        location_id: locId,
+        department_id: deptId,
         can_view: false,
         can_create: false,
         can_edit: false,
@@ -404,8 +456,18 @@ content %}
     async function deleteFormTypePermission(formTypeId) {
       if (!confirm('Are you sure you want to revoke this permission?')) return;
 
+      const locId = document.getElementById('locationSelect').value || '';
+      const deptId = document.getElementById('departmentSelect').value || '';
+      let url = `/api/v1/permissions/form-types/${formTypeId}/roles/${encodeURIComponent(currentRole)}`;
+      let params = [];
+      if (locId) params.push(`location_id=${encodeURIComponent(locId)}`);
+      if (deptId) params.push(`department_id=${encodeURIComponent(deptId)}`);
+      if (params.length > 0) {
+        url += '?' + params.join('&');
+      }
+
       try {
-        await apiFetch(`/api/v1/permissions/form-types/${formTypeId}/roles/${encodeURIComponent(currentRole)}`, {
+        await apiFetch(url, {
           method: 'DELETE'
         });
         toast('Permission revoked successfully', 'success');
@@ -461,8 +523,13 @@ content %}
         return;
       }
 
+      const locId = document.getElementById('locationSelect').value || null;
+      const deptId = document.getElementById('departmentSelect').value || null;
+
       const permissionData = {
         role_name: currentRole,
+        location_id: locId,
+        department_id: deptId,
         can_view: document.getElementById('add-stage-view').checked,
         can_create: document.getElementById('add-stage-create').checked,
         can_edit: document.getElementById('add-stage-edit').checked,
@@ -536,8 +603,13 @@ content %}
         return;
       }
 
+      const locId = document.getElementById('locationSelect').value || null;
+      const deptId = document.getElementById('departmentSelect').value || null;
+
       const permissionData = {
         role_name: currentRole,
+        location_id: locId,
+        department_id: deptId,
         can_view: document.getElementById('add-ft-view').checked,
         can_create: document.getElementById('add-ft-create').checked,
         can_edit: document.getElementById('add-ft-edit').checked,
@@ -585,6 +657,18 @@ content %}
     .tab-btn.active {
         color: var(--primary);
         border-bottom-color: var(--primary);
+    }
+
+    .scope-selector-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    @media (min-width: 768px) {
+        .scope-selector-grid {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
     }
 </style>
 {% endblock %}

@@ -20,6 +20,14 @@ class StagePermission(Base):
     )
     role_name = Column(String(100), nullable=False)
 
+    # Scoping
+    location_id = Column(
+        String(36), ForeignKey("locations.location_id", ondelete="CASCADE"), nullable=True
+    )
+    department_id = Column(
+        String(36), ForeignKey("departments.department_id", ondelete="CASCADE"), nullable=True
+    )
+
     # Permissions
     can_view = Column(Boolean, nullable=False, default=False)
     can_create = Column(Boolean, nullable=False, default=False)
@@ -33,9 +41,11 @@ class StagePermission(Base):
 
     # Relationships
     stage = relationship("Stage", back_populates="permissions")
+    location = relationship("Location", foreign_keys=[location_id], lazy="selectin")
+    department = relationship("Department", foreign_keys=[department_id], lazy="selectin")
 
     def __repr__(self):
-        return f"<StagePermission(stage={self.stage_id}, role={self.role_name})>"
+        return f"<StagePermission(stage={self.stage_id}, role={self.role_name}, location={self.location_id}, dept={self.department_id})>"
 
     def to_dict(self):
         """Convert model to dictionary."""
@@ -43,6 +53,8 @@ class StagePermission(Base):
             "permission_id": self.permission_id,
             "stage_id": self.stage_id,
             "role_name": self.role_name,
+            "location_id": self.location_id,
+            "department_id": self.department_id,
             "can_view": self.can_view,
             "can_create": self.can_create,
             "can_edit": self.can_edit,
@@ -69,6 +81,14 @@ class FormTypePermission(Base):
     )
     role_name = Column(String(100), nullable=False)
 
+    # Scoping
+    location_id = Column(
+        String(36), ForeignKey("locations.location_id", ondelete="CASCADE"), nullable=True
+    )
+    department_id = Column(
+        String(36), ForeignKey("departments.department_id", ondelete="CASCADE"), nullable=True
+    )
+
     # Permissions
     can_view = Column(Boolean, nullable=False, default=False)
     can_create = Column(Boolean, nullable=False, default=False)
@@ -86,9 +106,11 @@ class FormTypePermission(Base):
 
     # Relationships
     form_type = relationship("FormType", back_populates="permissions")
+    location = relationship("Location", foreign_keys=[location_id], lazy="selectin")
+    department = relationship("Department", foreign_keys=[department_id], lazy="selectin")
 
     def __repr__(self):
-        return f"<FormTypePermission(form_type={self.form_type_id}, role={self.role_name})>"
+        return f"<FormTypePermission(form_type={self.form_type_id}, role={self.role_name}, location={self.location_id}, dept={self.department_id})>"
 
     def to_dict(self):
         """Convert model to dictionary."""
@@ -96,6 +118,8 @@ class FormTypePermission(Base):
             "permission_id": self.permission_id,
             "form_type_id": self.form_type_id,
             "role_name": self.role_name,
+            "location_id": self.location_id,
+            "department_id": self.department_id,
             "can_view": self.can_view,
             "can_create": self.can_create,
             "can_edit": self.can_edit,

@@ -30,6 +30,8 @@
                     <th>Username</th>
                     <th>Full Name</th>
                     <th>Email</th>
+                    <th>Location</th>
+                    <th>Department</th>
                     <th>Roles</th>
                     <th>Status</th>
                     <th style="width: 200px">Actions</th>
@@ -46,6 +48,20 @@
                     </td>
                     <td>{{ user_data.full_name }}</td>
                     <td>{{ user_data.email }}</td>
+                    <td>
+                        {% if user_data.location %}
+                        <span style="font-weight:500;">{{ user_data.location }}</span>
+                        {% else %}
+                        <span style="color:var(--text-muted);font-style:italic;font-size:12px;">Global</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user_data.department %}
+                        <span style="font-weight:500;">{{ user_data.department }}</span>
+                        {% else %}
+                        <span style="color:var(--text-muted);font-style:italic;font-size:12px;">Global</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% for role in user_data.roles %}
                         <span class="badge badge-blue" style="margin-bottom:2px;display:inline-block;">{{ role }}</span>
@@ -69,6 +85,8 @@
                                 data-full-name="{{ user_data.full_name }}"
                                 data-dept="{{ user_data.dept or '' }}"
                                 data-department="{{ user_data.department or '' }}"
+                                data-location-id="{{ user_data.location_id or '' }}"
+                                data-location="{{ user_data.location or '' }}"
                                 data-phone="{{ user_data.phone or '' }}"
                                 data-manager-id="{{ user_data.manager_id or '' }}"
                                 data-profile-photo-url="{{ user_data.profile_photo_url or '' }}"
@@ -149,6 +167,19 @@
                 <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:12px">Profile <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
                     <div class="form-group">
+                        <label class="form-label">Location</label>
+                        <select class="form-control" id="newLocationSelect" onchange="toggleNewLocationInput()">
+                            <option value="">-- None / Select --</option>
+                            {% for loc in locations %}
+                            <option value="{{ loc.name }}">{{ loc.name }}</option>
+                            {% endfor %}
+                            <option value="__new__">+ Create New Location...</option>
+                        </select>
+                        <div id="newLocationTextInputWrapper" style="display:none; margin-top:8px;">
+                            <input type="text" class="form-control" id="newLocationText" maxlength="100" placeholder="Enter new location name" />
+                        </div>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Department</label>
                         <select class="form-control" id="newDepartmentSelect" onchange="toggleNewDepartmentInput()">
                             <option value="">-- None / Select --</option>
@@ -161,6 +192,8 @@
                             <input type="text" class="form-control" id="newDepartmentText" maxlength="100" placeholder="Enter new department name" />
                         </div>
                     </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px">
                     <div class="form-group">
                         <label class="form-label">Phone</label>
                         <input type="tel" class="form-control" id="newPhone"
@@ -282,14 +315,26 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Department</label>
-                    <select class="form-control" id="detailsDepartmentSelect" onchange="toggleDetailsNewDepartmentInput()">
-                        <option value="">-- None / Select --</option>
-                        <option value="__new__">+ Create New Department...</option>
-                    </select>
-                    <div id="detailsNewDepartmentTextInputWrapper" style="display:none; margin-top:8px;">
-                        <input type="text" class="form-control" id="detailsNewDepartmentText" maxlength="100" placeholder="Enter new department name" />
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+                    <div class="form-group">
+                        <label class="form-label">Location</label>
+                        <select class="form-control" id="detailsLocationSelect" onchange="toggleDetailsNewLocationInput()">
+                            <option value="">-- None / Select --</option>
+                            <option value="__new__">+ Create New Location...</option>
+                        </select>
+                        <div id="detailsNewLocationTextInputWrapper" style="display:none; margin-top:8px;">
+                            <input type="text" class="form-control" id="detailsNewLocationText" maxlength="100" placeholder="Enter new location name" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Department</label>
+                        <select class="form-control" id="detailsDepartmentSelect" onchange="toggleDetailsNewDepartmentInput()">
+                            <option value="">-- None / Select --</option>
+                            <option value="__new__">+ Create New Department...</option>
+                        </select>
+                        <div id="detailsNewDepartmentTextInputWrapper" style="display:none; margin-top:8px;">
+                            <input type="text" class="form-control" id="detailsNewDepartmentText" maxlength="100" placeholder="Enter new department name" />
+                        </div>
                     </div>
                 </div>
 
@@ -331,6 +376,7 @@
         document.getElementById("create-user-modal").classList.remove("open");
         document.getElementById("createUserForm").reset();
         document.getElementById("newDepartmentTextInputWrapper").style.display = "none";
+        document.getElementById("newLocationTextInputWrapper").style.display = "none";
     }
 
     function toggleNewDepartmentInput() {
@@ -344,6 +390,17 @@
         }
     }
 
+    function toggleNewLocationInput() {
+        const select = document.getElementById("newLocationSelect");
+        const wrapper = document.getElementById("newLocationTextInputWrapper");
+        if (select.value === "__new__") {
+            wrapper.style.display = "block";
+            document.getElementById("newLocationText").focus();
+        } else {
+            wrapper.style.display = "none";
+        }
+    }
+
     async function createUser(e) {
         e.preventDefault();
 
@@ -351,6 +408,7 @@
         const email = document.getElementById("newEmail").value.trim();
         const fullName = document.getElementById("newFullName").value.trim();
         const password = document.getElementById("newPassword").value;
+        
         let department = null;
         const deptSelect = document.getElementById("newDepartmentSelect").value;
         if (deptSelect === "__new__") {
@@ -358,6 +416,15 @@
         } else if (deptSelect) {
             department = deptSelect;
         }
+
+        let location = null;
+        const locSelect = document.getElementById("newLocationSelect").value;
+        if (locSelect === "__new__") {
+            location = document.getElementById("newLocationText").value.trim() || null;
+        } else if (locSelect) {
+            location = locSelect;
+        }
+
         const phone = document.getElementById("newPhone").value.trim() || null;
         const manager_id = document.getElementById("newManager").value || null;
 
@@ -383,7 +450,7 @@
         try {
             const newUser = await apiFetch("/api/v1/users", {
                 method: "POST",
-                body: { username, email, full_name: fullName, password, department, phone, manager_id, roles: checkedRoles }
+                body: { username, email, full_name: fullName, password, department, location, phone, manager_id, roles: checkedRoles }
             });
 
             toast(checkedRoles.length > 0 ? `User created and assigned ${checkedRoles.length} role(s)` : "User created successfully", "success");
@@ -508,6 +575,7 @@
     }
 
     let allDepartmentsList = [];
+    let allLocationsList = [];
 
     async function loadDepartmentsForDetailsModal() {
         try {
@@ -544,9 +612,45 @@
         }
     }
 
+    async function loadLocationsForDetailsModal() {
+        try {
+            const response = await fetch('/api/v1/locations');
+            if (response.ok) {
+                allLocationsList = await response.json();
+                
+                // Populate Create User modal select
+                const createUserSelect = document.getElementById("newLocationSelect");
+                if (createUserSelect) {
+                    const currentVal = createUserSelect.value;
+                    createUserSelect.innerHTML = '<option value="">-- None / Select --</option>';
+                    allLocationsList.forEach(l => {
+                        createUserSelect.innerHTML += `<option value="${l.name}">${l.name}</option>`;
+                    });
+                    createUserSelect.innerHTML += '<option value="__new__">+ Create New Location...</option>';
+                    createUserSelect.value = currentVal;
+                }
+
+                // Populate Details modal select
+                const detailsSelect = document.getElementById("detailsLocationSelect");
+                if (detailsSelect) {
+                    const currentVal = detailsSelect.value;
+                    detailsSelect.innerHTML = '<option value="">-- None / Select --</option>';
+                    allLocationsList.forEach(l => {
+                        detailsSelect.innerHTML += `<option value="${l.name}">${l.name}</option>`;
+                    });
+                    detailsSelect.innerHTML += '<option value="__new__">+ Create New Location...</option>';
+                    detailsSelect.value = currentVal;
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
     function closeUserDetailsModal() {
         document.getElementById("user-details-modal").classList.remove("open");
         document.getElementById("detailsNewDepartmentTextInputWrapper").style.display = "none";
+        document.getElementById("detailsNewLocationTextInputWrapper").style.display = "none";
     }
 
     function toggleDetailsNewDepartmentInput() {
@@ -555,6 +659,17 @@
         if (select.value === "__new__") {
             wrapper.style.display = "block";
             document.getElementById("detailsNewDepartmentText").focus();
+        } else {
+            wrapper.style.display = "none";
+        }
+    }
+
+    function toggleDetailsNewLocationInput() {
+        const select = document.getElementById("detailsLocationSelect");
+        const wrapper = document.getElementById("detailsNewLocationTextInputWrapper");
+        if (select.value === "__new__") {
+            wrapper.style.display = "block";
+            document.getElementById("detailsNewLocationText").focus();
         } else {
             wrapper.style.display = "none";
         }
@@ -617,6 +732,34 @@
         }
         document.getElementById("detailsNewDepartmentTextInputWrapper").style.display = "none";
 
+        // Set location
+        const detailsLocSelect = document.getElementById("detailsLocationSelect");
+        if (detailsLocSelect) {
+            if (allLocationsList.length === 0) {
+                await loadLocationsForDetailsModal();
+            }
+            
+            const locName = user.location || "";
+            let found = false;
+            for (let opt of detailsLocSelect.options) {
+                if (opt.value === locName) {
+                    detailsLocSelect.value = locName;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && locName && locName !== "None") {
+                const opt = document.createElement("option");
+                opt.value = locName;
+                opt.textContent = locName;
+                opt.selected = true;
+                detailsLocSelect.insertBefore(opt, detailsLocSelect.lastChild);
+            } else if (!locName) {
+                detailsLocSelect.value = "";
+            }
+        }
+        document.getElementById("detailsNewLocationTextInputWrapper").style.display = "none";
+
         // Set manager
         const managerSelect = document.getElementById("detailsManager");
         if (managerSelect) {
@@ -655,6 +798,8 @@
             full_name: btn.dataset.fullName,
             dept: btn.dataset.dept || "",
             department: btn.dataset.department || "",
+            location_id: btn.dataset.locationId || "",
+            location: btn.dataset.location || "",
             phone: btn.dataset.phone || "",
             manager_id: btn.dataset.managerId || "",
             profile_photo_url: btn.dataset.profilePhotoUrl || "",
@@ -681,6 +826,14 @@
             department = deptSelect;
         }
 
+        let location = null;
+        const locSelect = document.getElementById("detailsLocationSelect").value;
+        if (locSelect === "__new__") {
+            location = document.getElementById("detailsNewLocationText").value.trim() || null;
+        } else if (locSelect) {
+            location = locSelect;
+        }
+
         const submitBtn = document.getElementById("saveUserDetailsSubmitBtn");
         submitBtn.disabled = true;
         submitBtn.textContent = "Saving...";
@@ -688,7 +841,7 @@
         try {
             await apiFetch(`/api/v1/users/${userId}`, {
                 method: "PUT",
-                body: { full_name, email, phone, department, is_active, manager_id }
+                body: { full_name, email, phone, department, location, is_active, manager_id }
             });
 
             toast("User updated successfully!", "success");
@@ -701,9 +854,10 @@
         }
     }
 
-    // Call initial departments load
+    // Call initial departments and locations load
     document.addEventListener("DOMContentLoaded", () => {
         loadDepartmentsForDetailsModal();
+        loadLocationsForDetailsModal();
     });
 </script>
 {% endblock %}

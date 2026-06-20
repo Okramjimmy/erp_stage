@@ -105,12 +105,20 @@ class UserService:
             dept_obj = await dept_service.get_or_create(data.department)
             dept_id = dept_obj.department_id
 
+        loc_id = None
+        if data.location:
+            from src.app.services.location_service import LocationService
+            loc_service = LocationService(self.db)
+            loc_obj = await loc_service.get_or_create(data.location)
+            loc_id = loc_obj.location_id
+
         user = User(
             user_id=str(uuid.uuid4()),
             username=data.username,
             email=data.email,
             full_name=data.full_name,
             dept=dept_id,
+            location_id=loc_id,
             phone=data.phone,
             manager_id=data.manager_id,
             hashed_password=hash_password(data.password),
@@ -146,6 +154,14 @@ class UserService:
                 dept_service = DepartmentService(self.db)
                 dept_obj = await dept_service.get_or_create(data.department)
                 user.dept = dept_obj.department_id
+        if data.location is not None:
+            if data.location == "":
+                user.location_id = None
+            else:
+                from src.app.services.location_service import LocationService
+                loc_service = LocationService(self.db)
+                loc_obj = await loc_service.get_or_create(data.location)
+                user.location_id = loc_obj.location_id
         if data.phone is not None:
             user.phone = data.phone
         if data.manager_id is not None:
