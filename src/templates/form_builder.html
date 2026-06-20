@@ -130,6 +130,10 @@
       <span style="font-size:12px;color:var(--text-muted)">v</span>
       <input class="fb-ver" id="form-ver" value="{% if form_type %}{{ form_type.version }}{% else %}1.0.0{% endif %}">
     </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <span style="font-size:12px;color:var(--text-muted)">group:</span>
+      <input class="fb-ver" id="form-group" style="width:100px" value="{% if form_type and form_type.group %}{{ form_type.group }}{% endif %}" placeholder="General">
+    </div>
     <span id="fields-badge" class="badge badge-blue" style="font-size:11px">0 fields</span>
     <div class="ml-auto" style="display:flex;gap:8px;align-items:center">
       <span id="dirty-dot" style="font-size:11px;color:var(--warning);display:none">● Unsaved</span>
@@ -1319,6 +1323,10 @@ document.getElementById('form-name').addEventListener('input',function(){
   document.getElementById('canvas-title').textContent=this.value; markDirty();
 });
 
+document.getElementById('form-group').addEventListener('input',function(){
+  markDirty();
+});
+
 function markDirty(){
   dirty=true; document.getElementById('dirty-dot').style.display='';
 }
@@ -1346,19 +1354,20 @@ async function _doSave(){
   document.getElementById('settings-modal').classList.remove('open');
   const name=document.getElementById('form-name').value.trim();
   const version=document.getElementById('form-ver').value.trim()||'1.0.0';
+  const group=document.getElementById('form-group').value.trim()||null;
   const schema={fields:exportFields(),settings:formSettings};
   const btn=document.getElementById('save-btn');
   const orig=btn.innerHTML; btn.innerHTML='⏳ Saving…'; btn.disabled=true;
   try{
     if(window.FORM_META.id){
-      await apiFetch(`${API}/form-types/${window.FORM_META.id}`,{method:'PUT',body:{form_name:name,version,schema}});
+      await apiFetch(`${API}/form-types/${window.FORM_META.id}`,{method:'PUT',body:{form_name:name,version,group,schema}});
       const url = new URL(window.location);
       if (url.searchParams.has('is_new')) {
         url.searchParams.delete('is_new');
         window.history.replaceState({}, '', url.pathname + url.search);
       }
     } else {
-      const ft=await apiFetch(`${API}/form-types`,{method:'POST',body:{form_name:name,version,schema}});
+      const ft=await apiFetch(`${API}/form-types`,{method:'POST',body:{form_name:name,version,group,schema}});
       if(window.FORM_META.stage_id && window.FORM_META.stage_id !== 'null' && window.FORM_META.stage_id !== 'None' && window.FORM_META.stage_id !== '') {
         await apiFetch(`${API}/form-types/${ft.form_type_id}/link-stage/${window.FORM_META.stage_id}`,{method:'POST'});
       }

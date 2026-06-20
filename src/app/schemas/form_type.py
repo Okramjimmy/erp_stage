@@ -9,6 +9,7 @@ class FormTypeBase(BaseModel):
 
     form_name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    group: Optional[str] = None
     version: str = Field(default="1.0.0", pattern=r"^\d{1,3}\.\d{1,3}\.\d{1,3}$")
 
 
@@ -31,6 +32,8 @@ class FormTypeUpdate(BaseModel):
     """Schema for updating a Form Type."""
 
     form_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    group: Optional[str] = None
 
     version: Optional[str] = Field(
         None,
@@ -55,6 +58,7 @@ class FormTypeResponse(BaseModel):
     form_type_id: str
     form_name: str
     description: Optional[str] = None
+    group: Optional[str] = None
     version: str
     schema_reference: Optional[Dict[str, Any]] = None  # JSONB type - accepts dict directly
     workflow_data: Optional[Dict[str, Any]] = None

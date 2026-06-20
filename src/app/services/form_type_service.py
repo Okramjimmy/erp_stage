@@ -51,6 +51,7 @@ class FormTypeService:
             form_type_id=self.generate_form_type_id(),
             form_name=form_data.form_name,
             description=form_data.description,
+            group=form_data.group,
             version=form_data.version,
             schema_reference=form_data.schema_reference,  # JSONB accepts dict directly
             created_by=created_by,
@@ -254,9 +255,11 @@ class FormTypeService:
         if form_data.workflow_data is not None:
             form_type.workflow_data = form_data.workflow_data  # JSONB accepts dict directly
 
-        # Also support updating description if it's in the payload
+        # Also support updating description and group if they are in the payload
         if hasattr(form_data, "description") and form_data.description is not None:
             form_type.description = form_data.description
+        if hasattr(form_data, "group") and form_data.group is not None:
+            form_type.group = form_data.group
 
         await self.db.commit()
         await self.db.refresh(form_type)

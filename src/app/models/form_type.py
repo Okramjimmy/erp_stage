@@ -17,6 +17,7 @@ class FormType(Base):
     # Basic fields
     form_name = Column(String(255), nullable=False, unique=True)
     description = Column(Text, nullable=True)
+    group = Column(String(100), nullable=True)
 
     # Versioning
     version = Column(String(20), nullable=False, default="1.0.0")
@@ -55,6 +56,7 @@ class FormType(Base):
             "form_type_id": self.form_type_id,
             "form_name": self.form_name,
             "description": self.description,
+            "group": self.group,
             "version": self.version,
             "schema_reference": self.schema_reference,
             "created_by": self.created_by,

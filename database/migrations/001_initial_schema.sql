@@ -87,6 +87,7 @@ CREATE TABLE form_types (
     form_type_id VARCHAR(50) PRIMARY KEY,
     form_name VARCHAR(255) NOT NULL UNIQUE,
     description TEXT,
+    "group" VARCHAR(100),
 
     -- Versioning
     version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
