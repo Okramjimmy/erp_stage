@@ -1,9 +1,10 @@
 """UI routes — renders Jinja2 HTML templates."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
 from src.app.core.auth import get_current_user, get_current_user_optional, _require_auth
 from src.app.database import get_db
@@ -572,3 +573,127 @@ async def users_page(request: Request, db: AsyncSession = Depends(get_db)):
             "locations": all_locations,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Submissions Management (superadmin and manager only)
+# ---------------------------------------------------------------------------
+
+@router.get("/submissions", response_class=HTMLResponse)
+async def submissions_page(
+    request: Request,
+    created_by: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    user, roles = await _require_auth(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    is_superadmin = "superadmin" in (roles or [])
+    is_manager = "manager" in (roles or [])
+
+    if not is_superadmin and not is_manager:
+        return HTMLResponse("Access denied — superadmins and managers only", status_code=403)
+
+    from src.app.models.form_record import FormRecord
+    from src.app.models.form_type import FormType
+    from src.app.models.stage import Stage
+    from src.app.models.user import User
+    from src.app.services.permission_service import PermissionService
+    from sqlalchemy import select, and_, or_
+
+    perm_service = PermissionService(db)
+    user_perms = await perm_service.get_user_permissions(user.user_id)
+    
+    # Identify which form types are viewable by this user
+    if is_superadmin:
+        # Superadmin can view all form types
+        fts_res = await db.execute(select(FormType).order_by(FormType.form_name))
+        all_accessible_fts = fts_res.scalars().all()
+        allowed_form_type_ids = [ft.form_type_id for ft in all_accessible_fts]
+    else:
+        # Manager can view form types they have access to
+        allowed_form_type_ids = [
+            ft_id for ft_id, perms in user_perms.get("form_types", {}).items()
+            if perms.get("view")
+        ]
+        if allowed_form_type_ids:
+            fts_res = await db.execute(
+                select(FormType)
+                .where(FormType.form_type_id.in_(allowed_form_type_ids))
+                .order_by(FormType.form_name)
+            )
+            all_accessible_fts = fts_res.scalars().all()
+        else:
+            all_accessible_fts = []
+
+    # Get list of all stages for filter dropdown
+    stages_res = await db.execute(select(Stage).order_by(Stage.stage_name))
+    all_stages = stages_res.scalars().all()
+
+    # Query latest records
+    stmt = (
+        select(FormRecord, FormType.form_name, Stage.stage_name, User.full_name.label("creator_name"))
+        .join(FormType, FormRecord.form_type_id == FormType.form_type_id)
+        .outerjoin(Stage, FormRecord.stage_id == Stage.stage_id)
+        .outerjoin(User, FormRecord.created_by == User.user_id)
+    )
+
+    # Restrict to accessible form types
+    stmt = stmt.where(FormRecord.form_type_id.in_(allowed_form_type_ids))
+
+    # Apply backend filter only if created_by is queried
+    if created_by:
+        stmt = stmt.where(
+            or_(
+                User.full_name.ilike(f"%{created_by}%"),
+                User.username.ilike(f"%{created_by}%"),
+                FormRecord.created_by.ilike(f"%{created_by}%")
+            )
+        )
+
+    # Always sort by newest on the database query by default
+    stmt = stmt.order_by(FormRecord.created_at.desc())
+
+    # Limit to 100 submissions
+    stmt = stmt.limit(100)
+    
+    res = await db.execute(stmt)
+    records_rows = res.all()
+
+    records_data = []
+    for row in records_rows:
+        record_obj = row[0]
+        form_name = row[1]
+        stage_name = row[2]
+        creator_name = row[3]
+        records_data.append({
+            "record_id": record_obj.record_id,
+            "docname": record_obj.docname,
+            "form_type_id": record_obj.form_type_id,
+            "form_name": form_name,
+            "stage_id": record_obj.stage_id,
+            "stage_name": stage_name or "Global",
+            "status": record_obj.status,
+            "created_by": record_obj.created_by,
+            "creator_name": creator_name or record_obj.created_by or "System",
+            "created_at_iso": record_obj.created_at.isoformat() if record_obj.created_at else "",
+            "created_at_formatted": record_obj.created_at.strftime('%d %b %Y, %H:%M') if record_obj.created_at else "",
+        })
+
+    if request.query_params.get("format") == "json":
+        from fastapi.responses import JSONResponse
+        return JSONResponse(content=records_data)
+
+    return templates.TemplateResponse(
+        "submissions.html",
+        {
+            "request": request,
+            "current_user": user,
+            "current_user_roles": roles,
+            "records": records_data,
+            "stages": all_stages,
+            "form_types": all_accessible_fts,
+        }
+    )
+

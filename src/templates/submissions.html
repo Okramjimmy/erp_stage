@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Latest Submissions{% endblock %}
+{% block nav_submissions %}active{% endblock %}
+
+{% block content %}
+<style>
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
+</style>
+
+<div class="page-header">
+  <div>
+    <div class="page-title">Latest Submissions</div>
+    <div class="page-subtitle">View and filter submitted form records across stages</div>
+  </div>
+  <div class="page-actions">
+    <button type="button" id="refresh-btn" class="btn btn-secondary btn-sm" onclick="refreshSubmissions()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle;">
+        <path d="M23 4v6h-6M1 20v-6h6" />
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+      </svg>
+      Refresh
+    </button>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom: 24px;">
+  <div class="card-header" style="border-bottom: none; padding-bottom: 0; display: flex; justify-content: space-between; align-items: center;">
+    <div class="card-title">
+      Filters
+      <span id="filter-loading-indicator" style="display: none; font-size: 12px; color: var(--primary); margin-left: 12px; font-weight: 500;">
+        <svg class="spinner" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        </svg>
+        Searching DB...
+      </span>
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <span style="font-size: 12px; color: var(--text-muted);">Showing <strong id="submissions-count">0</strong> records</span>
+      <button type="button" class="btn btn-secondary btn-xs" onclick="clearFilters()">Clear Filters</button>
+    </div>
+  </div>
+  <div class="card-body" style="padding: 16px 20px 20px 20px;">
+    <div class="grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+      <div>
+        <label class="form-label" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin-bottom: 6px;">Sort Order</label>
+        <select id="filter-sort" class="form-control" onchange="applyFilters()">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+        </select>
+      </div>
+      
+      <div>
+        <label class="form-label" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin-bottom: 6px;">Stage</label>
+        <select id="filter-stage" class="form-control" onchange="applyFilters()">
+          <option value="">All Stages</option>
+          {% for s in stages %}
+          <option value="{{ s.stage_id }}">{{ s.stage_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin-bottom: 6px;">Form Type</label>
+        <select id="filter-formtype" class="form-control" onchange="applyFilters()">
+          <option value="">All Form Types</option>
+          {% for ft in form_types %}
+          <option value="{{ ft.form_type_id }}">{{ ft.form_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin-bottom: 6px;">Status</label>
+        <select id="filter-status" class="form-control" onchange="applyFilters()">
+          <option value="">All Statuses</option>
+          <option value="Draft">Draft</option>
+          <option value="Submitted">Submitted</option>
+          <option value="Verified">Verified</option>
+          <option value="Completed">Completed</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="form-label" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); display: block; margin-bottom: 6px;">Created By</label>
+        <input type="text" id="filter-created-by" class="form-control" placeholder="User name..." oninput="debounceApplyFilters()">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>DocName</th>
+          <th>Form Type</th>
+          <th>Stage</th>
+          <th>Status</th>
+          <th>Created By</th>
+          <th>Created Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="submissions-tbody">
+        <!-- populated dynamically -->
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Safely inject initial records via Jinja2
+const initialRecords = {{ records | tojson }};
+let allRecords = [...initialRecords];
+let currentCreatedByQuery = '';
+let debounceTimer;
+
+function renderTable(records) {
+  const tbody = document.getElementById('submissions-tbody');
+  tbody.innerHTML = '';
+  
+  if (records.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 48px;">
+          <div style="font-size: 32px; margin-bottom: 12px;">📋</div>
+          <h3 style="margin-bottom: 8px; font-weight: 600;">No submissions found</h3>
+          <p style="color: var(--text-muted); margin-bottom: 16px;">Try adjusting your filters or search terms.</p>
+        </td>
+      </tr>
+    `;
+    document.getElementById('submissions-count').textContent = '0';
+    return;
+  }
+  
+  document.getElementById('submissions-count').textContent = records.length;
+  
+  records.forEach(rec => {
+    let statusBadge = '';
+    if (rec.status === 'Submitted') {
+      statusBadge = `<span class="badge badge-green">${rec.status}</span>`;
+    } else if (rec.status === 'Verified') {
+      statusBadge = `<span class="badge" style="background:#e0f2fe;color:#0369a1">${rec.status}</span>`;
+    } else if (rec.status === 'Completed') {
+      statusBadge = `<span class="badge badge-green">${rec.status}</span>`;
+    } else if (rec.status === 'Cancelled') {
+      statusBadge = `<span class="badge" style="background:#fee2e2;color:#dc2626">${rec.status}</span>`;
+    } else if (rec.status === 'Amended') {
+      statusBadge = `<span class="badge" style="background:#f3e8ff;color:#7c3aed">${rec.status}</span>`;
+    } else {
+      statusBadge = `<span class="badge badge-orange">${rec.status}</span>`;
+    }
+    
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <a href="/forms/${rec.form_type_id}/${rec.record_id}" style="font-weight: 600; text-decoration: none; color: var(--primary);">${rec.docname}</a>
+      </td>
+      <td>${rec.form_name}</td>
+      <td>
+        <span class="badge badge-gray" style="font-weight: 500;">${rec.stage_name}</span>
+      </td>
+      <td>${statusBadge}</td>
+      <td>
+        <div style="font-size: 13px;">${rec.creator_name}</div>
+      </td>
+      <td style="color: var(--text-muted); font-size: 12px;">
+        ${rec.created_at_formatted}
+      </td>
+      <td>
+        <a href="/forms/${rec.form_type_id}/${rec.record_id}" class="btn btn-xs btn-secondary">Open</a>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function applyFilters() {
+  const sort = document.getElementById('filter-sort').value;
+  const stageId = document.getElementById('filter-stage').value;
+  const formTypeId = document.getElementById('filter-formtype').value;
+  const status = document.getElementById('filter-status').value;
+  const createdBy = document.getElementById('filter-created-by').value.trim();
+  
+  // If created_by is filled, check if we need to query backend
+  if (createdBy !== '' && createdBy !== currentCreatedByQuery) {
+    const hasLocalMatch = allRecords.some(rec => 
+      (rec.creator_name && rec.creator_name.toLowerCase().includes(createdBy.toLowerCase())) || 
+      (rec.created_by && rec.created_by.toLowerCase().includes(createdBy.toLowerCase()))
+    );
+    
+    if (!hasLocalMatch) {
+      currentCreatedByQuery = createdBy;
+      const loader = document.getElementById('filter-loading-indicator');
+      loader.style.display = 'inline-block';
+      
+      try {
+        const res = await fetch(`/submissions?created_by=${encodeURIComponent(createdBy)}&format=json`);
+        if (res.ok) {
+          const newRecords = await res.json();
+          // Merge new records into allRecords, avoiding duplicates
+          const existingIds = new Set(allRecords.map(r => r.record_id));
+          newRecords.forEach(rec => {
+            if (!existingIds.has(rec.record_id)) {
+              allRecords.push(rec);
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching matching records from backend:", err);
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+  }
+  
+  // Perform frontend filtering
+  let filtered = [...allRecords];
+  
+  if (stageId) {
+    filtered = filtered.filter(rec => rec.stage_id === stageId);
+  }
+  
+  if (formTypeId) {
+    filtered = filtered.filter(rec => rec.form_type_id === formTypeId);
+  }
+  
+  if (status) {
+    filtered = filtered.filter(rec => rec.status === status);
+  }
+  
+  if (createdBy) {
+    filtered = filtered.filter(rec => 
+      (rec.creator_name && rec.creator_name.toLowerCase().includes(createdBy.toLowerCase())) || 
+      (rec.created_by && rec.created_by.toLowerCase().includes(createdBy.toLowerCase()))
+    );
+  }
+  
+  // Sort
+  filtered.sort((a, b) => {
+    const dateA = a.created_at_iso ? new Date(a.created_at_iso) : new Date(0);
+    const dateB = b.created_at_iso ? new Date(b.created_at_iso) : new Date(0);
+    if (sort === 'oldest') {
+      return dateA - dateB;
+    } else {
+      return dateB - dateA;
+    }
+  });
+  
+  renderTable(filtered);
+}
+
+function debounceApplyFilters() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(applyFilters, 300);
+}
+
+async function refreshSubmissions() {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.innerHTML = `
+    <svg class="spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle; display: inline-block;">
+      <path d="M23 4v6h-6M1 20v-6h6" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    </svg>
+    Refreshing...
+  `;
+  
+  try {
+    const res = await fetch('/submissions?format=json');
+    if (res.ok) {
+      const latestRecords = await res.json();
+      allRecords = latestRecords;
+      currentCreatedByQuery = '';
+      await applyFilters();
+    }
+  } catch (err) {
+    console.error("Error refreshing records:", err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: middle;">
+        <path d="M23 4v6h-6M1 20v-6h6" />
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+      </svg>
+      Refresh
+    `;
+  }
+}
+
+function clearFilters() {
+  document.getElementById('filter-sort').value = 'newest';
+  document.getElementById('filter-stage').value = '';
+  document.getElementById('filter-formtype').value = '';
+  document.getElementById('filter-status').value = '';
+  document.getElementById('filter-created-by').value = '';
+  currentCreatedByQuery = '';
+  allRecords = [...initialRecords];
+  applyFilters();
+}
+
+// Initial render on load
+document.addEventListener('DOMContentLoaded', () => {
+  renderTable(initialRecords);
+});
+</script>
+{% endblock %}
