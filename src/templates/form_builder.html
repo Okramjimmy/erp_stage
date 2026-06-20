@@ -254,6 +254,23 @@
   </div>
 </div>
 
+<!-- Conditional Logic Modal -->
+<div class="modal-overlay" id="cond-modal">
+  <div class="modal" style="max-width:650px; width: 95%;">
+    <div class="modal-header">
+      <span class="modal-title" id="cond-modal-title">Edit Conditional Logic</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeCondModal()">✕</button>
+    </div>
+    <div class="modal-body" id="cond-modal-body" style="max-height:60vh; overflow-y:auto; padding: 20px;">
+      <!-- Built dynamically -->
+    </div>
+    <div class="modal-footer" style="padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px;">
+      <button class="btn btn-secondary" onclick="closeCondModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCondModal()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
@@ -1464,6 +1481,200 @@ async function loadBuilderPreviewChildTableCols(fieldname, formTypeName) {
   `;
 }
 
+function structureFields(fields) {
+  if (!fields) return [];
+  const layout = [];
+  let currentTab = null;
+  let currentSection = null;
+  let currentColumn = null;
+  let currentGroup = null;
+  let currentGroupColumn = null;
+
+  function getOrCreateTab() {
+    if (!currentTab) {
+      currentTab = { type: 'tab', label: '', sections: [] };
+      layout.push(currentTab);
+    }
+    return currentTab;
+  }
+
+  function getOrCreateSection() {
+    const tab = getOrCreateTab();
+    if (!currentSection) {
+      currentSection = { type: 'section', label: '', collapsible: false, columns: [] };
+      tab.sections.push(currentSection);
+    }
+    return currentSection;
+  }
+
+  function getOrCreateColumn() {
+    const sec = getOrCreateSection();
+    if (!currentColumn) {
+      currentColumn = { type: 'column', fields: [] };
+      sec.columns.push(currentColumn);
+    }
+    return currentColumn;
+  }
+
+  fields.forEach(f => {
+    const ftype = f.fieldtype || f.type;
+    if (ftype === 'Tab Break') {
+      currentTab = { type: 'tab', label: f.label || '', sections: [] };
+      layout.push(currentTab);
+      currentSection = null;
+      currentColumn = null;
+      currentGroup = null;
+      currentGroupColumn = null;
+    } else if (ftype === 'Section Break') {
+      const tab = getOrCreateTab();
+      currentSection = { type: 'section', label: f.label || '', collapsible: f.collapsible || false, columns: [] };
+      tab.sections.push(currentSection);
+      currentColumn = null;
+      currentGroup = null;
+      currentGroupColumn = null;
+    } else if (ftype === 'Column Break') {
+      if (currentGroup) {
+        currentGroupColumn = { type: 'group-column', fields: [] };
+        currentGroup.columns.push(currentGroupColumn);
+      } else {
+        const sec = getOrCreateSection();
+        currentColumn = { type: 'column', fields: [] };
+        sec.columns.push(currentColumn);
+      }
+    } else if (ftype === 'Field Group') {
+      const col = getOrCreateColumn();
+      currentGroup = { type: 'group', label: f.label || '', collapsible: f.collapsible || false, fieldname: f.fieldname, columns: [{ type: 'group-column', fields: [] }] };
+      currentGroupColumn = currentGroup.columns[0];
+      col.fields.push(currentGroup);
+    } else if (ftype === 'Field Group End') {
+      currentGroup = null;
+      currentGroupColumn = null;
+    } else {
+      if (currentGroupColumn) {
+        currentGroupColumn.fields.push(f);
+      } else {
+        const col = getOrCreateColumn();
+        col.fields.push(f);
+      }
+    }
+  });
+
+  return layout;
+}
+
+function renderSingleFieldHtmlForBuilder(f) {
+  if (f.fieldtype === 'Heading') {
+    return `<div class="preview-field-wrapper" data-fieldname="${f.fieldname}"><h3 style="font-size:15px;font-weight:700;margin:16px 0 10px">${esc(f.label)}</h3></div>`;
+  }
+  if (f.fieldtype === 'HTML') {
+    return `<div class="preview-field-wrapper" data-fieldname="${f.fieldname}"><div style="margin-bottom:12px">${f.options||''}</div></div>`;
+  }
+
+  const req = f.required ? `<span class="req-asterisk" style="color:var(--danger)"> *</span>` : '';
+  const hint = f.description ? `<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${esc(f.description)}</div>` : '';
+  const lbl = `<label style="display:block;font-size:12px;font-weight:${f.bold ? '700' : '600'};margin-bottom:5px">${esc(f.label)}${req}</label>`;
+  const ro = f.read_only ? 'pointer-events:none;opacity:.65' : '';
+  const ph = esc(f.placeholder || '');
+  let inp = '';
+  
+  if (f.fieldtype === 'Check') {
+    const isChecked = window.PREVIEW_DATA[f.fieldname] === true;
+    return `<div class="preview-field-wrapper" data-fieldname="${f.fieldname}"><div style="margin-bottom:12px;${ro}"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="updatePreviewVal('${f.fieldname}',this.checked)"><span>${esc(f.label)}</span></label>${hint}</div></div>`;
+  }
+
+  const curVal = window.PREVIEW_DATA[f.fieldname];
+  switch (f.fieldtype) {
+    case 'Select':
+    case 'Autocomplete':
+      inp = `<select class="form-control" onchange="updatePreviewVal('${f.fieldname}',this.value)"><option value="">— Select —</option>${(f.options || '').split('\n').filter(Boolean).map(o => `<option${o === String(curVal) ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+      break;
+    case 'Link':
+    case 'Dynamic Link':
+      inp = `<input type="text" class="form-control" placeholder="Search ${esc(f.options || '')}…" value="${esc(curVal || '')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;
+      break;
+    case 'Table':
+    case 'Table MultiSelect':
+      let colsHtml = '';
+      let prevCellsHtml = '';
+      let thStyle = 'background:var(--bg);padding:7px 10px;font-size:11px;font-weight:700;text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em;white-space:normal;word-break:break-word;line-height:1.4;';
+      if (f.options === 'Empty Table') {
+        const headers = (f.empty_table_columns || '').split('\n').map(c => c.trim()).filter(Boolean).filter(h => h.toLowerCase() !== 'sl. no.');
+        colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th>` + headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('');
+        prevCellsHtml = headers.map(h => `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({ label: h, fieldtype: 'Data' })}</td>`).join('');
+      } else if (f.options === 'Users') {
+        colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th><th style="${thStyle}">User</th>`;
+        prevCellsHtml = `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({ label: 'User', fieldtype: 'Data' })}</td>`;
+      } else {
+        colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th><th style="${thStyle}">[Linked Columns: ${esc(f.options || 'Unknown')}]</th>`;
+        prevCellsHtml = `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({ label: 'Linked Columns', fieldtype: 'Data' })}</td>`;
+        setTimeout(() => loadBuilderPreviewChildTableCols(f.fieldname, f.options), 0);
+      }
+      inp = `<div class="child-table-wrap" id="preview-ct-wrap-${f.fieldname}" style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;margin-top:4px">
+              <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+                <thead><tr>${colsHtml}</tr></thead>
+                <tbody>
+                  <tr><td style="color:var(--text-muted);font-size:12px;padding:7px 10px;border-top:1px solid var(--border);text-align:center;">1</td>
+                  ${prevCellsHtml}</tr>
+                </tbody>
+              </table>
+            </div>`;
+      break;
+    case 'Date':
+      inp = `<input type="date" class="form-control" value="${esc(curVal || '')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;
+      break;
+    case 'Datetime':
+      inp = `<input type="datetime-local" class="form-control" value="${esc(curVal || '')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;
+      break;
+    case 'Time':
+      inp = `<input type="time" class="form-control" value="${esc(curVal || '')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;
+      break;
+    case 'Int':
+      inp = `<input type="number" step="1" class="form-control" placeholder="${ph}" value="${esc(curVal || '')}" oninput="updatePreviewVal('${f.fieldname}',+this.value)">`;
+      break;
+    case 'Float':
+    case 'Currency':
+    case 'Percent':
+      inp = `<input type="number" step="any" class="form-control" placeholder="${ph}" value="${esc(curVal || '')}" oninput="updatePreviewVal('${f.fieldname}',+this.value)">`;
+      break;
+    case 'Password':
+      inp = `<input type="password" class="form-control" placeholder="${ph}" value="${esc(curVal || '')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;
+      break;
+    case 'Small Text':
+      inp = `<textarea class="form-control" rows="2" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal || '')}</textarea>`;
+      break;
+    case 'Long Text':
+    case 'Text Editor':
+      inp = `<textarea class="form-control" rows="4" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal || '')}</textarea>`;
+      break;
+    case 'Code':
+    case 'JSON':
+      inp = `<textarea class="form-control text-mono" rows="4" style="font-size:12px" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal || '')}</textarea>`;
+      break;
+    case 'Color':
+      inp = `<input type="color" style="width:60px;height:34px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer" value="${esc(curVal || '#000000')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;
+      break;
+    case 'Rating':
+      inp = `<div style="font-size:24px;letter-spacing:2px">⭐⭐⭐⭐⭐</div>`;
+      break;
+    case 'Attach':
+    case 'Attach Image':
+      inp = `<input type="file" disabled class="form-control" style="padding:4px">`;
+      break;
+    case 'Signature':
+      inp = `<div style="height:72px;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">✒ Click to sign</div>`;
+      break;
+    case 'Duration':
+      inp = `<input type="text" class="form-control" placeholder="HH:MM:SS" value="${esc(curVal || '')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;
+      break;
+    case 'Geolocation':
+      inp = `<div style="height:44px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;padding:0 12px;color:var(--text-muted);font-size:12px">📍 Click to pick location</div>`;
+      break;
+    default:
+      inp = `<input type="text" class="form-control" value="${esc(curVal || '')}" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;
+  }
+  return `<div class="preview-field-wrapper" data-fieldname="${f.fieldname}"><div style="margin-bottom:14px;${ro}">${lbl}${inp}${hint}</div></div>`;
+}
+
 function previewForm(){
   const name=document.getElementById('form-name').value;
   document.getElementById('preview-title').textContent=name+' — Preview';
@@ -1474,7 +1685,6 @@ function previewForm(){
     openPreview(); return;
   }
   let html='<form onsubmit="return false" style="font-size:13px">';
-  let inCols=false;
   
   // Set up local state for preview values
   window.PREVIEW_DATA = {};
@@ -1498,107 +1708,57 @@ function previewForm(){
     }
   });
 
-  flat.forEach(f=>{
-    if(f.hidden) return;
-    if(f.fieldtype==='Section Break'){
-      if(inCols){html+='</div></div>';inCols=false;}
-      html+=`<div style="border-bottom:2px solid var(--border);padding-bottom:4px;margin:18px 0 14px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${esc(f.label)||'Section'}</div>`;
-      return;
+  const layout = structureFields(flat);
+  
+  layout.forEach(tab => {
+    if (tab.label) {
+      html += `<div style="border-bottom:2px solid var(--primary);padding-bottom:4px;margin:24px 0 16px;color:var(--primary);font-size:13px;font-weight:700">${esc(tab.label)}</div>`;
     }
-    if(f.fieldtype==='Column Break'){
-      if(!inCols){html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div>';inCols=true;}
-      else{html+='</div><div>';}return;
-    }
-    if(f.fieldtype==='Tab Break'){
-      if(inCols){html+='</div></div>';inCols=false;}
-      html+=`<div style="border-bottom:2px solid var(--primary);padding-bottom:4px;margin:24px 0 16px;color:var(--primary);font-size:13px;font-weight:700">${esc(f.label||'Tab')}</div>`;return;
-    }
-    if(f.fieldtype==='Field Group'){
-      html+=`<div class="preview-field-wrapper" data-fieldname="${f.fieldname}" style="margin-bottom:12px;">`;
-      if(f.label){
-        html+=`<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.03em">${esc(f.label)}</div>`;
+    tab.sections.forEach(sec => {
+      if (sec.label) {
+        html += `<div style="border-bottom:2px solid var(--border);padding-bottom:4px;margin:18px 0 14px;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">${esc(sec.label)}</div>`;
       }
-      html+=`<div style="margin-left:12px;padding-left:12px;border-left:2px dashed var(--border-light)">`;
-      return;
-    }
-    if(f.fieldtype==='Field Group End'){
-      html+=`</div></div>`;
-      return;
-    }
-    
-    let fieldContent = '';
-    if(f.fieldtype==='Heading'){
-      fieldContent = `<h3 style="font-size:15px;font-weight:700;margin:16px 0 10px">${esc(f.label)}</h3>`;
-    } else if(f.fieldtype==='HTML'){
-      fieldContent = `<div style="margin-bottom:12px">${f.options||''}</div>`;
-    } else {
-      const req=f.required?`<span class="req-asterisk" style="color:var(--danger)"> *</span>`:'';
-      const hint=f.description?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px">${esc(f.description)}</div>`:'';
-      const lbl=`<label style="display:block;font-size:12px;font-weight:${f.bold?'700':'600'};margin-bottom:5px">${esc(f.label)}${req}</label>`;
-      const ro=f.read_only?'pointer-events:none;opacity:.65':'';
-      const ph=esc(f.placeholder||'');
-      let inp='';
-      if(f.fieldtype==='Check'){
-        const isChecked = window.PREVIEW_DATA[f.fieldname] === true;
-        fieldContent = `<div style="margin-bottom:12px;${ro}"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" ${isChecked?'checked':''} onchange="updatePreviewVal('${f.fieldname}',this.checked)"><span>${esc(f.label)}</span></label>${hint}</div>`;
-      } else {
-        const curVal = window.PREVIEW_DATA[f.fieldname];
-        switch(f.fieldtype){
-          case 'Select':case 'Autocomplete': inp=`<select class="form-control" onchange="updatePreviewVal('${f.fieldname}',this.value)"><option value="">— Select —</option>${(f.options||'').split('\n').filter(Boolean).map(o=>`<option${o===String(curVal)?' selected':''}>${esc(o)}</option>`).join('')}</select>`;break;
-          case 'Link':case 'Dynamic Link': inp=`<input type="text" class="form-control" placeholder="Search ${esc(f.options||'')}…" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Table':case 'Table MultiSelect':
-            let colsHtml = '';
-            let prevCellsHtml = '';
-            let thStyle = 'background:var(--bg);padding:7px 10px;font-size:11px;font-weight:700;text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.05em;white-space:normal;word-break:break-word;line-height:1.4;';
-            if (f.options === 'Empty Table') {
-              const headers = (f.empty_table_columns || '').split('\n').map(c=>c.trim()).filter(Boolean).filter(h => h.toLowerCase() !== 'sl. no.');
-              colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th>` + headers.map(h => `<th style="${thStyle}">${esc(h)}</th>`).join('');
-              prevCellsHtml = headers.map(h => `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({label: h, fieldtype: 'Data'})}</td>`).join('');
-            } else if (f.options === 'Users') {
-              colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th><th style="${thStyle}">User</th>`;
-              prevCellsHtml = `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({label: 'User', fieldtype: 'Data'})}</td>`;
-            } else {
-              colsHtml = `<th style="${thStyle}text-align:center">Sl. No.</th><th style="${thStyle}">[Linked Columns: ${esc(f.options||'Unknown')}]</th>`;
-              prevCellsHtml = `<td style="padding:4px 8px;border-top:1px solid var(--border);">${getPreviewTableCellInput({label: 'Linked Columns', fieldtype: 'Data'})}</td>`;
-              setTimeout(() => loadBuilderPreviewChildTableCols(f.fieldname, f.options), 0);
+      
+      const colsCount = sec.columns.length || 1;
+      html += `<div style="display:grid;grid-template-columns:repeat(${colsCount}, 1fr);gap:20px;margin-bottom:14px;">`;
+      
+      sec.columns.forEach(col => {
+        html += `<div>`;
+        col.fields.forEach(f => {
+          if (f.hidden) return;
+          if (f.type === 'group') {
+            html += `<div class="preview-field-wrapper" data-fieldname="${f.fieldname}" style="margin-bottom:12px;">`;
+            if (f.label) {
+              html += `<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.03em">${esc(f.label)}</div>`;
             }
-            inp = `<div class="child-table-wrap" id="preview-ct-wrap-${f.fieldname}" style="border:1px solid var(--border);border-radius:var(--radius-lg);overflow:visible;margin-top:4px">
-                    <table style="width:100%;border-collapse:collapse;table-layout:fixed">
-                      <thead><tr>${colsHtml}</tr></thead>
-                      <tbody>
-                        <tr><td style="color:var(--text-muted);font-size:12px;padding:7px 10px;border-top:1px solid var(--border);text-align:center;">1</td>
-                        ${prevCellsHtml}</tr>
-                      </tbody>
-                    </table>
-                  </div>`;
-            break;
-          case 'Date': inp=`<input type="date" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Datetime': inp=`<input type="datetime-local" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Time': inp=`<input type="time" class="form-control" value="${esc(curVal||'')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Int': inp=`<input type="number" step="1" class="form-control" placeholder="${ph}" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',+this.value)">`;break;
-          case 'Float':case 'Currency':case 'Percent': inp=`<input type="number" step="any" class="form-control" placeholder="${ph}" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',+this.value)">`;break;
-          case 'Password': inp=`<input type="password" class="form-control" placeholder="${ph}" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Small Text': inp=`<textarea class="form-control" rows="2" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal||'')}</textarea>`;break;
-          case 'Long Text':case 'Text Editor': inp=`<textarea class="form-control" rows="4" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal||'')}</textarea>`;break;
-          case 'Code':case 'JSON': inp=`<textarea class="form-control text-mono" rows="4" style="font-size:12px" oninput="updatePreviewVal('${f.fieldname}',this.value)">${esc(curVal||'')}</textarea>`;break;
-          case 'Color': inp=`<input type="color" style="width:60px;height:34px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer" value="${esc(curVal||'#000000')}" onchange="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Rating': inp=`<div style="font-size:24px;letter-spacing:2px">⭐⭐⭐⭐⭐</div>`;break;
-          case 'Attach':case 'Attach Image': inp=`<input type="file" class="form-control" style="padding:4px">`;break;
-          case 'Signature': inp=`<div style="height:72px;border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px">✒ Click to sign</div>`;break;
-          case 'Duration': inp=`<input type="text" class="form-control" placeholder="HH:MM:SS" value="${esc(curVal||'')}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;break;
-          case 'Geolocation': inp=`<div style="height:44px;border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;padding:0 12px;color:var(--text-muted);font-size:12px">📍 Click to pick location</div>`;break;
-          default: inp=`<input type="text" class="form-control" value="${esc(curVal||'')}" placeholder="${ph}" oninput="updatePreviewVal('${f.fieldname}',this.value)">`;
-        }
-        fieldContent = `<div style="margin-bottom:14px;${ro}">${lbl}${inp}${hint}</div>`;
-      }
-    }
-    
-    html += `<div class="preview-field-wrapper" data-fieldname="${f.fieldname}">${fieldContent}</div>`;
+            html += `<div style="margin-left:12px;padding-left:12px;border-left:2px dashed var(--border-light)">`;
+            
+            const gColsCount = f.columns.length || 1;
+            html += `<div style="display:grid;grid-template-columns:repeat(${gColsCount}, 1fr);gap:20px;margin-bottom:12px;">`;
+            f.columns.forEach(gcol => {
+              html += `<div>`;
+              gcol.fields.forEach(gf => {
+                if (gf.hidden) return;
+                html += renderSingleFieldHtmlForBuilder(gf);
+              });
+              html += `</div>`;
+            });
+            html += `</div>`; // end grid
+            html += `</div></div>`; // end left border and wrapper
+          } else {
+            html += renderSingleFieldHtmlForBuilder(f);
+          }
+        });
+        html += `</div>`;
+      });
+      
+      html += `</div>`; // end section columns grid
+    });
   });
-  if(inCols) html+='</div></div>';
+
   html+=`<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
     <button class="btn btn-secondary" onclick="closePreview()">Cancel</button>
-    <button class="btn btn-primary" type="submit">Submit</button>
+    <!-- <button class="btn btn-primary" type="submit">Submit</button> -->
   </div></form>`;
   body.innerHTML=html; openPreview();
   applyPreviewConditionalLogic();
@@ -1666,6 +1826,130 @@ document.getElementById('preview-modal').addEventListener('click',e=>{if(e.targe
 
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveForm();}});
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
+
+function parseSingleCondition(subExpr) {
+  subExpr = subExpr.trim();
+  
+  // 1. in / not in:
+  let match = subExpr.match(/^\s*\[([\s\S]*?)\]\.includes\(\s*doc\.([a-zA-Z0-9_]+)\s*\)\s*$/);
+  if (match) {
+     const vals = parseCommaSeparatedStrings(match[1]);
+     return { fieldname: match[2], operator: 'in', value: vals.join(', ') };
+  }
+  match = subExpr.match(/^\s*!\s*\[([\s\S]*?)\]\.includes\(\s*doc\.([a-zA-Z0-9_]+)\s*\)\s*$/);
+  if (match) {
+     const vals = parseCommaSeparatedStrings(match[1]);
+     return { fieldname: match[2], operator: 'not in', value: vals.join(', ') };
+  }
+
+  // 2. comparison operators: ==, !=, >, <, >=, <=
+  match = subExpr.match(/^\s*doc\.([a-zA-Z0-9_]+)\s*(===|==|!==|!=|>=|<=|>|<)\s*(['"][\s\S]*?['"]|[0-9.-]+|true|false)\s*$/);
+  if (match) {
+     const fieldname = match[1];
+     let op = match[2];
+     let rawVal = match[3].trim();
+     
+     // Normalize operators
+     if (op === '===') op = '==';
+     if (op === '!==') op = '!=';
+     
+     let value = rawVal;
+     if ((rawVal.startsWith("'") && rawVal.endsWith("'")) || (rawVal.startsWith('"') && rawVal.endsWith('"'))) {
+        value = rawVal.slice(1, -1);
+     }
+     return { fieldname, operator: op, value };
+  }
+  
+  return null;
+}
+
+function parseCommaSeparatedStrings(arrayStr) {
+  try {
+     return JSON.parse('[' + arrayStr.replace(/'/g, '"') + ']');
+  } catch(e) {
+     return arrayStr.split(',').map(s => {
+       s = s.trim();
+       if (s.startsWith("'") && s.endsWith("'")) return s.slice(1, -1);
+       if (s.startsWith('"') && s.endsWith('"')) return s.slice(1, -1);
+       return s;
+     });
+  }
+}
+
+function parseComplexCondExpr(expr) {
+  if (!expr) return { mode: 'simple', join: 'AND', conditions: [] };
+  let code = expr.trim();
+  if (code.startsWith('eval:')) {
+    code = code.slice(5).trim();
+  }
+  if (!code) return { mode: 'simple', join: 'AND', conditions: [] };
+
+  let join = 'AND';
+  let parts = [];
+  if (code.includes('&&') && code.includes('||')) {
+    return { mode: 'raw', join: 'AND', conditions: [], rawExpr: expr };
+  } else if (code.includes('||')) {
+    join = 'OR';
+    parts = code.split('||');
+  } else if (code.includes('&&')) {
+    join = 'AND';
+    parts = code.split('&&');
+  } else {
+    join = 'AND';
+    parts = [code];
+  }
+
+  const conditions = [];
+  for (let i = 0; i < parts.length; i++) {
+    const cond = parseSingleCondition(parts[i]);
+    if (!cond) {
+      return { mode: 'raw', join: 'AND', conditions: [], rawExpr: expr };
+    }
+    conditions.push(cond);
+  }
+
+  return { mode: 'simple', join, conditions };
+}
+
+function serializeComplexCondExpr(complex) {
+  if (complex.mode === 'raw') {
+    return complex.rawExpr || '';
+  }
+  if (complex.conditions.length === 0) {
+    return '';
+  }
+
+  const parts = complex.conditions.map(cond => {
+    if (!cond.fieldname) return '';
+    const field = getFieldByFieldname(cond.fieldname);
+    const ftype = field ? field.fieldtype : (cond.fieldname === 'status' ? 'Select' : '');
+    
+    let val = cond.value || '';
+    if (cond.operator === 'in' || cond.operator === 'not in') {
+      const vals = val.split(',').map(s => s.trim()).filter(Boolean);
+      const valsStr = vals.map(v => `'${v.replace(/'/g, "\\'")}'`).join(', ');
+      if (cond.operator === 'in') {
+        return `[${valsStr}].includes(doc.${cond.fieldname})`;
+      } else {
+        return `![${valsStr}].includes(doc.${cond.fieldname})`;
+      }
+    } else {
+      if (val === 'true' || val === 'false') {
+        return `doc.${cond.fieldname} ${cond.operator} ${val}`;
+      } else if (val !== '' && !isNaN(val) && ['Int', 'Float', 'Currency', 'Percent'].includes(ftype)) {
+        return `doc.${cond.fieldname} ${cond.operator} ${val}`;
+      } else {
+        return `doc.${cond.fieldname} ${cond.operator} '${val.replace(/'/g, "\\'")}'`;
+      }
+    }
+  }).filter(Boolean);
+
+  if (parts.length === 0) return '';
+  const joinStr = complex.join === 'OR' ? ' || ' : ' && ';
+  return 'eval:' + parts.join(joinStr);
+}
+
+// Keep legacy / backward compatible parseCondExpr
 function parseCondExpr(expr) {
   if (!expr) return { fieldname: '', value: '' };
   let match = expr.match(/^\s*(?:eval\s*:\s*)?doc\.([a-zA-Z0-9_]+)\s*==={0,1}\s*['"]([^'"]*)['"]\s*$/);
@@ -1683,6 +1967,7 @@ function getFieldByFieldname(fieldname) {
   return exportFields().find(f => f.fieldname === fieldname);
 }
 
+// Keep legacy / backward compatible updateCondProp
 function updateCondProp(fid, prop, part, val) {
   const f = getField(fid);
   if (!f) return;
@@ -1711,24 +1996,241 @@ function updateCondProp(fid, prop, part, val) {
   markDirty();
 }
 
-function renderCondRows(f, prop, label, hint) {
-  const dep = parseCondExpr(f[prop] || '');
+window.activeCondFieldId = null;
+window.activeCondProp = null;
+window.activeCondState = null;
+
+window.openCondModal = function(fid, prop, label) {
+  const f = getField(fid);
+  if (!f) return;
+  
+  window.activeCondFieldId = fid;
+  window.activeCondProp = prop;
+  
+  const stateKey = '_conditions_' + prop;
+  if (!f[stateKey]) {
+    f[stateKey] = parseComplexCondExpr(f[prop] || '');
+  }
+  
+  // Deep clone so they can cancel
+  window.activeCondState = JSON.parse(JSON.stringify(f[stateKey]));
+  
+  document.getElementById('cond-modal-title').textContent = `Edit Conditional Logic: ${label} (for ${f.label || f.fieldname || 'Field'})`;
+  
+  window.renderCondModalBody();
+  
+  document.getElementById('cond-modal').classList.add('open');
+};
+
+window.closeCondModal = function() {
+  document.getElementById('cond-modal').classList.remove('open');
+  window.activeCondFieldId = null;
+  window.activeCondProp = null;
+  window.activeCondState = null;
+};
+
+window.saveCondModal = function() {
+  const fid = window.activeCondFieldId;
+  const prop = window.activeCondProp;
+  const f = getField(fid);
+  if (!f || !window.activeCondState) return;
+  
+  const stateKey = '_conditions_' + prop;
+  f[stateKey] = window.activeCondState;
+  f[prop] = serializeComplexCondExpr(f[stateKey]);
+  
+  window.closeCondModal();
+  renderProps(f);
+  markDirty();
+};
+
+window.renderCondModalBody = function() {
+  const fid = window.activeCondFieldId;
+  const prop = window.activeCondProp;
+  const f = getField(fid);
+  if (!f || !window.activeCondState) return;
+  
+  const complex = window.activeCondState;
   const otherFields = exportFields().filter(other => other._id !== f._id && !LAYOUT_SET.has(other.fieldtype) && other.fieldname);
-  const statusOption = `<option value="status" ${dep.fieldname === 'status' ? 'selected' : ''}>status (Document Status)</option>`;
-  const otherOptions = otherFields.map(other => {
-    const selected = other.fieldname === dep.fieldname ? 'selected' : '';
-    return `<option value="${esc(other.fieldname)}" ${selected}>${esc(other.label || other.fieldname)} (${esc(other.fieldname)})</option>`;
-  }).join('');
-  const hintHtml = hint ? `<div class="form-hint">${hint}</div>` : '';
-  return `
-    <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">${label}</label>
-      <select class="form-control form-control-sm" style="margin-bottom:4px" onchange="updateCondProp(${f._id}, '${prop}', 'fieldname', this.value)">
+  
+  const body = document.getElementById('cond-modal-body');
+  
+  if (complex.mode === 'raw') {
+    body.innerHTML = `
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:16px">
+        Write a custom JavaScript expression. The conditional rule will evaluate when this expression returns true.
+      </div>
+      <div class="form-group">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <label style="font-weight:700; font-size:13px">JavaScript Expression</label>
+          <button class="btn btn-outline btn-xs" onclick="switchModalCondMode('simple')">Switch to Visual Builder</button>
+        </div>
+        <textarea class="form-control text-mono" style="font-size:12px; height:120px; font-family:monospace; margin-bottom:8px" 
+          placeholder="e.g. eval:doc.status == 'Draft'" 
+          oninput="updateModalCondRaw(this.value)">${esc(complex.rawExpr || '')}</textarea>
+        <div style="font-size:11px; color:var(--text-muted)">
+          Use <code>doc.fieldname</code> to reference other fields. E.g., <code>eval:doc.status == 'Submitted' &amp;&amp; doc.total &gt; 100</code>.
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
+  const rowsHtml = complex.conditions.map((cond, idx) => {
+    const fSelect = `
+      <select class="form-control form-control-sm" style="flex:2" 
+        onchange="updateModalCondRow(${idx}, 'fieldname', this.value)">
         <option value="">— Select Field —</option>
-        ${statusOption}
-        ${otherOptions}
+        <option value="status" ${cond.fieldname === 'status' ? 'selected' : ''}>status (Document Status)</option>
+        ${otherFields.map(other => {
+          const sel = other.fieldname === cond.fieldname ? 'selected' : '';
+          return `<option value="${esc(other.fieldname)}" ${sel}>${esc(other.label || other.fieldname)} (${esc(other.fieldname)})</option>`;
+        }).join('')}
       </select>
-      <input type="text" class="form-control form-control-sm" placeholder="Equals Value" value="${esc(dep.value || '')}" oninput="updateCondProp(${f._id}, '${prop}', 'value', this.value)">
+    `;
+
+    const opSelect = `
+      <select class="form-control form-control-sm" style="width:125px" 
+        onchange="updateModalCondRow(${idx}, 'operator', this.value)">
+        ${[['==', 'Equals (==)'], ['!=', 'Not Equals (!=)'], ['in', 'In List (in)'], ['not in', 'Not In (not in)'], ['>', 'Greater Than (>)'], ['<', 'Less Than (<)'], ['>=', 'Greater or Equal (>=)'], ['<=', 'Less or Equal (<=)']].map(([op, opLbl]) => {
+          const sel = cond.operator === op ? 'selected' : '';
+          return `<option value="${op}" ${sel}>${opLbl}</option>`;
+        }).join('')}
+      </select>
+    `;
+
+    const valPlaceholder = (cond.operator === 'in' || cond.operator === 'not in') ? 'e.g. Draft, Submitted' : 'Value';
+    const valInput = `
+      <input type="text" class="form-control form-control-sm" style="flex:2" 
+        placeholder="${valPlaceholder}" value="${esc(cond.value || '')}" 
+        oninput="updateModalCondRow(${idx}, 'value', this.value)">
+    `;
+
+    return `
+      <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center">
+        <span style="font-size:12px; color:var(--text-muted); width:20px; text-align:center">${idx + 1}</span>
+        ${fSelect}
+        ${opSelect}
+        ${valInput}
+        <button class="btn btn-ghost btn-icon" style="color:var(--danger); padding:0; height:32px; width:32px; min-width:32px; display:inline-flex; align-items:center; justify-content:center" 
+          onclick="removeModalCondRow(${idx})">✕</button>
+      </div>
+    `;
+  }).join('');
+
+  const joinSelect = `
+    <select class="form-control form-control-sm" style="width:180px; display:inline-block;" 
+      onchange="updateModalCondJoin(this.value)">
+      <option value="AND" ${complex.join === 'AND' ? 'selected' : ''}>All conditions match (AND)</option>
+      <option value="OR" ${complex.join === 'OR' ? 'selected' : ''}>Any condition matches (OR)</option>
+    </select>
+  `;
+
+  body.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+      <div style="font-size:13px; color:var(--text-muted)">Define rules to control field behavior conditionally.</div>
+      <button class="btn btn-outline btn-xs" onclick="switchModalCondMode('raw')">Switch to Code Editor</button>
+    </div>
+    
+    ${complex.conditions.length > 1 ? `
+      <div style="margin-bottom:16px; padding:10px; background:var(--bg-light); border-radius:var(--radius); display:flex; align-items:center; gap:10px; border: 1px solid var(--border-light)">
+        <span style="font-weight:600; font-size:13px">Logical Operator:</span>
+        ${joinSelect}
+      </div>
+    ` : ''}
+    
+    <div style="margin-bottom:16px">
+      ${rowsHtml || '<p style="text-align:center; padding:20px; color:var(--text-muted); font-style:italic; background:var(--bg-light); border-radius:var(--radius)">No conditions defined yet. Click "+ Add Condition" below to begin.</p>'}
+    </div>
+    
+    <div>
+      <button class="btn btn-secondary btn-sm" onclick="addModalCondRow()">+ Add Condition</button>
+    </div>
+  `;
+};
+
+window.addModalCondRow = function() {
+  if (!window.activeCondState) return;
+  window.activeCondState.conditions.push({ fieldname: '', operator: '==', value: '' });
+  window.renderCondModalBody();
+};
+
+window.removeModalCondRow = function(idx) {
+  if (!window.activeCondState) return;
+  window.activeCondState.conditions.splice(idx, 1);
+  window.renderCondModalBody();
+};
+
+window.updateModalCondRow = function(idx, key, val) {
+  if (!window.activeCondState) return;
+  window.activeCondState.conditions[idx][key] = val;
+};
+
+window.updateModalCondJoin = function(val) {
+  if (!window.activeCondState) return;
+  window.activeCondState.join = val;
+};
+
+window.updateModalCondRaw = function(val) {
+  if (!window.activeCondState) return;
+  window.activeCondState.rawExpr = val;
+};
+
+window.switchModalCondMode = function(mode) {
+  if (!window.activeCondState) return;
+  if (mode === 'raw') {
+    window.activeCondState = {
+      mode: 'raw',
+      join: 'AND',
+      conditions: [],
+      rawExpr: serializeComplexCondExpr(window.activeCondState)
+    };
+  } else {
+    const parsed = parseComplexCondExpr(window.activeCondState.rawExpr || '');
+    if (parsed.mode === 'raw') {
+      window.activeCondState = { mode: 'simple', join: 'AND', conditions: [] };
+    } else {
+      window.activeCondState = parsed;
+    }
+  }
+  window.renderCondModalBody();
+};
+
+function renderCondRows(f, prop, label, hint) {
+  const stateKey = '_conditions_' + prop;
+  if (!f[stateKey]) {
+    f[stateKey] = parseComplexCondExpr(f[prop] || '');
+  }
+  const complex = f[stateKey];
+  
+  let summary = '';
+  if (complex.mode === 'raw') {
+    summary = `<span class="text-mono" style="font-size:11px; color:var(--primary); font-family:monospace">${esc(f[prop] || '')}</span>`;
+  } else if (complex.conditions.length === 0) {
+    summary = `<span style="color:var(--text-muted); font-style:italic">Always Active (no rules)</span>`;
+  } else {
+    const parts = complex.conditions.map(c => {
+      if (!c.fieldname) return '';
+      return `${c.fieldname} ${c.operator} ${c.value || "''"}`;
+    }).filter(Boolean);
+    
+    if (parts.length === 0) {
+      summary = `<span style="color:var(--text-muted); font-style:italic">Always Active (no rules)</span>`;
+    } else {
+      const joinStr = ` <strong style="color:var(--primary); font-size:10px">${complex.join}</strong> `;
+      summary = parts.join(joinStr);
+    }
+  }
+  
+  const hintHtml = hint ? `<div class="form-hint" style="margin-top:4px">${hint}</div>` : '';
+  
+  return `
+    <div class="form-group" style="margin-bottom:14px; border:1px solid var(--border-light); padding:10px; border-radius:var(--radius); background:var(--bg-light)">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+        <label class="form-label" style="margin-bottom:0; font-weight:700">${label}</label>
+      </div>
+      <div style="font-size:12px; margin-bottom:8px; word-break:break-all; line-height:1.4">${summary}</div>
+      <button class="btn btn-outline btn-xs w-100" style="padding:4px 8px; font-size:11px" onclick="openCondModal(${f._id}, '${prop}', '${esc(label)}')">⚙ Edit Rules</button>
       ${hintHtml}
     </div>
   `;

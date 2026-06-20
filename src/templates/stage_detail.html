@@ -2385,7 +2385,8 @@ Builder{% endblock %} {% block content %}
             
             let stageFormTypes = [];
             try {
-                const cachedTree = JSON.parse(sessionStorage.getItem('stageTreeCache') || "[]");
+                const cacheKey = `stageTreeCache_${window.CURRENT_USER_ID || 'anon'}`;
+                const cachedTree = JSON.parse(sessionStorage.getItem(cacheKey) || sessionStorage.getItem('stageTreeCache') || "[]");
                 function findStage(nodes) {
                     for(const node of nodes) {
                         if (node.stage_id === STAGE_ID) return node;
@@ -2479,7 +2480,8 @@ Builder{% endblock %} {% block content %}
             // get the form name from tree cache
             let formName = "Unknown Form Type";
             try {
-                const cachedTree = JSON.parse(sessionStorage.getItem('stageTreeCache') || "[]");
+                const cacheKey = `stageTreeCache_${window.CURRENT_USER_ID || 'anon'}`;
+                const cachedTree = JSON.parse(sessionStorage.getItem(cacheKey) || sessionStorage.getItem('stageTreeCache') || "[]");
                 function findFormName(nodes) {
                     for(const node of nodes) {
                         if (node.form_types) {
@@ -3030,6 +3032,10 @@ Builder{% endblock %} {% block content %}
     }
 
     async function unlinkFormType(formTypeId, formName) {
+        if (!formTypeId || !STAGE_ID) {
+            toast("Form type or stage ID is not registered.", "error");
+            return;
+        }
         if (!confirm(`Are you sure you want to unlink the form type "${formName}" from this stage?`)) {
             return;
         }
@@ -3037,6 +3043,9 @@ Builder{% endblock %} {% block content %}
             await apiFetch(`${API}/form-types/${formTypeId}/link-stage/${STAGE_ID}`, {
                 method: "DELETE"
             });
+            const cacheKey = `stageTreeCache_${window.CURRENT_USER_ID || 'anon'}`;
+            sessionStorage.removeItem(cacheKey);
+            sessionStorage.removeItem('stageTreeCache');
             toast("Form unlinked successfully!", "success");
             setTimeout(() => {
                 window.location.reload();
@@ -3287,6 +3296,214 @@ Builder{% endblock %} {% block content %}
         return `<input type="text" placeholder="${esc(c.label || c.fieldname || '')}" disabled style="${style}">`;
     }
 
+    function structureFields(fields) {
+        if (!fields) return [];
+        const layout = [];
+        let currentTab = null;
+        let currentSection = null;
+        let currentColumn = null;
+        let currentGroup = null;
+        let currentGroupColumn = null;
+
+        function getOrCreateTab() {
+            if (!currentTab) {
+                currentTab = { type: 'tab', label: '', sections: [] };
+                layout.push(currentTab);
+            }
+            return currentTab;
+        }
+
+        function getOrCreateSection() {
+            const tab = getOrCreateTab();
+            if (!currentSection) {
+                currentSection = { type: 'section', label: '', collapsible: false, columns: [] };
+                tab.sections.push(currentSection);
+            }
+            return currentSection;
+        }
+
+        function getOrCreateColumn() {
+            const sec = getOrCreateSection();
+            if (!currentColumn) {
+                currentColumn = { type: 'column', fields: [] };
+                sec.columns.push(currentColumn);
+            }
+            return currentColumn;
+        }
+
+        fields.forEach(f => {
+            const ftype = f.fieldtype || f.type;
+            if (ftype === 'Tab Break') {
+                currentTab = { type: 'tab', label: f.label || '', sections: [] };
+                layout.push(currentTab);
+                currentSection = null;
+                currentColumn = null;
+                currentGroup = null;
+                currentGroupColumn = null;
+            } else if (ftype === 'Section Break') {
+                const tab = getOrCreateTab();
+                currentSection = { type: 'section', label: f.label || '', collapsible: f.collapsible || false, columns: [] };
+                tab.sections.push(currentSection);
+                currentColumn = null;
+                currentGroup = null;
+                currentGroupColumn = null;
+            } else if (ftype === 'Column Break') {
+                if (currentGroup) {
+                    currentGroupColumn = { type: 'group-column', fields: [] };
+                    currentGroup.columns.push(currentGroupColumn);
+                } else {
+                    const sec = getOrCreateSection();
+                    currentColumn = { type: 'column', fields: [] };
+                    sec.columns.push(currentColumn);
+                }
+            } else if (ftype === 'Field Group') {
+                const col = getOrCreateColumn();
+                currentGroup = { type: 'group', label: f.label || '', collapsible: f.collapsible || false, fieldname: f.fieldname, columns: [{ type: 'group-column', fields: [] }] };
+                currentGroupColumn = currentGroup.columns[0];
+                col.fields.push(currentGroup);
+            } else if (ftype === 'Field Group End') {
+                currentGroup = null;
+                currentGroupColumn = null;
+            } else {
+                if (currentGroupColumn) {
+                    currentGroupColumn.fields.push(f);
+                } else {
+                    const col = getOrCreateColumn();
+                    col.fields.push(f);
+                }
+            }
+        });
+
+        return layout;
+    }
+
+    function renderSingleFieldHtmlForDetail(field) {
+        const FieldType = field.fieldtype || field.type || "Data";
+        const label = field.label || field.name || "Unnamed Field";
+        const fieldname = field.fieldname || field.name || "";
+        const required = field.required ? " *" : "";
+        const placeholder = field.placeholder || "";
+        const description = field.description || "";
+        const defaultValue = field.default || "";
+        const options = field.options || "";
+
+        // Description hint
+        const hint = description
+            ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${esc(description)}</div>`
+            : "";
+
+        if (FieldType === "Heading") {
+            return `<div style="margin-bottom: 16px;"><h3 style="font-size: 15px; font-weight: 700; margin: 16px 0 10px;">${esc(label)}</h3></div>`;
+        }
+
+        if (FieldType === "HTML") {
+            return `<div style="margin-bottom: 16px;">${options || ""}</div>`;
+        }
+
+        // Get field type info
+        const typeInfo = getFieldTypeIcon(FieldType);
+
+        // Render based on field type
+        if (FieldType === "Check") {
+            return `
+                <div style="margin-bottom: 16px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" disabled ${defaultValue === "1" ? "checked" : ""}>
+                        <span style="font-size: 13px; font-weight: 600;">${typeInfo.icon} ${esc(label)}${required}</span>
+                    </label>
+                    ${hint}
+                </div>
+            `;
+        }
+
+        // Label for all other fields
+        const labelText = `<label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">${typeInfo.icon} ${esc(label)}${required}</label>`;
+
+        let inputHtml = "";
+
+        switch (FieldType) {
+            case "Select":
+            case "Autocomplete":
+                inputHtml = `
+                    <select class="form-control" disabled>
+                        <option value="">-- Select --</option>
+                        ${options
+                            .split("\n")
+                            .filter(Boolean)
+                            .map(
+                                (opt) =>
+                                    `<option value="${esc(opt)}" ${defaultValue === opt ? "selected" : ""}>${esc(opt)}</option>`,
+                            )
+                            .join("")}
+                    </select>
+                `;
+                break;
+            case "Link":
+            case "Dynamic Link":
+                inputHtml = `<input type="text" class="form-control" disabled placeholder="Search ${esc(options)}...">`;
+                break;
+            case "Table":
+            case "Table MultiSelect":
+                inputHtml = getPreviewChildTableHtml(fieldname, options, field.empty_table_columns);
+                break;
+            case "Date":
+                inputHtml = `<input type="date" class="form-control" disabled>`;
+                break;
+            case "Datetime":
+                inputHtml = `<input type="datetime-local" class="form-control" disabled>`;
+                break;
+            case "Time":
+                inputHtml = `<input type="time" class="form-control" disabled>`;
+                break;
+            case "Int":
+                inputHtml = `<input type="number" step="1" class="form-control" disabled placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+                break;
+            case "Float":
+            case "Currency":
+            case "Percent":
+                inputHtml = `<input type="number" step="any" class="form-control" disabled placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+                break;
+            case "Small Text":
+                inputHtml = `<textarea class="form-control" rows="2" disabled placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                break;
+            case "Long Text":
+            case "Text Editor":
+                inputHtml = `<textarea class="form-control" rows="4" disabled placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                break;
+            case "Code":
+            case "JSON":
+                inputHtml = `<textarea class="form-control" rows="4" style="font-family: monospace; font-size: 12px;" disabled placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
+                break;
+            case "Password":
+                inputHtml = `<input type="password" class="form-control" disabled placeholder="${esc(placeholder)}">`;
+                break;
+            case "Color":
+                inputHtml = `<input type="color" disabled style="width: 60px; height: 40px; border-radius: var(--radius); border: 1px solid var(--border); cursor: pointer;">`;
+                break;
+            case "Rating":
+                inputHtml = `<div style="font-size: 28px; letter-spacing: 4px; color: #ffd700;">⭐⭐⭐⭐⭐</div>`;
+                break;
+            case "Attach":
+            case "Attach Image":
+                inputHtml = `<input type="file" disabled class="form-control" style="padding: 8px;">`;
+                break;
+            case "Signature":
+                inputHtml = `<div style="height: 80px; border: 2px dashed var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; background: var(--bg);">✒ Click to sign</div>`;
+                break;
+            case "Duration":
+                inputHtml = `<input type="text" class="form-control" disabled placeholder="HH:MM:SS" value="${esc(defaultValue)}">`;
+                break;
+            case "Geolocation":
+                inputHtml = `<div style="height: 44px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; padding: 0 16px; color: var(--text-muted); font-size: 13px; background: var(--bg);">📍 Click to pick location</div>`;
+                break;
+            default:
+                // Default text input
+                inputHtml = `<input type="text" class="form-control" disabled placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
+        }
+
+        return `<div style="margin-bottom: 20px;">${labelText}${inputHtml}${hint}</div>`;
+    }
+
     async function previewTemplate(formTypeId) {
         try {
             // Get the form type from already loaded data
@@ -3328,143 +3545,53 @@ Builder{% endblock %} {% block content %}
                     </div>
                 `;
 
-                // Render fields
-                schema.fields.forEach((field) => {
-                    const FieldType = field.fieldtype || field.type || "Data";
-                    const label = field.label || field.name || "Unnamed Field";
-                    const fieldname = field.fieldname || field.name || "";
-                    const required = field.required ? " *" : "";
-                    const readonly = field.read_only ? "readonly" : "";
-                    const placeholder = field.placeholder || "";
-                    const description = field.description || "";
-                    const defaultValue = field.default || "";
-                    const options = field.options || "";
-
-                    // Description hint
-                    const hint = description
-                        ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">${esc(description)}</div>`
-                        : "";
-
-                    // Skip layout elements for now
-                    if (
-                        [
-                            "Section Break",
-                            "Column Break",
-                            "Tab Break",
-                            "Heading",
-                        ].includes(FieldType)
-                    ) {
-                        return;
+                // Render fields using structured layout
+                const layout = structureFields(schema.fields);
+                
+                layout.forEach(tab => {
+                    if (tab.label) {
+                        html += `<div style="border-bottom: 2px solid var(--primary); padding-bottom: 4px; margin: 24px 0 16px; color: var(--primary); font-size: 13px; font-weight: 700">${esc(tab.label)}</div>`;
                     }
-
-                    if (FieldType === "HTML") {
-                        html += `<div style="margin-bottom: 16px;">${options || ""}</div>`;
-                        return;
-                    }
-
-                    // Get field type info
-                    const typeInfo = getFieldTypeIcon(FieldType);
-
-                    // Render based on field type
-                    if (FieldType === "Check") {
-                        html += `
-                            <div style="margin-bottom: 16px;">
-                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                    <input type="checkbox" ${readonly} ${defaultValue === "1" ? "checked" : ""}>
-                                    <span style="font-size: 13px; font-weight: 600;">${typeInfo.icon} ${esc(label)}${required}</span>
-                                </label>
-                                ${hint}
-                            </div>
-                        `;
-                        return;
-                    }
-
-                    // Label for all other fields
-                    const labelText = `<label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px;">${typeInfo.icon} ${esc(label)}${required}</label>`;
-
-                    let inputHtml = "";
-
-                    switch (FieldType) {
-                        case "Select":
-                        case "Autocomplete":
-                            inputHtml = `
-                                <select class="form-control" ${readonly}>
-                                    <option value="">-- Select --</option>
-                                    ${options
-                                        .split("\n")
-                                        .filter(Boolean)
-                                        .map(
-                                            (opt) =>
-                                                `<option value="${esc(opt)}" ${defaultValue === opt ? "selected" : ""}>${esc(opt)}</option>`,
-                                        )
-                                        .join("")}
-                                </select>
-                            `;
-                            break;
-                        case "Link":
-                        case "Dynamic Link":
-                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="Search ${esc(options)}...">`;
-                            break;
-                        case "Table":
-                        case "Table MultiSelect":
-                            inputHtml = getPreviewChildTableHtml(fieldname, options, field.empty_table_columns);
-                            break;
-                        case "Date":
-                            inputHtml = `<input type="date" class="form-control" ${readonly}>`;
-                            break;
-                        case "Datetime":
-                            inputHtml = `<input type="datetime-local" class="form-control" ${readonly}>`;
-                            break;
-                        case "Time":
-                            inputHtml = `<input type="time" class="form-control" ${readonly}>`;
-                            break;
-                        case "Int":
-                            inputHtml = `<input type="number" step="1" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
-                            break;
-                        case "Float":
-                        case "Currency":
-                        case "Percent":
-                            inputHtml = `<input type="number" step="any" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
-                            break;
-                        case "Small Text":
-                            inputHtml = `<textarea class="form-control" rows="2" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
-                            break;
-                        case "Long Text":
-                        case "Text Editor":
-                            inputHtml = `<textarea class="form-control" rows="4" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
-                            break;
-                        case "Code":
-                        case "JSON":
-                            inputHtml = `<textarea class="form-control" rows="4" style="font-family: monospace; font-size: 12px;" ${readonly} placeholder="${esc(placeholder)}">${esc(defaultValue)}</textarea>`;
-                            break;
-                        case "Password":
-                            inputHtml = `<input type="password" class="form-control" ${readonly} placeholder="${esc(placeholder)}">`;
-                            break;
-                        case "Color":
-                            inputHtml = `<input type="color" style="width: 60px; height: 40px; border-radius: var(--radius); border: 1px solid var(--border); cursor: pointer;">`;
-                            break;
-                        case "Rating":
-                            inputHtml = `<div style="font-size: 28px; letter-spacing: 4px; color: #ffd700;">⭐⭐⭐⭐⭐</div>`;
-                            break;
-                        case "Attach":
-                        case "Attach Image":
-                            inputHtml = `<input type="file" ${readonly} class="form-control" style="padding: 8px;">`;
-                            break;
-                        case "Signature":
-                            inputHtml = `<div style="height: 80px; border: 2px dashed var(--border); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; background: var(--bg);">✒ Click to sign</div>`;
-                            break;
-                        case "Duration":
-                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="HH:MM:SS" value="${esc(defaultValue)}">`;
-                            break;
-                        case "Geolocation":
-                            inputHtml = `<div style="height: 44px; border: 1px solid var(--border); border-radius: var(--radius); display: flex; align-items: center; padding: 0 16px; color: var(--text-muted); font-size: 13px; background: var(--bg);">📍 Click to pick location</div>`;
-                            break;
-                        default:
-                            // Default text input
-                            inputHtml = `<input type="text" class="form-control" ${readonly} placeholder="${esc(placeholder)}" value="${esc(defaultValue)}">`;
-                    }
-
-                    html += `<div style="margin-bottom: 20px;">${labelText}${inputHtml}${hint}</div>`;
+                    tab.sections.forEach(sec => {
+                        if (sec.label) {
+                            html += `<div style="border-bottom: 2px solid var(--border); padding-bottom: 4px; margin: 18px 0 14px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em">${esc(sec.label)}</div>`;
+                        }
+                        
+                        const colsCount = sec.columns.length || 1;
+                        html += `<div style="display: grid; grid-template-columns: repeat(${colsCount}, 1fr); gap: 20px; margin-bottom: 14px;">`;
+                        
+                        sec.columns.forEach(col => {
+                            html += `<div>`;
+                            col.fields.forEach(field => {
+                                if (field.hidden) return;
+                                if (field.type === 'group' || field.fieldtype === 'Field Group') {
+                                    html += `<div style="margin-bottom:12px;">`;
+                                    if (field.label) {
+                                        html += `<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.03em">${esc(field.label)}</div>`;
+                                    }
+                                    html += `<div style="margin-left:12px;padding-left:12px;border-left:2px dashed var(--border-light)">`;
+                                    
+                                    const gColsCount = field.columns.length || 1;
+                                    html += `<div style="display: grid; grid-template-columns: repeat(${gColsCount}, 1fr); gap: 20px; margin-bottom: 12px;">`;
+                                    field.columns.forEach(gcol => {
+                                        html += `<div>`;
+                                        gcol.fields.forEach(gf => {
+                                            if (gf.hidden) return;
+                                            html += renderSingleFieldHtmlForDetail(gf);
+                                        });
+                                        html += `</div>`;
+                                    });
+                                    html += `</div>`; // end grid
+                                    html += `</div></div>`; // end left border and wrapper
+                                } else {
+                                    html += renderSingleFieldHtmlForDetail(field);
+                                }
+                            });
+                            html += `</div>`;
+                        });
+                        
+                        html += `</div>`; // end section columns grid
+                    });
                 });
 
                 addPreviewActions(html, formTypeId);
