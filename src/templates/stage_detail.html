@@ -847,7 +847,7 @@ Builder{% endblock %} {% block content %}
                             class="dropdown-item"
                             onclick="
                                 event.preventDefault();
-                                exportFormType('{{ ft.form_type_id }}', {{ ft.form_name | tojson | safe }});
+                                exportFormType('{{ ft.form_type_id }}', '{{ ft.form_name | replace("'", "\\'") }}');
                                 closeAllCardDropdowns();
                             "
                             style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--text); text-decoration: none; font-size: 13px; transition: background 0.15s;"
@@ -862,7 +862,7 @@ Builder{% endblock %} {% block content %}
                             class="dropdown-item text-danger"
                             onclick="
                                 event.preventDefault();
-                                unlinkFormType('{{ ft.form_type_id }}', {{ ft.form_name | tojson | safe }});
+                                unlinkFormType('{{ ft.form_type_id }}', '{{ ft.form_name | replace("'", "\\'") }}');
                                 closeAllCardDropdowns();
                             "
                             style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--danger); text-decoration: none; font-size: 13px; transition: background 0.15s;"
@@ -878,7 +878,7 @@ Builder{% endblock %} {% block content %}
                             class="dropdown-item text-danger"
                             onclick="
                                 event.preventDefault();
-                                deleteForm('{{ ft.form_type_id }}', {{ ft.form_name | tojson | safe }});
+                                deleteForm('{{ ft.form_type_id }}', '{{ ft.form_name | replace("'", "\\'") }}');
                                 closeAllCardDropdowns();
                             "
                             style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--danger); text-decoration: none; font-size: 13px; transition: background 0.15s;"
