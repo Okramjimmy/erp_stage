@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.app.cache import cache
 from src.app.models.permission import FormTypePermission, Role, StagePermission, UserRole
+from src.app.models import User
 from src.app.models.stage import Stage
 from src.app.schemas.permission import (
     FormTypePermissionCreate,

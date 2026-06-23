@@ -387,13 +387,40 @@ class FormRecordService:
             if not field_name or field_name not in data:
                 continue
             value = data[field_name]
-            if not value or not isinstance(value, str):
+            if not value:
                 continue
 
-            # If the value is not a full path (i.e. does not have '/'), build the full path
-            if '/' not in value:
-                value = self._build_minio_path(ft, field, value, record_id)
-            data[field_name] = value
+            # Normalize value to a list of strings
+            import json
+            normalized_list = []
+            if isinstance(value, str):
+                # Check if it looks like a JSON array
+                if value.strip().startswith('[') and value.strip().endswith(']'):
+                    try:
+                        parsed = json.loads(value)
+                        if isinstance(parsed, list):
+                            normalized_list = parsed
+                        else:
+                            normalized_list = [value]
+                    except Exception:
+                        normalized_list = [value]
+                else:
+                    normalized_list = [value]
+            elif isinstance(value, list):
+                normalized_list = value
+            else:
+                normalized_list = [str(value)]
+
+            processed_list = []
+            for item in normalized_list:
+                if not item or not isinstance(item, str):
+                    continue
+                # If the value is not a full path (i.e. does not have '/'), build the full path
+                if '/' not in item:
+                    item = self._build_minio_path(ft, field, item, record_id)
+                processed_list.append(item)
+            
+            data[field_name] = processed_list
                 
         return data
 
@@ -436,8 +463,37 @@ class FormRecordService:
 
         # Persist the full path in the record
         data = dict(record.data) if record.data else {}
-        data[field_name] = object_name
+        
+        # We append to list of attachments to support multiple file uploads
+        existing_val = data.get(field_name)
+        if isinstance(existing_val, list):
+            new_list = list(existing_val)
+            if object_name not in new_list:
+                new_list.append(object_name)
+            data[field_name] = new_list
+        elif isinstance(existing_val, str) and existing_val:
+            # For backwards compatibility with old records storing a single string path
+            if existing_val.strip().startswith('[') and existing_val.strip().endswith(']'):
+                try:
+                    import json
+                    parsed = json.loads(existing_val)
+                    if isinstance(parsed, list):
+                        new_list = list(parsed)
+                        if object_name not in new_list:
+                            new_list.append(object_name)
+                        data[field_name] = new_list
+                    else:
+                        data[field_name] = [existing_val, object_name]
+                except Exception:
+                    data[field_name] = [existing_val, object_name]
+            else:
+                data[field_name] = [existing_val, object_name]
+        else:
+            data[field_name] = [object_name]
+            
         record.data = data
+        from sqlalchemy.orm.attributes import flag_modified
+        flag_modified(record, "data")
         logger.debug(f"------Updated record data: {data}")
         await self.db.commit()
         await self.db.refresh(record)
