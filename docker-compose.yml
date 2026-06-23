@@ -5,8 +5,8 @@ services:
     image: minio/minio:latest
     container_name: erp_stage_minio
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -25,9 +25,9 @@ services:
     image: postgres:14-alpine
     container_name: erp_stage_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: erp_stage
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
     ports:
       - "5432:5432"
     volumes:
@@ -62,15 +62,17 @@ services:
       dockerfile: Dockerfile
     container_name: erp_stage_app
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/erp_stage
-      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${DATABASE_USER}:${DATABASE_PASSWORD}@postgres:${DATABASE_PORT}/${DATABASE_NAME}
+      REDIS_URL: redis://redis:${REDIS_PORT}/${REDIS_DB}
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_SECURE: "false"
-      MINIO_BUCKET_NAME: erp-stage-storage
-      DEBUG: "true"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME}
+      DEBUG: ${DEBUG}
       WATCHFILES_FORCE_POLLING: "true"
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     depends_on:

@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 from dotenv import load_dotenv
 import os
@@ -6,53 +6,55 @@ import os
 load_dotenv()
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
     # Application
-    app_name: str = "ERP Stage Builder"
-    app_version: str = "1.0.0"
-    debug: bool = True
-    secret_key: str = "your-secret-key-here-change-in-production"
+    app_name: str = os.getenv("APP_NAME")
+    app_version: str = os.getenv("APP_VERSION")
+    debug: bool = os.getenv("DEBUG")
+    secret_key: str = os.getenv("SECRET_KEY")
     # Used to sign the session cookie — override in .env in production
-    session_secret_key: str = "your-session-secret-key-change-in-production"
+    session_secret_key: str = os.getenv("SESSION_SECRET_KEY")
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/erp_stage"
-    database_host: str = "127.0.0.1"
-    database_port: int = 5432
-    database_name: str = "erp_stage"
-    database_user: str = "postgres"
-    database_password: str = "postgres"
+    database_url: str = os.getenv("DATABASE_URL")
+    database_host: str = os.getenv("DATABASE_HOST")
+    database_port: int = os.getenv("DATABASE_PORT")
+    database_name: str = os.getenv("DATABASE_NAME")
+    database_user: str = os.getenv("DATABASE_USER")
+    database_password: str = os.getenv("DATABASE_PASSWORD")
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-    redis_db: int = 0
+    redis_url: str = os.getenv("REDIS_URL")
+    redis_host: str = os.getenv("REDIS_HOST")
+    redis_port: int = os.getenv("REDIS_PORT")
+    redis_db: int = os.getenv("REDIS_DB")
 
     # MinIO Storage
-    minio_endpoint: str = "localhost:9000"
-    minio_access_key: str = "minioadmin"
-    minio_secret_key: str = "minioadmin"
-    minio_secure: bool = False
-    minio_bucket_name: str = "erp-stage-storage"
-    minio_default_region: str = "us-east-1"
+    minio_endpoint: str = os.getenv("MINIO_ENDPOINT")
+    minio_access_key: str = os.getenv("MINIO_ACCESS_KEY")
+    minio_secret_key: str = os.getenv("MINIO_SECRET_KEY")
+    minio_secure: bool = os.getenv("MINIO_SECURE")
+    minio_bucket_name: str = os.getenv("MINIO_BUCKET_NAME")
+    minio_default_region: str = os.getenv("MINIO_DEFAULT_REGION")
     public_url: str = os.getenv("PUBLIC_URL") or "localhost"
 
     # CORS
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    cors_origins: str = os.getenv("CORS_ORIGINS")
 
     # Cache TTL (in seconds)
-    cache_ttl_master_metadata: int = 3600  # 1 hour
-    cache_ttl_stage_path: int = 86400  # 24 hours
-    cache_ttl_visible_stages: int = 900  # 15 minutes
-    cache_ttl_permissions: int = 1800  # 30 minutes
+    cache_ttl_master_metadata: int = os.getenv("CACHE_TTL_MASTER_METADATA")
+    cache_ttl_stage_path: int = os.getenv("CACHE_TTL_STAGE_PATH")
+    cache_ttl_visible_stages: int = os.getenv("CACHE_TTL_VISIBLE_STAGES")
+    cache_ttl_permissions: int = os.getenv("CACHE_TTL_PERMISSIONS")
 
     # Pagination
-    default_page_size: int = 50
-    max_page_size: int = 100
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    default_page_size: int = os.getenv("DEFAULT_PAGE_SIZE")
+    max_page_size: int = os.getenv("MAX_PAGE_SIZE")
 
 
 settings = Settings()
