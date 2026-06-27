@@ -459,8 +459,10 @@ input:disabled + .slider {
                     type="text"
                     class="form-control"
                     id="new-form-group"
+                    list="groups-datalist"
                     placeholder="e.g. Finance, HR, Operations"
                 />
+                <datalist id="groups-datalist"></datalist>
             </div>
         </div>
         <div class="modal-footer">
@@ -1409,5 +1411,28 @@ input:disabled + .slider {
             selectElement.style.backgroundImage = `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`;
         }
     }
+
+    async function loadGroups() {
+        try {
+            const resp = await fetch('/api/v1/groups?limit=500');
+            if (resp.ok) {
+                const groups = await resp.json();
+                const dl = document.getElementById('groups-datalist');
+                if (dl) {
+                    dl.innerHTML = '';
+                    groups.forEach(g => {
+                        const opt = document.createElement('option');
+                        opt.value = g.name;
+                        dl.appendChild(opt);
+                    });
+                }
+            }
+        } catch(e) {
+            console.error('Failed to load groups:', e);
+        }
+    }
+
+    // Call loadGroups on page load
+    loadGroups();
 </script>
 {% endblock %}

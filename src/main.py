@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.app.api import ui as ui_router
-from src.app.api.v1 import form_records, form_types, metadata, permissions, stages, storage, parse, departments, locations, workflow_assignments
+from src.app.api.v1 import form_records, form_types, metadata, permissions, stages, storage, parse, departments, locations, workflow_assignments, groups
 from src.app.api.v1 import auth as auth_router
 from src.app.api.v1 import users as users_router
 import src.app.models  # noqa: F401 — ensures all models are registered with Base
@@ -63,6 +63,12 @@ async def lifespan(app: FastAPI):
         # await PermissionService(seed_db).seed_superadmin_role()
         # await StageService(seed_db).seed_system_stage()
     logger.info("Superadmin and System stage seed check complete")
+
+    # Seed groups from existing form types
+    from src.app.services.group_service import GroupService
+    async with async_session_maker() as seed_db:
+        await GroupService(seed_db).seed_groups_from_form_types()
+    logger.info("Groups table seeded from existing form types")
 
     # Connect to Redis
     await cache.connect()
@@ -129,6 +135,7 @@ app.include_router(parse.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
 app.include_router(locations.router, prefix="/api/v1")
 app.include_router(workflow_assignments.router, prefix="/api/v1")
+app.include_router(groups.router, prefix="/api/v1")
 
 
 

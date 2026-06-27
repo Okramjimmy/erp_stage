@@ -57,6 +57,10 @@ class FormTypeService:
             created_by=created_by,
         )
 
+        if form_data.group:
+            from src.app.services.group_service import GroupService
+            await GroupService(self.db).get_or_create(form_data.group)
+
         self.db.add(new_form_type)
         await self.db.commit()
         await self.db.refresh(new_form_type)
@@ -260,6 +264,9 @@ class FormTypeService:
             form_type.description = form_data.description
         if hasattr(form_data, "group") and form_data.group is not None:
             form_type.group = form_data.group
+            if form_data.group:
+                from src.app.services.group_service import GroupService
+                await GroupService(self.db).get_or_create(form_data.group)
 
         await self.db.commit()
         await self.db.refresh(form_type)

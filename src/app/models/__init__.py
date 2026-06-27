@@ -8,6 +8,7 @@ from src.app.models.stage import Stage
 from src.app.models.stage_form_type import StageFormType
 from src.app.models.form_action import FormAction
 from src.app.models.workflow_assignment import WorkflowAssignment
+from src.app.models.group import Group
 
 __all__ = [
     "User",
@@ -23,6 +24,7 @@ __all__ = [
     "FormTypePermission",
     "Role",
     "UserRole",
+    "Group",
 ]
 
 
