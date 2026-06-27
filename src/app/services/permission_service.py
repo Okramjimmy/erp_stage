@@ -634,6 +634,50 @@ class PermissionService:
         for perm in ft_perms:
             await self.db.delete(perm)
 
+        # Delete workflow assignments for this role
+        from src.app.models.workflow_assignment import WorkflowAssignment
+        wa_result = await self.db.execute(
+            select(WorkflowAssignment).where(WorkflowAssignment.role == role_name)
+        )
+        wa_perms = wa_result.scalars().all()
+        for wa in wa_perms:
+            await self.db.delete(wa)
+
+        # Update FormRecord rows (assigned_role = None)
+        from src.app.models.form_record import FormRecord
+        fr_result = await self.db.execute(
+            select(FormRecord).where(FormRecord.assigned_role == role_name)
+        )
+        form_records = fr_result.scalars().all()
+        for fr in form_records:
+            fr.assigned_role = None
+
+        # Update FormType workflow_data
+        from src.app.models.form_type import FormType
+        ft_type_result = await self.db.execute(
+            select(FormType).where(FormType.workflow_data.isnot(None))
+        )
+        form_types = ft_type_result.scalars().all()
+        for ft in form_types:
+            wdata = dict(ft.workflow_data)
+            changed = False
+            if "transitions" in wdata:
+                new_transitions = []
+                for t in wdata["transitions"]:
+                    new_t = dict(t)
+                    if new_t.get("actor_role") == role_name:
+                        new_t["actor_role"] = None
+                        changed = True
+                    if new_t.get("next_role") == role_name:
+                        new_t["next_role"] = None
+                        changed = True
+                    new_transitions.append(new_t)
+                wdata["transitions"] = new_transitions
+            if changed:
+                from sqlalchemy.orm.attributes import flag_modified
+                ft.workflow_data = wdata
+                flag_modified(ft, "workflow_data")
+
         # Update or delete UserRole rows
         users_result = await self.db.execute(
             select(UserRole).where(
@@ -662,6 +706,8 @@ class PermissionService:
             "deleted": role_name,
             "stage_permissions_deleted": len(stage_perms),
             "form_type_permissions_deleted": len(ft_perms),
+            "workflow_assignments_deleted": len(wa_perms),
+            "form_records_updated": len(form_records),
             "user_assignments_deleted": users_count,
         }
 
@@ -669,7 +715,8 @@ class PermissionService:
         self, old_role_name: str, new_role_name: str
     ) -> Dict[str, str]:
         """Rename a role: update roles.role_name (single truth source), then
-        propagate to stage/form-type permission rows which still store role_name.
+        propagate to stage/form-type permission rows, workflow assignments, 
+        form records, and form type workflow_data.
         user_roles rows don't need updating — they store role_id.
         """
         role_result = await self.db.execute(
@@ -699,6 +746,50 @@ class PermissionService:
         for perm in ft_perms:
             perm.role_name = new_role_name
 
+        # Update workflow assignments
+        from src.app.models.workflow_assignment import WorkflowAssignment
+        wa_result = await self.db.execute(
+            select(WorkflowAssignment).where(WorkflowAssignment.role == old_role_name)
+        )
+        wa_perms = wa_result.scalars().all()
+        for wa in wa_perms:
+            wa.role = new_role_name
+
+        # Update FormRecord rows
+        from src.app.models.form_record import FormRecord
+        fr_result = await self.db.execute(
+            select(FormRecord).where(FormRecord.assigned_role == old_role_name)
+        )
+        form_records = fr_result.scalars().all()
+        for fr in form_records:
+            fr.assigned_role = new_role_name
+
+        # Update FormType workflow_data
+        from src.app.models.form_type import FormType
+        ft_type_result = await self.db.execute(
+            select(FormType).where(FormType.workflow_data.isnot(None))
+        )
+        form_types = ft_type_result.scalars().all()
+        for ft in form_types:
+            wdata = dict(ft.workflow_data)
+            changed = False
+            if "transitions" in wdata:
+                new_transitions = []
+                for t in wdata["transitions"]:
+                    new_t = dict(t)
+                    if new_t.get("actor_role") == old_role_name:
+                        new_t["actor_role"] = new_role_name
+                        changed = True
+                    if new_t.get("next_role") == old_role_name:
+                        new_t["next_role"] = new_role_name
+                        changed = True
+                    new_transitions.append(new_t)
+                wdata["transitions"] = new_transitions
+            if changed:
+                from sqlalchemy.orm.attributes import flag_modified
+                ft.workflow_data = wdata
+                flag_modified(ft, "workflow_data")
+
         await self.db.commit()
         await cache.delete_pattern(f"permission:{old_role_name}:*")
         await cache.delete_pattern(f"permission:{new_role_name}:*")
@@ -707,6 +798,8 @@ class PermissionService:
             "renamed": f"{old_role_name} -> {new_role_name}",
             "stage_permissions_updated": len(stage_perms),
             "form_type_permissions_updated": len(ft_perms),
+            "workflow_assignments_updated": len(wa_perms),
+            "form_records_updated": len(form_records),
             "user_assignments_updated": 0,  # stored by role_id — no update needed
         }
 

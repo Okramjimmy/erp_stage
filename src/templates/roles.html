@@ -64,7 +64,7 @@
 </div>
 
 <!-- Edit Role Modal -->
-<div class="modal-overlay" id="edit-role-modal" style="display: none">
+<div class="modal-overlay" id="edit-role-modal">
     <div class="modal">
         <div class="modal-header">
             <span class="modal-title">Edit Role Name</span>
@@ -99,7 +99,7 @@
 </div>
 
 <!-- Delete Role Modal -->
-<div class="modal-overlay" id="delete-role-modal" style="display: none">
+<div class="modal-overlay" id="delete-role-modal">
     <div class="modal">
         <div class="modal-header">
             <span class="modal-title">Delete Role</span>
@@ -125,6 +125,8 @@
                 <li>Remove all stage permissions for this role</li>
                 <li>Remove all form type permissions for this role</li>
                 <li>Remove this role from all users</li>
+                <li>Remove this role from all workflow assignments</li>
+                <li>Clear assignments from active form records</li>
             </ul>
         </div>
         <div class="modal-footer">
@@ -268,11 +270,11 @@
     function openEditModal(roleName) {
         document.getElementById("editRoleOriginal").value = roleName;
         document.getElementById("editRoleName").value = roleName;
-        document.getElementById("edit-role-modal").style.display = "flex";
+        document.getElementById("edit-role-modal").classList.add("open");
     }
 
     function closeEditModal() {
-        document.getElementById("edit-role-modal").style.display = "none";
+        document.getElementById("edit-role-modal").classList.remove("open");
     }
 
     async function saveEditRole() {
@@ -312,11 +314,11 @@
     function openDeleteModal(roleName) {
         document.getElementById("deleteRoleName").value = roleName;
         document.getElementById("deleteRoleNameDisplay").textContent = roleName;
-        document.getElementById("delete-role-modal").style.display = "flex";
+        document.getElementById("delete-role-modal").classList.add("open");
     }
 
     function closeDeleteModal() {
-        document.getElementById("delete-role-modal").style.display = "none";
+        document.getElementById("delete-role-modal").classList.remove("open");
     }
 
     async function confirmDeleteRole() {
@@ -331,7 +333,7 @@
             );
 
             toast(
-                `Role "${roleName}" deleted. Removed ${result.stage_permissions_deleted} stage permissions, ${result.form_type_permissions_deleted} form permissions, and ${result.user_assignments_deleted} user assignments.`,
+                `Role "${roleName}" deleted. Removed ${result.stage_permissions_deleted} stage permissions, ${result.form_type_permissions_deleted} form permissions, ${result.workflow_assignments_deleted} workflow assignments, updated ${result.form_records_updated} form records, and removed from ${result.user_assignments_deleted} users.`,
                 "success",
             );
             closeDeleteModal();
