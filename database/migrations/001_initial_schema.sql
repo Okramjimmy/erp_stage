@@ -232,9 +232,11 @@ CREATE TABLE form_type_permissions (
 
     -- Permissions
     can_view BOOLEAN NOT NULL DEFAULT FALSE,
-    can_create BOOLEAN NOT NULL DEFAULT FALSE,
+    can_create_records BOOLEAN NOT NULL DEFAULT FALSE,
     can_edit BOOLEAN NOT NULL DEFAULT FALSE,
     can_delete BOOLEAN NOT NULL DEFAULT FALSE,
+    can_edit_records BOOLEAN NOT NULL DEFAULT FALSE,
+    can_delete_records BOOLEAN NOT NULL DEFAULT FALSE,
     can_submit BOOLEAN NOT NULL DEFAULT FALSE,
     can_verify BOOLEAN NOT NULL DEFAULT FALSE,
     can_cancel BOOLEAN NOT NULL DEFAULT FALSE,

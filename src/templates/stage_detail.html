@@ -1489,32 +1489,29 @@ Builder{% endblock %} {% block content %}
                 />
             </div>
             <div
+                id="grant-permissions-grid"
                 style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px"
             >
-                <label class="form-check"
-                    ><input type="checkbox" id="perm-view" checked /><span
-                        >View</span
-                    ></label
-                >
-                <label class="form-check"
-                    ><input type="checkbox" id="perm-create" /><span
-                        >Create</span
-                    ></label
-                >
-                <label class="form-check"
-                    ><input type="checkbox" id="perm-edit" /><span
-                        >Edit</span
-                    ></label
-                >
-                <label class="form-check"
-                    ><input type="checkbox" id="perm-delete" /><span
-                        >Delete</span
-                    ></label
-                >
-                <label class="form-check"
+                <label class="form-check" id="check-view"
+                    ><input type="checkbox" id="perm-view" checked /><span>View</span></label>
+                <label class="form-check" id="check-create"
+                    ><input type="checkbox" id="perm-create" /><span id="label-create">Create</span></label>
+                <label class="form-check" id="check-edit"
+                    ><input type="checkbox" id="perm-edit" /><span id="label-edit">Edit</span></label>
+                <label class="form-check" id="check-delete"
+                    ><input type="checkbox" id="perm-delete" /><span id="label-delete">Delete</span></label>
+                <label class="form-check" id="check-manage"
                     ><input type="checkbox" id="perm-manage" /><span>Manage Permissions</span></label>
-                <!-- <label class="form-check"
-                    ><input type="checkbox" id="perm-submit" /><span>Submit</span></label> -->
+                
+                <!-- Form Type Specific Permissions -->
+                <label class="form-check" id="check-create-records" style="display: none;"
+                    ><input type="checkbox" id="perm-create-records" /><span>Create Records</span></label>
+                <label class="form-check" id="check-edit-records" style="display: none;"
+                    ><input type="checkbox" id="perm-edit-records" /><span>Edit Records</span></label>
+                <label class="form-check" id="check-delete-records" style="display: none;"
+                    ><input type="checkbox" id="perm-delete-records" /><span>Delete Records</span></label>
+                <label class="form-check" id="check-submit" style="display: none;"
+                    ><input type="checkbox" id="perm-submit" /><span>Submit</span></label>
             </div>
         </div>
         <div class="modal-footer">
@@ -2373,7 +2370,34 @@ Builder{% endblock %} {% block content %}
         document.getElementById('perm-edit').checked = false;
         document.getElementById('perm-delete').checked = false;
         document.getElementById('perm-manage').checked = false;
-        // document.getElementById('perm-submit').checked = false;
+        
+        // Reset new fields
+        document.getElementById('perm-create-records').checked = false;
+        document.getElementById('perm-edit-records').checked = false;
+        document.getElementById('perm-delete-records').checked = false;
+        document.getElementById('perm-submit').checked = false;
+
+        // Show/hide based on type
+        if (type === 'stage') {
+            document.getElementById('check-create').style.display = 'block';
+            document.getElementById('check-create-records').style.display = 'none';
+            document.getElementById('check-edit-records').style.display = 'none';
+            document.getElementById('check-delete-records').style.display = 'none';
+            document.getElementById('check-submit').style.display = 'none';
+            
+            document.getElementById('label-edit').textContent = 'Edit';
+            document.getElementById('label-delete').textContent = 'Delete';
+        } else {
+            document.getElementById('check-create').style.display = 'none';
+            document.getElementById('check-create-records').style.display = 'block';
+            document.getElementById('check-edit-records').style.display = 'block';
+            document.getElementById('check-delete-records').style.display = 'block';
+            document.getElementById('check-submit').style.display = 'block';
+            
+            document.getElementById('label-edit').textContent = 'Edit Form';
+            document.getElementById('label-delete').textContent = 'Delete Form';
+        }
+        
         openModal('grant-modal');
     }
 
@@ -2453,9 +2477,11 @@ Builder{% endblock %} {% block content %}
                 const crossBadge = '<span style="background: rgba(239, 68, 68, 0.15); color: rgb(239, 68, 68); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">✗</span>';
 
                 const viewVal = p.can_view ? checkBadge : crossBadge;
-                const createVal = p.can_create ? checkBadge : crossBadge;
+                const createRecVal = p.can_create_records ? checkBadge : crossBadge;
                 const editVal = p.can_edit ? checkBadge : crossBadge;
                 const deleteVal = p.can_delete ? checkBadge : crossBadge;
+                const editRecVal = p.can_edit_records ? checkBadge : crossBadge;
+                const deleteRecVal = p.can_delete_records ? checkBadge : crossBadge;
                 const manageVal = p.can_manage_permissions ? checkBadge : crossBadge;
                 const submitVal = p.can_submit ? checkBadge : crossBadge;
 
@@ -2467,9 +2493,11 @@ Builder{% endblock %} {% block content %}
                     <tr style="border-bottom: 1px solid var(--border-color);">
                         <td style="padding: 12px 10px; font-weight: 500; color: var(--text-color);">${p.role_name}</td>
                         <td style="padding: 12px 10px; text-align: center;">${viewVal}</td>
-                        <td style="padding: 12px 10px; text-align: center;">${createVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${createRecVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${deleteVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${editRecVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${deleteRecVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${manageVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${submitVal}</td>
                         <td style="padding: 12px 10px; text-align: right;">${actionButton}</td>
@@ -2510,9 +2538,11 @@ Builder{% endblock %} {% block content %}
                             <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--background-sidebar); border-radius: 6px;">
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500;">Role</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">View</th>
-                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create</th>
-                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit</th>
-                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create Records</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit Form</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete Form</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit Records</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete Records</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Manage</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Submit</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: right;">Actions</th>
@@ -2558,7 +2588,6 @@ Builder{% endblock %} {% block content %}
                 const editVal = p.can_edit ? checkBadge : crossBadge;
                 const deleteVal = p.can_delete ? checkBadge : crossBadge;
                 const manageVal = p.can_manage_permissions ? checkBadge : crossBadge;
-                const submitVal = p.can_submit ? checkBadge : crossBadge;
 
                 const actionButton = canManage 
                     ? `<button class="btn btn-sm btn-ghost" style="color: var(--danger); padding: 2px 8px; font-size: 12px;" onclick="revokeStagePermission('${p.role_name}')">Revoke</button>`
@@ -2572,7 +2601,6 @@ Builder{% endblock %} {% block content %}
                         <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${deleteVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${manageVal}</td>
-                        <td style="padding: 12px 10px; text-align: center;">${submitVal}</td>
                         <td style="padding: 12px 10px; text-align: right;">${actionButton}</td>
                     </tr>
                 `;
@@ -2589,7 +2617,6 @@ Builder{% endblock %} {% block content %}
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Manage</th>
-                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Submit</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: right;">Actions</th>
                             </tr>
                         </thead>
@@ -2608,7 +2635,6 @@ Builder{% endblock %} {% block content %}
                         <li><strong>Edit:</strong> Can edit stage name/prefix and link/unlink formtypes.</li>
                         <li><strong>Delete:</strong> Can delete this stage and all descendants.</li>
                         <li><strong>Manage:</strong> Can assign permissions to other roles in this stage or descendants.</li>
-                        <li><strong>Submit:</strong> Can submit records for formtypes in this stage.</li>
                     </ul>
                 </div>
             `;
@@ -2655,17 +2681,26 @@ Builder{% endblock %} {% block content %}
             toast("Role name is required", "error");
             return;
         }
-        const body = {
+        let body = {
             role_name: role,
             can_view: document.getElementById("perm-view").checked,
-            can_create: document.getElementById("perm-create").checked,
-            can_edit: document.getElementById("perm-edit").checked,
-            can_delete: document.getElementById("perm-delete").checked,
             can_manage_permissions:
                 document.getElementById("perm-manage").checked,
-            // can_submit: document.getElementById("perm-submit").checked,
             granted_by: "system",
         };
+
+        if (currentGrantType === 'stage') {
+            body.can_create = document.getElementById("perm-create").checked;
+            body.can_edit = document.getElementById("perm-edit").checked;
+            body.can_delete = document.getElementById("perm-delete").checked;
+        } else {
+            body.can_create_records = document.getElementById("perm-create-records").checked;
+            body.can_edit = document.getElementById("perm-edit").checked;
+            body.can_delete = document.getElementById("perm-delete").checked;
+            body.can_edit_records = document.getElementById("perm-edit-records").checked;
+            body.can_delete_records = document.getElementById("perm-delete-records").checked;
+            body.can_submit = document.getElementById("perm-submit").checked;
+        }
         try {
             if (currentGrantType === 'stage') {
                 await apiFetch(`${API}/permissions/stages/${STAGE_ID}`, {

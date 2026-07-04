@@ -118,9 +118,11 @@ async def grant_form_type_permission(
 
     - **role_name**: Role to grant permission to
     - **can_view**: Can view the form type
-    - **can_create**: Can create form instances
-    - **can_edit**: Can edit the form type
-    - **can_delete**: Can delete the form type
+    - **can_create_records**: Can create form records
+    - **can_edit**: Can edit the form type definition
+    - **can_delete**: Can delete the form type definition
+    - **can_edit_records**: Can edit form records
+    - **can_delete_records**: Can delete form records
     - **can_submit**: Can submit forms
     - **can_manage_permissions**: Can manage permissions
     """

@@ -653,7 +653,7 @@
 
         <!-- Save and Discard for Draft records -->
         {% if not is_readonly %}
-            {% if (not record and ft_perms.create) or (record and ft_perms.edit) %}
+            {% if (not record and ft_perms.create_records) or (record and ft_perms.edit_records) %}
             <button class="btn btn-secondary btn-sm" onclick="discardChanges()">
                 Discard
             </button>
@@ -695,7 +695,7 @@
 
         <!-- + New and Delete buttons -->
         {% if record %}
-            {% if ft_perms.create %}
+            {% if ft_perms.create_records %}
             <button
                 class="btn btn-secondary btn-sm"
                 onclick="window.location.href='/forms/{{ form_type.form_type_id }}/new{% if record.stage_id %}?stage_id={{ record.stage_id }}{% elif stage %}?stage_id={{ stage.stage_id }}{% endif %}'"
@@ -703,7 +703,7 @@
                 + New
             </button>
             {% endif %}
-            {% if ft_perms.delete %}
+            {% if ft_perms.delete_records %}
             <button
                 class="btn btn-danger btn-sm"
                 onclick="deleteThisRecord()"
@@ -900,7 +900,7 @@
     const STATUS = "{{ status }}";
     
     {% set js_perms = user_permissions.form_types.get(form_type.form_type_id, {}) if user_permissions else {} %}
-    const HAS_EDIT_PERMISSION = (!RECORD_ID && {% if js_perms.create %}true{% else %}false{% endif %}) || (RECORD_ID && {% if js_perms.edit %}true{% else %}false{% endif %});
+    const HAS_EDIT_PERMISSION = (!RECORD_ID && {% if js_perms.create_records %}true{% else %}false{% endif %}) || (RECORD_ID && {% if js_perms.edit_records %}true{% else %}false{% endif %});
 
     const SCHEMA = {% if form_type.schema_data %}{{ form_type.schema_data | tojson | safe }}{% else %}{"fields":[],"settings":{}}{% endif %};
     const SAVED_DATA = {% if record and record.data %}{{ record.data | tojson | safe }}{% else %}{}{% endif %};

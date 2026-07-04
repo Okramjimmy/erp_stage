@@ -322,7 +322,7 @@ content %}
         return;
       }
 
-      let html = '<table class="table"><thead><tr><th>Form Type</th><th>View</th><th>Create</th><th>Edit</th><th>Delete</th><th>Submit</th><th>Verify</th><th>Cancel</th><th>Amend</th><th>Manage</th><th>Actions</th></tr></thead><tbody>';
+      let html = '<table class="table"><thead><tr><th>Form Type</th><th>View</th><th>Create Records</th><th>Edit Form</th><th>Delete Form</th><th>Edit Records</th><th>Delete Records</th><th>Submit</th><th>Verify</th><th>Cancel</th><th>Amend</th><th>Manage</th><th>Actions</th></tr></thead><tbody>';
 
       permissions.forEach(perm => {
         const formType = formTypes.find(ft => ft.form_type_id === perm.form_type_id);
@@ -332,9 +332,11 @@ content %}
           <tr>
             <td style="font-weight:600">${formName}</td>
             <td><input type="checkbox" ${perm.can_view ? 'checked' : ''} data-type="view" data-id="${perm.form_type_id}"></td>
-            <td><input type="checkbox" ${perm.can_create ? 'checked' : ''} data-type="create" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_create_records ? 'checked' : ''} data-type="create_records" data-id="${perm.form_type_id}"></td>
             <td><input type="checkbox" ${perm.can_edit ? 'checked' : ''} data-type="edit" data-id="${perm.form_type_id}"></td>
             <td><input type="checkbox" ${perm.can_delete ? 'checked' : ''} data-type="delete" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_edit_records ? 'checked' : ''} data-type="edit_records" data-id="${perm.form_type_id}"></td>
+            <td><input type="checkbox" ${perm.can_delete_records ? 'checked' : ''} data-type="delete_records" data-id="${perm.form_type_id}"></td>
             <td><input type="checkbox" ${perm.can_submit ? 'checked' : ''} data-type="submit" data-id="${perm.form_type_id}"></td>
             <td><input type="checkbox" ${perm.can_verify ? 'checked' : ''} data-type="verify" data-id="${perm.form_type_id}"></td>
             <td><input type="checkbox" ${perm.can_cancel ? 'checked' : ''} data-type="cancel" data-id="${perm.form_type_id}"></td>
@@ -424,9 +426,11 @@ content %}
         location_id: locId,
         department_id: deptId,
         can_view: false,
-        can_create: false,
+        can_create_records: false,
         can_edit: false,
         can_delete: false,
+        can_edit_records: false,
+        can_delete_records: false,
         can_submit: false,
         can_verify: false,
         can_cancel: false,
@@ -578,9 +582,11 @@ content %}
             <label style="display:block;margin-bottom:8px;font-weight:600">Permissions:</label>
             <div style="display:flex;gap:16px;flex-wrap:wrap">
               <label><input type="checkbox" id="add-ft-view" checked> View</label>
-              <label><input type="checkbox" id="add-ft-create"> Create</label>
-              <label><input type="checkbox" id="add-ft-edit"> Edit</label>
-              <label><input type="checkbox" id="add-ft-delete"> Delete</label>
+              <label><input type="checkbox" id="add-ft-create-records"> Create Records</label>
+              <label><input type="checkbox" id="add-ft-edit"> Edit Form</label>
+              <label><input type="checkbox" id="add-ft-delete"> Delete Form</label>
+              <label><input type="checkbox" id="add-ft-edit-records"> Edit Records</label>
+              <label><input type="checkbox" id="add-ft-delete-records"> Delete Records</label>
               <label><input type="checkbox" id="add-ft-submit"> Submit</label>
               <label><input type="checkbox" id="add-ft-verify"> Verify</label>
               <label><input type="checkbox" id="add-ft-cancel"> Cancel</label>
@@ -611,9 +617,11 @@ content %}
         location_id: locId,
         department_id: deptId,
         can_view: document.getElementById('add-ft-view').checked,
-        can_create: document.getElementById('add-ft-create').checked,
+        can_create_records: document.getElementById('add-ft-create-records').checked,
         can_edit: document.getElementById('add-ft-edit').checked,
         can_delete: document.getElementById('add-ft-delete').checked,
+        can_edit_records: document.getElementById('add-ft-edit-records').checked,
+        can_delete_records: document.getElementById('add-ft-delete-records').checked,
         can_submit: document.getElementById('add-ft-submit').checked,
         can_verify: document.getElementById('add-ft-verify').checked,
         can_cancel: document.getElementById('add-ft-cancel').checked,

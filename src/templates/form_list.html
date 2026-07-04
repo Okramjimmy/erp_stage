@@ -61,7 +61,7 @@
           <td>
             <div class="d-flex gap-1">
               <a href="/forms/{{ form_type.form_type_id }}/{{ rec.record_id }}" class="btn btn-xs btn-secondary">Open</a>
-              {% if user_permissions and user_permissions.form_types.get(form_type.form_type_id) and user_permissions.form_types[form_type.form_type_id].delete %}
+              {% if user_permissions and user_permissions.form_types.get(form_type.form_type_id) and user_permissions.form_types[form_type.form_type_id].delete_records %}
               <button class="btn btn-xs btn-danger" onclick="deleteRecord('{{ rec.record_id }}','{{ rec.docname }}')">Delete</button>
               {% endif %}
             </div>

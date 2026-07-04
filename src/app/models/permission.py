@@ -91,9 +91,11 @@ class FormTypePermission(Base):
 
     # Permissions
     can_view = Column(Boolean, nullable=False, default=False)
-    can_create = Column(Boolean, nullable=False, default=False)
+    can_create_records = Column(Boolean, nullable=False, default=False)
     can_edit = Column(Boolean, nullable=False, default=False)
     can_delete = Column(Boolean, nullable=False, default=False)
+    can_edit_records = Column(Boolean, nullable=False, default=False)
+    can_delete_records = Column(Boolean, nullable=False, default=False)
     can_submit = Column(Boolean, nullable=False, default=False)
     can_verify = Column(Boolean, nullable=False, default=False)
     can_cancel = Column(Boolean, nullable=False, default=False)
@@ -121,9 +123,11 @@ class FormTypePermission(Base):
             "location_id": self.location_id,
             "department_id": self.department_id,
             "can_view": self.can_view,
-            "can_create": self.can_create,
+            "can_create_records": self.can_create_records,
             "can_edit": self.can_edit,
             "can_delete": self.can_delete,
+            "can_edit_records": self.can_edit_records,
+            "can_delete_records": self.can_delete_records,
             "can_submit": self.can_submit,
             "can_verify": self.can_verify,
             "can_cancel": self.can_cancel,

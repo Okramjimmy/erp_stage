@@ -184,9 +184,11 @@ class PermissionService:
         if existing_perm:
             # Update existing permission
             existing_perm.can_view = permission_data.can_view
-            existing_perm.can_create = permission_data.can_create
+            existing_perm.can_create_records = permission_data.can_create_records
             existing_perm.can_edit = permission_data.can_edit
             existing_perm.can_delete = permission_data.can_delete
+            existing_perm.can_edit_records = permission_data.can_edit_records
+            existing_perm.can_delete_records = permission_data.can_delete_records
             existing_perm.can_submit = permission_data.can_submit
             existing_perm.can_verify = permission_data.can_verify
             existing_perm.can_cancel = permission_data.can_cancel
@@ -211,9 +213,11 @@ class PermissionService:
             location_id=permission_data.location_id,
             department_id=permission_data.department_id,
             can_view=permission_data.can_view,
-            can_create=permission_data.can_create,
+            can_create_records=permission_data.can_create_records,
             can_edit=permission_data.can_edit,
             can_delete=permission_data.can_delete,
+            can_edit_records=permission_data.can_edit_records,
+            can_delete_records=permission_data.can_delete_records,
             can_submit=permission_data.can_submit,
             can_verify=permission_data.can_verify,
             can_cancel=permission_data.can_cancel,
@@ -834,14 +838,19 @@ class PermissionService:
             and_(
                 FormTypePermission.role_name.in_(roles),
                 FormTypePermission.form_type_id == form_type_id,
-                getattr(FormTypePermission, permission_type) == True,
                 or_(FormTypePermission.location_id.is_(None), FormTypePermission.location_id == user_location_id),
                 or_(FormTypePermission.department_id.is_(None), FormTypePermission.department_id == user_department_id),
             )
         )
         direct_res = await self.db.execute(direct_stmt)
-        if direct_res.scalar_one_or_none() is not None:
-            return True
+        direct_perms = direct_res.scalars().all()
+
+        if direct_perms:
+            # If direct permissions are configured, they override stage-level fallback completely.
+            for dp in direct_perms:
+                if getattr(dp, permission_type) == True:
+                    return True
+            return False
 
         # 2. Check permissions on mapped stages (if any)
         from src.app.models.stage_form_type import StageFormType
@@ -851,6 +860,12 @@ class PermissionService:
         mapped_stage_ids = [r[0] for r in mapping_res.all()]
 
         stage_perm = permission_type
+        if permission_type == "can_create_records":
+            stage_perm = "can_create"
+        elif permission_type == "can_edit_records":
+            stage_perm = "can_edit"
+        elif permission_type == "can_delete_records":
+            stage_perm = "can_delete"
 
         for stage_id in mapped_stage_ids:
             if await self.check_stage_permission(user_id, stage_id, stage_perm):
@@ -886,9 +901,11 @@ class PermissionService:
             form_types_perms = {
                 ft.form_type_id: {
                     "view": True,
-                    "create": True,
+                    "create_records": True,
                     "edit": True,
                     "delete": True,
+                    "edit_records": True,
+                    "delete_records": True,
                     "submit": True,
                     "verify": True,
                     "cancel": True,
@@ -925,9 +942,11 @@ class PermissionService:
             form_types_perms = {
                 ft.form_type_id: {
                     "view": False,
-                    "create": False,
+                    "create_records": False,
                     "edit": False,
                     "delete": False,
+                    "edit_records": False,
+                    "delete_records": False,
                     "submit": False,
                     "verify": False,
                     "cancel": False,
@@ -1011,9 +1030,11 @@ class PermissionService:
             if ftid not in ft_perm_map:
                 ft_perm_map[ftid] = {
                     "view": False,
-                    "create": False,
+                    "create_records": False,
                     "edit": False,
                     "delete": False,
+                    "edit_records": False,
+                    "delete_records": False,
                     "submit": False,
                     "verify": False,
                     "cancel": False,
@@ -1021,9 +1042,11 @@ class PermissionService:
                     "manage_permissions": False,
                 }
             ft_perm_map[ftid]["view"] = ft_perm_map[ftid]["view"] or ftp.can_view
-            ft_perm_map[ftid]["create"] = ft_perm_map[ftid]["create"] or ftp.can_create
+            ft_perm_map[ftid]["create_records"] = ft_perm_map[ftid]["create_records"] or ftp.can_create_records
             ft_perm_map[ftid]["edit"] = ft_perm_map[ftid]["edit"] or ftp.can_edit
             ft_perm_map[ftid]["delete"] = ft_perm_map[ftid]["delete"] or ftp.can_delete
+            ft_perm_map[ftid]["edit_records"] = ft_perm_map[ftid]["edit_records"] or ftp.can_edit_records
+            ft_perm_map[ftid]["delete_records"] = ft_perm_map[ftid]["delete_records"] or ftp.can_delete_records
             ft_perm_map[ftid]["submit"] = ft_perm_map[ftid]["submit"] or ftp.can_submit
             ft_perm_map[ftid]["verify"] = ft_perm_map[ftid]["verify"] or ftp.can_verify
             ft_perm_map[ftid]["cancel"] = ft_perm_map[ftid]["cancel"] or ftp.can_cancel
@@ -1046,9 +1069,11 @@ class PermissionService:
             ftid = ft.form_type_id
             resolved = {
                 "view": False,
-                "create": False,
+                "create_records": False,
                 "edit": False,
                 "delete": False,
+                "edit_records": False,
+                "delete_records": False,
                 "submit": False,
                 "verify": False,
                 "cancel": False,
@@ -1056,24 +1081,21 @@ class PermissionService:
                 "manage_permissions": False,
             }
             if ftid in ft_perm_map:
-                resolved["view"] = ft_perm_map[ftid]["view"]
-                resolved["create"] = ft_perm_map[ftid]["create"]
-                resolved["edit"] = ft_perm_map[ftid]["edit"]
-                resolved["delete"] = ft_perm_map[ftid]["delete"]
-                resolved["submit"] = ft_perm_map[ftid]["submit"]
-                resolved["verify"] = ft_perm_map[ftid]["verify"]
-                resolved["cancel"] = ft_perm_map[ftid]["cancel"]
-                resolved["amend"] = ft_perm_map[ftid]["amend"]
-                resolved["manage_permissions"] = ft_perm_map[ftid]["manage_permissions"]
-
-            mapped_sids = ft_to_stages_map.get(ftid, [])
-            for stage_id in mapped_sids:
-                if stage_id in stages_perms:
-                    resolved["view"] = resolved["view"] or stages_perms[stage_id]["view"]
-                    resolved["create"] = resolved["create"] or stages_perms[stage_id]["create"]
-                    resolved["edit"] = resolved["edit"] or stages_perms[stage_id]["edit"]
-                    resolved["delete"] = resolved["delete"] or stages_perms[stage_id]["delete"]
-                    resolved["manage_permissions"] = resolved["manage_permissions"] or stages_perms[stage_id]["manage_permissions"]
+                # If direct form type permissions are defined, they override stage permissions completely.
+                # So we just use the direct permissions and DO NOT fall back to stage permissions!
+                resolved = ft_perm_map[ftid]
+            else:
+                # No direct permissions defined, so we fall back to stage permissions!
+                mapped_sids = ft_to_stages_map.get(ftid, [])
+                for stage_id in mapped_sids:
+                    if stage_id in stages_perms:
+                        resolved["view"] = resolved["view"] or stages_perms[stage_id]["view"]
+                        resolved["create_records"] = resolved["create_records"] or stages_perms[stage_id]["create"]
+                        resolved["edit_records"] = resolved["edit_records"] or stages_perms[stage_id]["edit"]
+                        resolved["delete_records"] = resolved["delete_records"] or stages_perms[stage_id]["delete"]
+                        resolved["edit"] = resolved["edit"] or stages_perms[stage_id]["edit"]
+                        resolved["delete"] = resolved["delete"] or stages_perms[stage_id]["delete"]
+                        resolved["manage_permissions"] = resolved["manage_permissions"] or stages_perms[stage_id]["manage_permissions"]
 
             form_types_perms[ftid] = resolved
 
@@ -1147,9 +1169,11 @@ class PermissionService:
             perm = existing.scalar_one_or_none()
             if perm:
                 perm.can_view = True
-                perm.can_create = True
+                perm.can_create_records = True
                 perm.can_edit = True
                 perm.can_delete = True
+                perm.can_edit_records = True
+                perm.can_delete_records = True
                 perm.can_submit = True
                 perm.can_verify = True
                 perm.can_cancel = True
@@ -1160,9 +1184,15 @@ class PermissionService:
                     form_type_id=ft.form_type_id,
                     role_name=ROLE,
                     can_view=True,
-                    can_create=True,
+                    can_create_records=True,
                     can_edit=True,
                     can_delete=True,
+                    can_edit_records=True,
+                    can_delete_records=True,
+                    can_submit=True,
+                    can_verify=True,
+                    can_cancel=True,
+                    can_amend=True,
                     can_manage_permissions=True,
                     granted_by="system",
                 ))

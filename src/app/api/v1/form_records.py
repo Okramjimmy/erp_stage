@@ -37,7 +37,7 @@ async def create_record(
     has_permission = await permission_service.check_form_type_permission(
         user_id=current_user.user_id,
         form_type_id=payload.form_type_id,
-        permission_type="can_create"
+        permission_type="can_create_records"
     )
 
     if not has_permission:
@@ -90,7 +90,7 @@ async def update_record(
     has_permission = await permission_service.check_form_type_permission(
         user_id=current_user.user_id,
         form_type_id=existing_record.form_type_id,
-        permission_type="can_edit"
+        permission_type="can_edit_records"
     )
 
     if not has_permission:
@@ -210,7 +210,7 @@ async def delete_record(
     has_permission = await permission_service.check_form_type_permission(
         user_id=current_user.user_id,
         form_type_id=rec.form_type_id,
-        permission_type="can_delete"
+        permission_type="can_delete_records"
     )
     if not has_permission:
         raise HTTPException(

@@ -134,9 +134,11 @@ class FormTypeService:
         perm = existing.scalar_one_or_none()
         if perm:
             perm.can_view = True
-            perm.can_create = True
+            perm.can_create_records = True
             perm.can_edit = True
             perm.can_delete = True
+            perm.can_edit_records = True
+            perm.can_delete_records = True
             perm.can_submit = True
             perm.can_cancel = True
             perm.can_amend = True
@@ -146,9 +148,11 @@ class FormTypeService:
                 form_type_id=form_type_id,
                 role_name=ROLE,
                 can_view=True,
-                can_create=True,
+                can_create_records=True,
                 can_edit=True,
                 can_delete=True,
+                can_edit_records=True,
+                can_delete_records=True,
                 can_submit=True,
                 can_cancel=True,
                 can_amend=True,

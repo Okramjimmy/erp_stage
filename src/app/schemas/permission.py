@@ -54,9 +54,11 @@ class FormTypePermissionCreate(BaseModel):
     location_id: Optional[str] = None
     department_id: Optional[str] = None
     can_view: bool = False
-    can_create: bool = False
+    can_create_records: bool = False
     can_edit: bool = False
     can_delete: bool = False
+    can_edit_records: bool = False
+    can_delete_records: bool = False
     can_submit: bool = False
     can_verify: bool = False
     can_cancel: bool = False
@@ -68,9 +70,11 @@ class FormTypePermissionUpdate(BaseModel):
     """Schema for updating Form Type permission."""
 
     can_view: Optional[bool] = None
-    can_create: Optional[bool] = None
+    can_create_records: Optional[bool] = None
     can_edit: Optional[bool] = None
     can_delete: Optional[bool] = None
+    can_edit_records: Optional[bool] = None
+    can_delete_records: Optional[bool] = None
     can_submit: Optional[bool] = None
     can_verify: Optional[bool] = None
     can_cancel: Optional[bool] = None
@@ -87,9 +91,11 @@ class FormTypePermissionResponse(BaseModel):
     location_id: Optional[str] = None
     department_id: Optional[str] = None
     can_view: bool
-    can_create: bool
+    can_create_records: bool
     can_edit: bool
     can_delete: bool
+    can_edit_records: bool
+    can_delete_records: bool
     can_submit: bool
     can_verify: bool
     can_cancel: bool
