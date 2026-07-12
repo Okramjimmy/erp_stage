@@ -528,8 +528,21 @@ class FormRecordService:
             created_by=created_by,
             form_version=ft.version,
             schema_snapshot=ft.schema_reference,
+            parent_record_id=payload.parent_record_id,
+            parent_form_type_id=payload.parent_form_type_id,
+            parent_field_name=payload.parent_field_name,
         )
         self.db.add(record)
+
+        # Update parent record's data if present
+        if payload.parent_record_id and payload.parent_field_name:
+            parent_rec = await self.db.get(FormRecord, payload.parent_record_id)
+            if parent_rec:
+                parent_data = dict(parent_rec.data) if parent_rec.data else {}
+                parent_data[payload.parent_field_name] = docname
+                parent_rec.data = parent_data
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(parent_rec, "data")
 
         # Save child records recursively
         schema = ft.schema_reference or {}

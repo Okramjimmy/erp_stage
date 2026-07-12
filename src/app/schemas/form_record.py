@@ -9,6 +9,9 @@ class FormRecordCreate(BaseModel):
     form_type_id: str
     data: Dict[str, Any] = Field(default_factory=dict)
     created_by: Optional[str] = None
+    parent_record_id: Optional[str] = None
+    parent_form_type_id: Optional[str] = None
+    parent_field_name: Optional[str] = None
 
 
 class FormRecordUpdate(BaseModel):

@@ -32,7 +32,7 @@ class FormRecord(Base):
     
     # Parent-Child Relationships
     parent_record_id = Column(
-        String(50), ForeignKey("form_records.record_id", ondelete="CASCADE"), nullable=True
+        String(50), ForeignKey("form_records.record_id", ondelete="CASCADE"), nullable=True, index=True
     )
     parent_form_type_id = Column(
         String(50), ForeignKey("form_types.form_type_id", ondelete="CASCADE"), nullable=True

@@ -65,10 +65,10 @@ async def lifespan(app: FastAPI):
     logger.info("Superadmin and System stage seed check complete")
 
     # Seed groups from existing form types
-    from src.app.services.group_service import GroupService
-    async with async_session_maker() as seed_db:
-        await GroupService(seed_db).seed_groups_from_form_types()
-    logger.info("Groups table seeded from existing form types")
+    # from src.app.services.group_service import GroupService
+    # async with async_session_maker() as seed_db:
+    #     await GroupService(seed_db).seed_groups_from_form_types()
+    # logger.info("Groups table seeded from existing form types")
 
     # Connect to Redis
     await cache.connect()

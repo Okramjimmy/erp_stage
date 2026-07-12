@@ -600,6 +600,19 @@
             border-radius: 8px !important;
         }
     }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .spinner {
+        display: inline-block;
+        border: 2px solid var(--border);
+        border-top: 2px solid var(--primary);
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        animation: spin 1s linear infinite;
+    }
 </style>
 {% endblock %} {% block content %} {% set schema = form_type.schema_data or
 {"fields":[],"settings":{}} %} {% set settings = schema.get("settings", {}) %}
@@ -868,6 +881,11 @@
                 <div id="print-field-checkboxes" style="display: flex; flex-direction: column; gap: 10px;">
                     <!-- Dynamically populated checkboxes -->
                 </div>
+                <h6 style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px;">Options</h6>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+                    <input type="checkbox" id="print-opt-annexure" checked onchange="renderPrintDocument()" style="cursor: pointer;">
+                    <label for="print-opt-annexure" style="font-size: 13px; cursor: pointer; user-select: none;">Include Image Annexure</label>
+                </div>
             </div>
             
             <!-- Document Preview -->
@@ -895,8 +913,11 @@
 <script>
     const API = '/api/v1';
     const FORM_TYPE_ID = '{{ form_type.form_type_id }}';
-    const RECORD_ID = {% if record %}"{{ record.record_id }}"{% else %}null{% endif %};
+    let RECORD_ID = {% if record %}"{{ record.record_id }}"{% else %}null{% endif %};
     const IS_READONLY = {% if is_readonly %}true{% else %}false{% endif %};
+    const PARENT_RECORD_ID = {% if record and record.parent_record_id %}"{{ record.parent_record_id }}"{% else %}null{% endif %};
+    const PARENT_FORM_TYPE_ID = {% if record and record.parent_form_type_id %}"{{ record.parent_form_type_id }}"{% else %}null{% endif %};
+    const PARENT_FIELD_NAME = {% if record and record.parent_field_name %}"{{ record.parent_field_name }}"{% else %}null{% endif %};
     const STATUS = "{{ status }}";
     
     {% set js_perms = user_permissions.form_types.get(form_type.form_type_id, {}) if user_permissions else {} %}
@@ -950,6 +971,31 @@
         return [val];
       }
       return [];
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const parentRecordId = PARENT_RECORD_ID || urlParams.get('parent_record_id');
+    const parentFormTypeId = PARENT_FORM_TYPE_ID || urlParams.get('parent_form_type_id');
+    const parentFieldName = PARENT_FIELD_NAME || urlParams.get('parent_field_name');
+
+    if (parentRecordId) {
+      let fields = SCHEMA.fields || [];
+      let secIdx = fields.findIndex(f => f.fieldtype === 'Section Break');
+      if (secIdx === -1) {
+        fields.unshift({ fieldtype: 'Section Break', label: 'Details', fieldname: 'sec_details' });
+        secIdx = 0;
+      }
+      const parentField = {
+        fieldname: 'parent_record_id',
+        fieldtype: 'Data',
+        label: 'Parent Record ID',
+        read_only: true,
+        default: parentRecordId
+      };
+      if (!fields.some(f => f.fieldname === 'parent_record_id')) {
+        fields.splice(secIdx + 1, 0, parentField);
+      }
+      SAVED_DATA['parent_record_id'] = parentRecordId;
     }
 
     let formData = Object.assign({}, SAVED_DATA);
@@ -1018,10 +1064,16 @@
     function esc(s){if(!s&&s!==0)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
     function markDirty(){dirty=true;document.getElementById('dirty-dot').style.display='';}
 
-    async function addNewLinkedRecord(formTypeName) {
-      if (dirty || !RECORD_ID) {
-        toast('Please save this record first before adding a new linked record.', 'error');
-        return;
+    async function addNewLinkedRecord(formTypeName, fieldName) {
+      let recordIdToUse = RECORD_ID;
+      if (!recordIdToUse || dirty) {
+        try {
+          recordIdToUse = await saveRecord(false);
+          if (!recordIdToUse) return;
+        } catch (e) {
+          toast('Please fill all required fields and save first.', 'error');
+          return;
+        }
       }
       try {
         const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(formTypeName)}&limit=5`);
@@ -1030,9 +1082,9 @@
             toast(`Form type "${formTypeName}" not found`, 'error');
             return;
         }
-        const returnUrl = encodeURIComponent(window.location.pathname);
+        const returnUrl = encodeURIComponent(`/forms/${FORM_TYPE_ID}/${recordIdToUse}`);
         const stageId = {% if record and record.stage_id %}"{{ record.stage_id }}"{% elif stage %}"{{ stage.stage_id }}"{% else %}null{% endif %};
-        let newUrl = `/forms/${ft.form_type_id}/new?return_to=${returnUrl}`;
+        let newUrl = `/forms/${ft.form_type_id}/new?return_to=${returnUrl}&parent_record_id=${recordIdToUse}&parent_form_type_id=${FORM_TYPE_ID}&parent_field_name=${fieldName}`;
         if (stageId) {
           newUrl += `&stage_id=${stageId}`;
         }
@@ -1042,10 +1094,66 @@
       }
     }
 
+    async function navigateToLinkedRecord(formTypeName, docname) {
+      if (!docname) return;
+      try {
+        const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(formTypeName)}&limit=5`);
+        const ft = fts.find(f => f.form_name === formTypeName);
+        if (!ft) {
+            toast(`Form type "${formTypeName}" not found`, 'error');
+            return;
+        }
+        const res = await apiFetch(`${API}/form-records?form_type_id=${encodeURIComponent(ft.form_type_id)}&limit=200`);
+        const records = res.items || [];
+        const match = records.find(r => r.docname === docname);
+        if (match) {
+            window.location.href = `/forms/${ft.form_type_id}/${match.record_id}`;
+        } else {
+            toast(`Linked record "${docname}" not found`, 'error');
+        }
+      } catch (e) {
+        toast('Failed to navigate to linked record', 'error');
+      }
+    }
+
     // ── render form from schema ──────────────────────────────────────────────────
     const LAYOUT = new Set(['Section Break','Column Break','Tab Break','Heading','HTML','Field Group','Field Group End']);
 
     function buildInput(f, val){
+      if (f.fieldname === 'parent_record_id') {
+          const cur = val!==undefined && val!==null ? val : (f.default||'');
+          return `<div style="position:relative; width:100%;">
+            <input type="text" class="form-control" value="${esc(cur)}" readonly style="padding-right:32px; pointer-events:none; opacity:0.85;">
+            <a href="/forms/${parentFormTypeId}/${parentRecordId}" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); display:flex; align-items:center; color:var(--primary); cursor:pointer;" title="Open Parent Record">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </a>
+          </div>`;
+      }
+
+      if (f.fieldtype === 'Link') {
+          const curVal = esc(val !== undefined && val !== null ? val : (f.default || ''));
+          if (curVal) {
+            const arrowBtnId = `link-arrow-${f.fieldname}`;
+            return `<div style="display:flex;align-items:center;width:100%;gap:8px;">
+              <input type="text" class="form-control" style="pointer-events:none;opacity:0.85;" value="${curVal}" readonly>
+              <button type="button" class="btn btn-ghost btn-xs" style="padding:6px 10px;color:var(--primary);border:1px solid var(--border);border-radius:4px;background:var(--bg);margin:0;display:flex;align-items:center;justify-content:center;" onclick="navigateToLinkedRecord('${f.options}', '${curVal}')" id="${arrowBtnId}" title="Open ${esc(f.options)}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>`;
+          } else {
+            if (IS_READONLY) {
+              return `<div class="form-control" style="background:var(--bg);min-height:34px;padding-top:7px">—</div>`;
+            }
+            const arrowBtnId = `link-arrow-${f.fieldname}`;
+            return `<div style="display:flex;align-items:center;width:100%;gap:8px;">
+              <input type="text" class="form-control" style="pointer-events:none;opacity:0.65" placeholder="Not Linked" readonly>
+              <button type="button" class="btn btn-ghost btn-xs" style="padding:6px 10px;color:var(--primary);border:1px solid var(--border);border-radius:4px;background:var(--bg);margin:0;display:flex;align-items:center;justify-content:center;" onclick="addNewLinkedRecord('${f.options}', '${f.fieldname}')" id="${arrowBtnId}" title="Create a new ${esc(f.options)}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>`;
+          }
+      }
+
       if(IS_READONLY) {
         if ((f.fieldtype === 'Attach' || f.fieldtype === 'Attach Image') && val) {
           const files = getAttachFiles(val);
@@ -1238,28 +1346,8 @@
         }
         case 'Dynamic Link': case 'Table': case 'Table MultiSelect':
           return ''; // handled separately
-        case 'Link': {
-          const selId = `link-sel-${f.fieldname}`;
-          const curVal = esc(cur);
-          const roAttr = f.read_only ? 'disabled' : '';
-          const reqAttr = f.required ? 'required' : '';
-          // Render a placeholder select; populate asynchronously
-          setTimeout(() => loadLinkOptions(f.fieldname, f.options, cur), 0);
-          
-          let addBtnHtml = '';
-          if (!IS_READONLY && f.options && f.options !== 'Users' && f.options !== 'Empty Table') {
-            const addBtnId = `link-add-${f.fieldname}`;
-            addBtnHtml = `<button type="button" class="btn btn-ghost btn-xs" style="padding:6px 10px;font-size:12px;font-weight:600;color:var(--primary);border:1px dashed var(--border);border-left:none;border-radius:0 4px 4px 0;background:var(--bg);margin:0" onclick="addNewLinkedRecord('${f.options}')" id="${addBtnId}" title="Create a new ${esc(f.options)}">+ New</button>`;
-          }
-
-          return `<div style="display:flex;align-items:stretch;width:100%">
-            <select id="${selId}" class="form-control" style="${addBtnHtml ? 'border-radius:4px 0 0 4px' : ''}" onchange="setVal('${f.fieldname}',this.value)" ${roAttr} ${reqAttr}>
-              <option value="">⏳ Loading…</option>
-              ${cur ? `<option value="${curVal}" selected>${curVal}</option>` : ''}
-            </select>
-            ${addBtnHtml}
-          </div>`;
-        }
+        case 'Link':
+          return ''; // Intercepted at start of buildInput
         default:
           return `<input type="text" class="form-control" value="${esc(cur)}" placeholder="${ph}" oninput="setVal('${f.fieldname}',this.value)" ${ro} ${req}>`;
       }
@@ -1479,7 +1567,7 @@
         }
 
         // 3. Read Only (Read Only Depends On)
-        const isReadOnly = IS_READONLY || f.read_only || (f.read_only_depends_on && evalExpr(f.read_only_depends_on, docContext));
+        const isReadOnly = IS_READONLY || f.read_only || f.fieldtype === 'Link' || (f.read_only_depends_on && evalExpr(f.read_only_depends_on, docContext));
         if (inputEl) {
           if (isReadOnly) {
             inputEl.setAttribute('readonly', 'true');
@@ -1708,7 +1796,53 @@
       return false;
     }
 
-    function openPrintPreview() {
+    const _linkedRecordsCache = {};
+
+    async function prefetchLinkedRecords() {
+      const fields = SCHEMA.fields || [];
+      const linkFields = fields.filter(f => f.fieldtype === 'Link' && formData[f.fieldname]);
+      if (linkFields.length === 0) return;
+
+      const prevDoc = document.getElementById('print-preview-document');
+      if (prevDoc) {
+        prevDoc.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:var(--text-muted);">
+          <span class="spinner" style="margin-bottom: 12px;"></span>
+          <span>Loading linked records...</span>
+        </div>`;
+      }
+
+      for (const f of linkFields) {
+        const docname = formData[f.fieldname];
+        if (_linkedRecordsCache[f.fieldname] && _linkedRecordsCache[f.fieldname].docname === docname) {
+          continue; // Already cached
+        }
+        try {
+          // 1. Resolve form type name → ID
+          const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(f.options)}&limit=5`);
+          const ft = fts.find(item => item.form_name === f.options);
+          if (!ft) continue;
+
+          // 2. Fetch records for that form type to resolve docname → record_id
+          const res = await apiFetch(`${API}/form-records?form_type_id=${encodeURIComponent(ft.form_type_id)}&limit=200`);
+          const records = res.items || [];
+          const match = records.find(r => r.docname === docname);
+          if (!match) continue;
+
+          // 3. Fetch the full child record data
+          const childRecord = await apiFetch(`${API}/form-records/${match.record_id}`);
+          _linkedRecordsCache[f.fieldname] = {
+            docname: docname,
+            formTypeName: f.options,
+            schema: ft.schema_data || ft.schema_reference,
+            record: childRecord
+          };
+        } catch (e) {
+          console.error(`Failed to fetch linked record for ${f.fieldname}:`, e);
+        }
+      }
+    }
+
+    async function openPrintPreview() {
       const modal = document.getElementById('print-preview-modal');
       const checkboxContainer = document.getElementById('print-field-checkboxes');
       if (!modal || !checkboxContainer) return;
@@ -1809,10 +1943,12 @@
         checkboxContainer.appendChild(div);
       });
       
-      renderPrintDocument();
       modal.style.display = 'flex';
       modal.offsetHeight; // Force reflow
       modal.classList.add('active');
+
+      await prefetchLinkedRecords();
+      renderPrintDocument();
     }
 
     function closePrintPreview() {
@@ -1857,6 +1993,9 @@
       const docContainer = document.getElementById('print-preview-document');
       if (!docContainer) return;
       
+      const annexureImages = [];
+      const includeAnnexure = document.getElementById('print-opt-annexure')?.checked ?? true;
+      
       let html = '';
       
       html += `
@@ -1871,7 +2010,143 @@
           </div>
         </div>
       `;
-      
+
+      // Helper function to render any field
+      function renderSingleField(ff, val, sourceLabel) {
+        let fieldHtml = `<div class="print-field-row" style="margin-bottom: 16px; width: 100%;">`;
+        fieldHtml += `<div class="print-field-label" style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">${esc(ff.label)}</div>`;
+
+        if (['Table', 'Table MultiSelect'].includes(ff.fieldtype)) {
+          const rows = Array.isArray(val) ? val : [];
+          let cols = [];
+          if (ff.options === 'Empty Table') {
+            const colHeaders = (ff.empty_table_columns || '').split('\n').map(c => c.trim()).filter(Boolean);
+            cols = [{label: 'Sl. No.', fieldname: '_sl_no'}];
+            colHeaders.forEach((header, idx) => {
+              cols.push({ label: header, fieldname: 'col_' + idx });
+            });
+          } else if (ff.options === 'Users') {
+            cols = [
+              {label: 'Sl. No.', fieldname: '_sl_no'},
+              {label: 'User', fieldname: 'user'}
+            ];
+          } else {
+            cols = (ff._childCols || _childColsCache[ff.options] || []);
+          }
+          
+          // Filter columns based on checkbox settings
+          cols = cols.filter(c => {
+            if (c.fieldname === '_sl_no') return true;
+            const cb = document.getElementById(`print-cb-${ff.fieldname}-${c.fieldname}`);
+            return cb ? cb.checked : true;
+          });
+          
+          if (rows.length === 0) {
+            fieldHtml += `<div class="print-field-value" style="font-size: 13px; color: #64748b; font-style: italic;">No records</div>`;
+          } else {
+            fieldHtml += `<table class="print-table" style="width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; margin-bottom: 16px;">`;
+            fieldHtml += `<thead><tr>`;
+            cols.forEach(c => {
+              let lbl = esc(c.label || c.fieldname);
+              if (c.required) lbl += `<span style="color:#ef4444;margin-left:2px">*</span>`;
+              const isSl = c.fieldname === '_sl_no';
+              const thStyle = isSl 
+                ? 'border: 1px solid #cbd5e1; padding: 6px 4px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; color: #475569; width: 55px; line-height: 1.4; white-space: normal; word-break: break-word; overflow-wrap: anywhere;'
+                : 'border: 1px solid #cbd5e1; padding: 6px 8px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; color: #475569; white-space: normal; word-break: break-word; overflow-wrap: anywhere; line-height: 1.4;';
+              fieldHtml += `<th style="${thStyle}">${lbl}</th>`;
+            });
+            fieldHtml += `</tr></thead>`;
+            fieldHtml += `<tbody>`;
+            rows.forEach((row, ri) => {
+              fieldHtml += `<tr>`;
+              cols.forEach(c => {
+                if (c.fieldname === '_sl_no') {
+                  fieldHtml += `<td style="border: 1px solid #cbd5e1; padding: 6px 4px; font-size: 12px; color: #475569; text-align: center; width: 55px; white-space: normal; word-break: break-word; overflow-wrap: anywhere;">${ri + 1}</td>`;
+                } else {
+                  let cellVal = row[c.fieldname];
+                  if (cellVal === undefined || cellVal === null) {
+                    cellVal = '';
+                  }
+                  const isAttach = ['Attach', 'Attach Image', 'Signature'].includes(c.fieldtype) ||
+                    (typeof cellVal === 'string' && cellVal.includes('/') && !cellVal.includes(' ') && cellVal.split('/').length > 2);
+                  if (isAttach && cellVal) {
+                    const files = getAttachFiles(cellVal);
+                    cellVal = files.map(fileObj => String(fileObj).split('/').pop()).join(', ');
+                  }
+                  fieldHtml += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #0f172a; word-break: break-word; overflow-wrap: anywhere;">${esc(cellVal)}</td>`;
+                }
+              });
+              fieldHtml += `</tr>`;
+            });
+            fieldHtml += `</tbody></table>`;
+          }
+        } else if (['Attach', 'Attach Image'].includes(ff.fieldtype)) {
+          const files = getAttachFiles(val);
+          if (files.length === 0) {
+            fieldHtml += `<div class="print-field-value" style="font-size: 13px; color: #64748b; font-style: italic;">No attachment</div>`;
+          } else {
+            files.forEach(fileObj => {
+              const filename = String(fileObj).split('/').pop();
+              fieldHtml += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-bottom: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                ${esc(filename)}
+              </div>`;
+              
+              const ext = filename.split('.').pop().toLowerCase();
+              const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+              if (isImage) {
+                const imgUrl = attachUrl(fileObj, ff.fieldname, 0);
+                annexureImages.push({
+                  label: sourceLabel ? `${sourceLabel} > ${ff.label}` : ff.label,
+                  name: filename,
+                  url: imgUrl
+                });
+              }
+            });
+          }
+        } else if (ff.fieldtype === 'Link') {
+          const cache = _linkedRecordsCache[ff.fieldname];
+          if (cache && cache.record) {
+            const childSchema = cache.schema || { fields: [] };
+            const childRecord = cache.record;
+            const childData = childRecord.data || {};
+            const childFormTypeName = cache.formTypeName;
+            const childDocname = cache.docname;
+
+            fieldHtml += `<div class="print-imported-record" style="margin-left: 20px; border-left: 3px solid #cbd5e1; padding-left: 16px; margin-top: 8px; margin-bottom: 16px; width: calc(100% - 20px);">
+              <div style="font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 12px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                Linked Record: ${esc(childFormTypeName)} (${esc(childDocname)})
+              </div>`;
+
+            const childFields = childSchema.fields || [];
+            childFields.forEach(cf => {
+              if (['Section Break', 'Column Break', 'Tab Break', 'Heading', 'HTML'].includes(cf.fieldtype)) return;
+              const cfVal = childData[cf.fieldname];
+              fieldHtml += renderSingleField(cf, cfVal, childFormTypeName);
+            });
+
+            fieldHtml += `</div>`;
+          } else {
+            const displayVal = val !== undefined && val !== null && val !== '' ? val : '—';
+            fieldHtml += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${esc(displayVal)}</div>`;
+          }
+        } else if (ff.fieldtype === 'Check') {
+          const checkVal = val ? 'Yes' : 'No';
+          fieldHtml += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${checkVal}</div>`;
+        } else {
+          const displayVal = val !== undefined && val !== null && val !== '' ? val : '—';
+          if (['Long Text', 'Text Editor', 'Code', 'JSON'].includes(ff.fieldtype)) {
+            fieldHtml += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; white-space: pre-wrap; background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere;">${esc(displayVal)}</div>`;
+          } else {
+            fieldHtml += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${esc(displayVal)}</div>`;
+          }
+        }
+
+        fieldHtml += `</div>`;
+        return fieldHtml;
+      }
+
       let i = 0;
       while (i < fields.length) {
         const f = fields[i];
@@ -1907,105 +2182,7 @@
             
             fieldsToPrint.forEach(ff => {
               let val = formData[ff.fieldname];
-              html += `<div class="print-field-row" style="margin-bottom: 16px; width: 100%;">`;
-              html += `<div class="print-field-label" style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 4px;">${esc(ff.label)}</div>`;
-              
-              if (['Table', 'Table MultiSelect'].includes(ff.fieldtype)) {
-                const rows = Array.isArray(val) ? val : [];
-                let cols = [];
-                if (ff.options === 'Empty Table') {
-                  const colHeaders = (ff.empty_table_columns || '').split('\n').map(c => c.trim()).filter(Boolean);
-                  cols = [{label: 'Sl. No.', fieldname: '_sl_no'}];
-                  colHeaders.forEach((header, idx) => {
-                    cols.push({ label: header, fieldname: 'col_' + idx });
-                  });
-                } else if (ff.options === 'Users') {
-                  cols = [
-                    {label: 'Sl. No.', fieldname: '_sl_no'},
-                    {label: 'User', fieldname: 'user'}
-                  ];
-                } else {
-                  cols = (ff._childCols || _childColsCache[ff.options] || []);
-                }
-                
-                // Filter columns based on checkbox settings
-                cols = cols.filter(c => {
-                  if (c.fieldname === '_sl_no') return true;
-                  const cb = document.getElementById(`print-cb-${ff.fieldname}-${c.fieldname}`);
-                  return cb ? cb.checked : true;
-                });
-                
-                if (rows.length === 0) {
-                  html += `<div class="print-field-value" style="font-size: 13px; color: #64748b; font-style: italic;">No records</div>`;
-                } else {
-                  html += `<table class="print-table" style="width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; margin-bottom: 16px;">`;
-                  html += `<thead><tr>`;
-                  cols.forEach(c => {
-                    let lbl = esc(c.label || c.fieldname);
-                    if (c.required) lbl += `<span style="color:#ef4444;margin-left:2px">*</span>`;
-                    const isSl = c.fieldname === '_sl_no';
-                    const thStyle = isSl 
-                      ? 'border: 1px solid #cbd5e1; padding: 6px 4px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: center; text-transform: uppercase; color: #475569; width: 55px; line-height: 1.4; white-space: normal; word-break: break-word; overflow-wrap: anywhere;'
-                      : 'border: 1px solid #cbd5e1; padding: 6px 8px; background: #f8fafc; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; color: #475569; white-space: normal; word-break: break-word; overflow-wrap: anywhere; line-height: 1.4;';
-                    html += `<th style="${thStyle}">${lbl}</th>`;
-                  });
-                  html += `</tr></thead>`;
-                  html += `<tbody>`;
-                  rows.forEach((row, ri) => {
-                    html += `<tr>`;
-                    cols.forEach(c => {
-                      if (c.fieldname === '_sl_no') {
-                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 4px; font-size: 12px; color: #475569; text-align: center; width: 55px; white-space: normal; word-break: break-word; overflow-wrap: anywhere;">${ri + 1}</td>`;
-                      } else {
-                        let cellVal = row[c.fieldname];
-                        if (cellVal === undefined || cellVal === null) {
-                          cellVal = '';
-                        }
-                        const isAttach = ['Attach', 'Attach Image', 'Signature'].includes(c.fieldtype) ||
-                          (typeof cellVal === 'string' && cellVal.includes('/') && !cellVal.includes(' ') && cellVal.split('/').length > 2);
-                        if (isAttach && cellVal) {
-                          const files = getAttachFiles(cellVal);
-                          cellVal = files.map(fileObj => String(fileObj).split('/').pop()).join(', ');
-                        }
-                        html += `<td style="border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 12px; color: #0f172a; word-break: break-word; overflow-wrap: anywhere;">${esc(cellVal)}</td>`;
-                      }
-                    });
-                    html += `</tr>`;
-                  });
-                  html += `</tbody></table>`;
-                }
-              } else if (['Attach', 'Attach Image'].includes(ff.fieldtype)) {
-                const files = getAttachFiles(val);
-                if (files.length === 0) {
-                  html += `<div class="print-field-value" style="font-size: 13px; color: #64748b; font-style: italic;">No attachment</div>`;
-                } else {
-                  files.forEach(fileObj => {
-                    const filename = String(fileObj).split('/').pop();
-                    html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-bottom: 6px;">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                      ${esc(filename)}
-                    </div>`;
-                    
-                    const ext = filename.split('.').pop().toLowerCase();
-                    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
-                    if (isImage) {
-                      const imgUrl = attachUrl(fileObj, ff.fieldname, 0);
-                      html += `<div style="margin-top: 6px; margin-bottom: 12px;"><img src="${imgUrl}" class="print-image-preview"></div>`;
-                    }
-                  });
-                }
-              } else if (ff.fieldtype === 'Check') {
-                const checkVal = val ? 'Yes' : 'No';
-                html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${checkVal}</div>`;
-              } else {
-                const displayVal = val !== undefined && val !== null && val !== '' ? val : '—';
-                if (['Long Text', 'Text Editor', 'Code', 'JSON'].includes(ff.fieldtype)) {
-                  html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; white-space: pre-wrap; background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 4px; margin-top: 4px; word-break: break-word; overflow-wrap: anywhere;">${esc(displayVal)}</div>`;
-                } else {
-                  html += `<div class="print-field-value" style="font-size: 13px; color: #0f172a; word-break: break-word;">${esc(displayVal)}</div>`;
-                }
-              }
-              html += `</div>`;
+              html += renderSingleField(ff, val, "");
             });
             
             html += `</div>`;
@@ -2013,6 +2190,28 @@
         } else {
           i++;
         }
+      }
+
+      if (includeAnnexure && annexureImages.length > 0) {
+        html += `
+          <div class="print-annexure-section" style="margin-top: 40px; border-top: 2px dashed #cbd5e1; padding-top: 24px; page-break-before: always;">
+            <h3 style="font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 16px; text-transform: uppercase; display: flex; align-items: center; gap: 8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+              Annexure: Image Attachments
+            </h3>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 24px;">
+              ${annexureImages.map((img, idx) => `
+                <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; background: #f8fafc; page-break-inside: avoid;">
+                  <div style="font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 6px;">[Image #${idx + 1}] ${esc(img.label)}</div>
+                  <div style="font-size: 13px; color: #64748b; margin-bottom: 12px;">Name: ${esc(img.name)}</div>
+                  <div style="text-align: center;">
+                    <img src="${img.url}" style="max-width: 100%; max-height: 500px; border-radius: 6px; border: 1px solid #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
       }
       
       docContainer.innerHTML = html;
@@ -2286,7 +2485,7 @@
       renderForm();
     }
 
-    async function saveRecord() {
+    async function saveRecord(doRedirect = true) {
       const btn = document.getElementById('save-btn');
       btn.disabled = true;
       const saveSvg = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save';
@@ -2393,7 +2592,10 @@
             body:{
               form_type_id:FORM_TYPE_ID,
               stage_id:stageIdToSend,
-              data:dataToSave
+              data:dataToSave,
+              parent_record_id: parentRecordId || null,
+              parent_form_type_id: parentFormTypeId || null,
+              parent_field_name: parentFieldName || null
             }
           });
           currentRecordId = rec.record_id;
@@ -2447,21 +2649,25 @@
 
         // If record was just created, redirect to its permanent URL
         if (!RECORD_ID) {
-          if (typeof collapseSidebar === 'function') {
-            collapseSidebar();
+          RECORD_ID = currentRecordId;
+          if (doRedirect) {
+            if (typeof collapseSidebar === 'function') {
+              collapseSidebar();
+            }
+            const urlParams = new URLSearchParams(window.location.search);
+            const returnTo = urlParams.get('return_to');
+            if (returnTo) {
+               window.location.replace(returnTo);
+               return;
+            }
+            window.location.replace(`/forms/${FORM_TYPE_ID}/${currentRecordId}`);
+            return;
           }
-          const urlParams = new URLSearchParams(window.location.search);
-          const returnTo = urlParams.get('return_to');
-          if (returnTo) {
-             window.location.replace(returnTo);
-             return;
-          }
-          window.location.replace(`/forms/${FORM_TYPE_ID}/${currentRecordId}`);
-          return;
         }
 
         // Re-render to refresh attachment previews with updated MinIO paths
         renderForm();
+        return currentRecordId;
       } catch(e) { toast(e.message, 'error'); }
       finally { btn.disabled = false; btn.innerHTML = saveSvg; }
     }
