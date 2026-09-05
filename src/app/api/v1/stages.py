@@ -7,6 +7,7 @@ from src.app.core.auth import get_current_user, get_current_user_optional
 from src.app.database import get_db
 from src.app.models.user import User
 from src.app.models.stage import StageFile
+from src.app.schemas.permission import EffectiveRoleSetResponse, StageRoleSetAssign
 from src.app.schemas.stage import (
     StageCreate,
     StageMoveRequest,
@@ -488,3 +489,34 @@ async def get_stage_permissions(
             "form_types": form_perms
         }
     }
+
+
+@router.put("/{stage_id}/role-set")
+async def set_stage_role_set(
+    stage_id: str,
+    data: StageRoleSetAssign,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set (or clear, with role_set_id=None) this stage's own governing
+    RoleSet. Clearing it falls back to inheriting from the nearest
+    ancestor stage that has one."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    has_perm = await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_manage_permissions")
+    if not has_perm:
+        raise HTTPException(status_code=403, detail="Permission denied to manage this stage's RoleSet.")
+
+    try:
+        return await perm_service.set_stage_role_set(stage_id, data.role_set_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{stage_id}/effective-roleset", response_model=EffectiveRoleSetResponse)
+async def get_effective_role_set(stage_id: str, db: AsyncSession = Depends(get_db)):
+    """Resolve the RoleSet actually governing this stage — its own if set,
+    else the nearest ancestor's, else unrestricted."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    return await perm_service.get_effective_role_set(stage_id)

@@ -40,6 +40,7 @@
                 <tr>
                     <th>Role Name</th>
                     <th>Stage Permissions</th>
+                    <th>Category Permissions</th>
                     <th>Form Type Permissions</th>
                     <th>Users</th>
                     <th style="width: 200px">Actions</th>
@@ -60,6 +61,117 @@
                 </tr>
             </tbody>
         </table>
+    </div>
+</div>
+
+<!-- Role Sets -->
+<div class="page-header" style="margin-top: 32px">
+    <div>
+        <div class="page-title" style="font-size: 18px">Role Sets</div>
+        <div class="page-subtitle">
+            Reusable bundles of roles a stage can point to as its
+            governing set — restricting which roles may be assigned there.
+            A stage with no Role Set of its own inherits its nearest
+            ancestor's; with none anywhere up the chain, any role is
+            assignable (unrestricted).
+        </div>
+    </div>
+    <div class="page-actions">
+        <div style="display: flex; gap: 8px; align-items: flex-start">
+            <input
+                type="text"
+                id="newRoleSetName"
+                class="form-control"
+                placeholder="Role set name (e.g., field_ops)"
+                style="width: 200px"
+            />
+            <select id="newRoleSetRoles" class="form-control" multiple style="width: 200px; height: 74px"></select>
+            <button class="btn btn-primary" onclick="createRoleSet()">
+                + Create Role Set
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">All Role Sets</div>
+        <span class="badge badge-gray" id="roleSetCount">Loading...</span>
+    </div>
+    <div class="table-wrap">
+        <table id="role-sets-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Member Roles</th>
+                    <th style="width: 160px">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="role-sets-table-body">
+                <tr>
+                    <td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted)">
+                        Loading role sets...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Edit Role Set Modal -->
+<div class="modal-overlay" id="edit-role-set-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Edit Role Set</span>
+            <button class="btn btn-ghost btn-icon" onclick="closeEditRoleSetModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editRoleSetId" />
+            <div class="form-group">
+                <label class="form-label required">Name</label>
+                <input type="text" class="form-control" id="editRoleSetName" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <input type="text" class="form-control" id="editRoleSetDescription" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Member Roles</label>
+                <select id="editRoleSetRoles" class="form-control" multiple style="height: 120px"></select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeEditRoleSetModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveEditRoleSet()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Role Set Modal -->
+<div class="modal-overlay" id="delete-role-set-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Delete Role Set</span>
+            <button class="btn btn-ghost btn-icon" onclick="closeDeleteRoleSetModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="deleteRoleSetId" />
+            <p>
+                Are you sure you want to delete the role set
+                <strong id="deleteRoleSetNameDisplay"></strong>?
+            </p>
+            <p style="color: var(--text-muted); font-size: 13px">
+                Any stage governed by this role set falls back to
+                inheriting from its nearest ancestor's role set (or becomes
+                unrestricted if none exists). Existing role assignments are
+                not affected.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeDeleteRoleSetModal()">Cancel</button>
+            <button class="btn btn-danger" onclick="confirmDeleteRoleSet()">Delete</button>
+        </div>
     </div>
 </div>
 
@@ -193,6 +305,9 @@
       </td>
       <td>
         <span class="badge badge-blue">${role.stage_permissions_count} stage${role.stage_permissions_count !== 1 ? "s" : ""}</span>
+      </td>
+      <td>
+        <span class="badge badge-purple">${role.category_permissions_count} categor${role.category_permissions_count !== 1 ? "ies" : "y"}</span>
       </td>
       <td>
         <span class="badge badge-green">${role.form_type_permissions_count} form${role.form_type_permissions_count !== 1 ? "s" : ""}</span>
@@ -353,5 +468,181 @@
                 createRole();
             }
         });
+
+    // ------------------------------------------------------------------
+    // Role Sets
+    // ------------------------------------------------------------------
+    let roleSetsData = [];
+
+    document.addEventListener("DOMContentLoaded", function () {
+        loadRoleSets();
+    });
+
+    function populateRoleMultiSelect(select) {
+        select.innerHTML = rolesData
+            .map((r) => `<option value="${r.role_name}">${r.role_name}</option>`)
+            .join("");
+    }
+
+    async function loadRoleSets() {
+        try {
+            // rolesData is populated by loadRoles(); wait for it if needed.
+            if (!rolesData || rolesData.length === 0) {
+                await loadRoles();
+            }
+            populateRoleMultiSelect(document.getElementById("newRoleSetRoles"));
+
+            roleSetsData = await apiFetch("/api/v1/permissions/role-sets");
+            document.getElementById("roleSetCount").textContent =
+                `${roleSetsData.length} role set${roleSetsData.length !== 1 ? "s" : ""}`;
+            renderRoleSets();
+        } catch (error) {
+            console.error("Error loading role sets:", error);
+            toast("Failed to load role sets", "error");
+            document.getElementById("role-sets-table-body").innerHTML = `
+      <tr>
+        <td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted)">
+          Failed to load role sets. Please try again.
+        </td>
+      </tr>
+    `;
+        }
+    }
+
+    function renderRoleSets() {
+        const tbody = document.getElementById("role-sets-table-body");
+
+        if (!roleSetsData || roleSetsData.length === 0) {
+            tbody.innerHTML = `
+      <tr>
+        <td colspan="4" style="text-align:center;padding:32px;color:var(--text-muted)">
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px">No role sets created yet</div>
+          <div style="font-size:13px">Create one above to govern which roles are valid at a stage</div>
+        </td>
+      </tr>
+    `;
+            return;
+        }
+
+        tbody.innerHTML = roleSetsData
+            .map(
+                (rs) => `
+    <tr>
+      <td><span style="font-weight:600">${rs.name}</span></td>
+      <td>${rs.description || '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>${rs.role_names.map((n) => `<span class="badge badge-blue">${n}</span>`).join(" ") || '<span style="color:var(--text-muted)">none</span>'}</td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn btn-xs btn-secondary" onclick="openEditRoleSetModal('${rs.role_set_id}')">Edit</button>
+          <button class="btn btn-xs btn-danger" onclick="openDeleteRoleSetModal('${rs.role_set_id}')">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `,
+            )
+            .join("");
+    }
+
+    async function createRoleSet() {
+        const nameInput = document.getElementById("newRoleSetName");
+        const name = nameInput.value.trim();
+        const roleNames = [...document.getElementById("newRoleSetRoles").selectedOptions].map((o) => o.value);
+
+        if (!name) {
+            toast("Please enter a role set name", "error");
+            return;
+        }
+
+        try {
+            await apiFetch("/api/v1/permissions/role-sets", {
+                method: "POST",
+                body: { name, description: null, role_names: roleNames },
+            });
+
+            nameInput.value = "";
+            document.getElementById("newRoleSetRoles").selectedIndex = -1;
+            toast(`Role set "${name}" created successfully!`, "success");
+            loadRoleSets();
+        } catch (error) {
+            console.error("Error creating role set:", error);
+            toast(error.message || "Failed to create role set", "error");
+        }
+    }
+
+    function openEditRoleSetModal(roleSetId) {
+        const rs = roleSetsData.find((r) => r.role_set_id === roleSetId);
+        if (!rs) return;
+        document.getElementById("editRoleSetId").value = rs.role_set_id;
+        document.getElementById("editRoleSetName").value = rs.name;
+        document.getElementById("editRoleSetDescription").value = rs.description || "";
+        const roleSelect = document.getElementById("editRoleSetRoles");
+        populateRoleMultiSelect(roleSelect);
+        [...roleSelect.options].forEach((o) => {
+            o.selected = rs.role_names.includes(o.value);
+        });
+        document.getElementById("edit-role-set-modal").classList.add("open");
+    }
+
+    function closeEditRoleSetModal() {
+        document.getElementById("edit-role-set-modal").classList.remove("open");
+    }
+
+    async function saveEditRoleSet() {
+        const roleSetId = document.getElementById("editRoleSetId").value;
+        const name = document.getElementById("editRoleSetName").value.trim();
+        const description = document.getElementById("editRoleSetDescription").value.trim() || null;
+        const roleNames = [...document.getElementById("editRoleSetRoles").selectedOptions].map((o) => o.value);
+
+        if (!name) {
+            toast("Please enter a role set name", "error");
+            return;
+        }
+
+        try {
+            await apiFetch(`/api/v1/permissions/role-sets/${encodeURIComponent(roleSetId)}`, {
+                method: "PUT",
+                body: { name, description, role_names: roleNames },
+            });
+
+            toast(`Role set "${name}" updated successfully`, "success");
+            closeEditRoleSetModal();
+            loadRoleSets();
+        } catch (error) {
+            console.error("Error updating role set:", error);
+            toast(error.message || "Failed to update role set", "error");
+        }
+    }
+
+    function openDeleteRoleSetModal(roleSetId) {
+        const rs = roleSetsData.find((r) => r.role_set_id === roleSetId);
+        if (!rs) return;
+        document.getElementById("deleteRoleSetId").value = roleSetId;
+        document.getElementById("deleteRoleSetNameDisplay").textContent = rs.name;
+        document.getElementById("delete-role-set-modal").classList.add("open");
+    }
+
+    function closeDeleteRoleSetModal() {
+        document.getElementById("delete-role-set-modal").classList.remove("open");
+    }
+
+    async function confirmDeleteRoleSet() {
+        const roleSetId = document.getElementById("deleteRoleSetId").value;
+
+        try {
+            const result = await apiFetch(`/api/v1/permissions/role-sets/${encodeURIComponent(roleSetId)}`, {
+                method: "DELETE",
+            });
+
+            toast(
+                `Role set deleted. ${result.stages_affected} stage${result.stages_affected !== 1 ? "s" : ""} fell back to inherited/unrestricted governance.`,
+                "success",
+            );
+            closeDeleteRoleSetModal();
+            loadRoleSets();
+        } catch (error) {
+            console.error("Error deleting role set:", error);
+            toast(error.message || "Failed to delete role set", "error");
+        }
+    }
 </script>
 {% endblock %}

@@ -72,6 +72,13 @@ content %}
         </button>
         <button
             class="tab-btn"
+            data-tab="categories"
+            onclick="switchTab('categories')"
+        >
+            Category Permissions
+        </button>
+        <button
+            class="tab-btn"
             data-tab="formtypes"
             onclick="switchTab('formtypes')"
         >
@@ -100,6 +107,32 @@ content %}
                     "
                 >
                     Select a role to view stage permissions
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Permissions Tab -->
+    <div id="categories-tab" class="tab-content" style="display: none">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Category Permissions</div>
+                <button
+                    class="btn btn-sm btn-secondary"
+                    onclick="showAddCategory()"
+                >
+                    + Add Permission
+                </button>
+            </div>
+            <div id="categories-content">
+                <p
+                    style="
+                        padding: 20px;
+                        text-align: center;
+                        color: var(--text-muted);
+                    "
+                >
+                    Select a role to view category permissions
                 </p>
             </div>
         </div>
@@ -136,6 +169,7 @@ content %}
     let currentRole = '';
     let stages = [];
     let formTypes = [];
+    let groups = [];
 
     // Load stages and form types from template
     try {
@@ -181,12 +215,15 @@ content %}
     }
 
     async function loadExistingPermissions() {
-      // Load stages and form types for the add permission dialogs
+      // Load stages, form types, and groups for the add permission dialogs
       try {
-        stages = await apiFetch('/api/v1/stages?limit=500')
+        // /api/v1/stages caps limit at 100 (le=100) — do not raise this past 100.
+        stages = await apiFetch('/api/v1/stages?limit=100')
           .catch(() => stages);
         formTypes = await apiFetch('/api/v1/formtypes?limit=500')
           .catch(() => formTypes);
+        groups = await apiFetch('/api/v1/groups?limit=200')
+          .catch(() => groups);
       } catch (error) {
         console.error('Error loading resources:', error);
       }
@@ -227,7 +264,13 @@ content %}
       document.getElementById('permission-content').style.display = 'block';
 
       loadStagePermissions(roleName);
+      loadCategoryPermissions(roleName);
       loadFormTypePermissions(roleName);
+    }
+
+    // Categories are records in the groups table — used to populate the category picker
+    function distinctCategories() {
+      return groups.map(g => g.name).sort();
     }
 
     async function loadStagePermissions(roleName) {
@@ -271,6 +314,28 @@ content %}
       } catch (error) {
         console.error('Error loading form type permissions:', error);
         document.getElementById('formtypes-content').innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted)">Failed to load permissions</p>';
+      }
+    }
+
+    async function loadCategoryPermissions(roleName) {
+      try {
+        const locId = document.getElementById('locationSelect').value || '';
+        const deptId = document.getElementById('departmentSelect').value || '';
+        let url = `/api/v1/permissions/categories?role_name=${encodeURIComponent(roleName)}`;
+        if (locId) url += `&location_id=${encodeURIComponent(locId)}`;
+        if (deptId) url += `&department_id=${encodeURIComponent(deptId)}`;
+
+        const response = await apiFetch(url);
+        const catPerms = response.filter(p => {
+          const matchRole = p.role_name === roleName;
+          const matchLoc = (!locId && !p.location_id) || (p.location_id === locId);
+          const matchDept = (!deptId && !p.department_id) || (p.department_id === deptId);
+          return matchRole && matchLoc && matchDept;
+        });
+        renderCategoryPermissions(catPerms);
+      } catch (error) {
+        console.error('Error loading category permissions:', error);
+        document.getElementById('categories-content').innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted)">Failed to load permissions</p>';
       }
     }
 
@@ -354,6 +419,219 @@ content %}
 
       html += '</tbody></table>';
       container.innerHTML = html;
+    }
+
+    function renderCategoryPermissions(permissions) {
+      const container = document.getElementById('categories-content');
+
+      if (permissions.length === 0) {
+        container.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted)">No category permissions assigned. Click "+ Add Permission" to add one.</p>';
+        return;
+      }
+
+      let html = '<table class="table"><thead><tr><th>Project</th><th>Category</th><th>View</th><th>Create Records</th><th>Edit Form</th><th>Delete Form</th><th>Edit Records</th><th>Delete Records</th><th>Submit</th><th>Verify</th><th>Cancel</th><th>Amend</th><th>Manage</th><th>Actions</th></tr></thead><tbody>';
+
+      permissions.forEach(perm => {
+        const stage = stages.find(s => s.stage_id === perm.stage_id);
+        const stageName = stage ? stage.stage_name : perm.stage_id;
+        const key = `${perm.stage_id}::${perm.category}`;
+
+        html += `
+          <tr>
+            <td style="font-weight:600">${stageName}</td>
+            <td>${perm.category}</td>
+            <td><input type="checkbox" ${perm.can_view ? 'checked' : ''} data-type="view" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_create_records ? 'checked' : ''} data-type="create_records" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_edit ? 'checked' : ''} data-type="edit" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_delete ? 'checked' : ''} data-type="delete" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_edit_records ? 'checked' : ''} data-type="edit_records" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_delete_records ? 'checked' : ''} data-type="delete_records" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_submit ? 'checked' : ''} data-type="submit" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_verify ? 'checked' : ''} data-type="verify" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_cancel ? 'checked' : ''} data-type="cancel" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_amend ? 'checked' : ''} data-type="amend" data-key="${key}"></td>
+            <td><input type="checkbox" ${perm.can_manage_permissions ? 'checked' : ''} data-type="manage" data-key="${key}"></td>
+            <td>
+              <div class="d-flex gap-1">
+                <button class="btn btn-xs btn-primary" onclick="updateCategoryPermission('${perm.stage_id}', '${perm.category}')">Save</button>
+                <button class="btn btn-xs btn-danger" onclick="deleteCategoryPermission('${perm.stage_id}', '${perm.category}')">Revoke</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    async function updateCategoryPermission(stageId, category) {
+      const key = `${stageId}::${category}`;
+      const checkboxes = document.querySelectorAll(`#categories-content input[data-key="${key}"]`);
+      const locId = document.getElementById('locationSelect').value || null;
+      const deptId = document.getElementById('departmentSelect').value || null;
+
+      const permissionData = {
+        role_name: currentRole,
+        location_id: locId,
+        department_id: deptId,
+        can_view: false,
+        can_create_records: false,
+        can_edit: false,
+        can_delete: false,
+        can_edit_records: false,
+        can_delete_records: false,
+        can_submit: false,
+        can_verify: false,
+        can_cancel: false,
+        can_amend: false,
+        can_manage_permissions: false
+      };
+
+      checkboxes.forEach(cb => {
+        const type = cb.dataset.type;
+        const key = type === 'manage' ? 'can_manage_permissions' : `can_${type}`;
+        permissionData[key] = cb.checked;
+      });
+
+      try {
+        await apiFetch(`/api/v1/permissions/stages/${stageId}/categories/${encodeURIComponent(category)}`, {
+          method: 'POST',
+          body: permissionData
+        });
+        toast('Permission updated successfully', 'success');
+        loadCategoryPermissions(currentRole);
+      } catch (error) {
+        console.error('Error updating permission:', error);
+        toast(error.message || 'Failed to update permission', 'error');
+      }
+    }
+
+    async function deleteCategoryPermission(stageId, category) {
+      if (!confirm('Are you sure you want to revoke this permission?')) return;
+
+      const locId = document.getElementById('locationSelect').value || '';
+      const deptId = document.getElementById('departmentSelect').value || '';
+      let url = `/api/v1/permissions/stages/${stageId}/categories/${encodeURIComponent(category)}/roles/${encodeURIComponent(currentRole)}`;
+      let params = [];
+      if (locId) params.push(`location_id=${encodeURIComponent(locId)}`);
+      if (deptId) params.push(`department_id=${encodeURIComponent(deptId)}`);
+      if (params.length > 0) {
+        url += '?' + params.join('&');
+      }
+
+      try {
+        await apiFetch(url, {
+          method: 'DELETE'
+        });
+        toast('Permission revoked successfully', 'success');
+        loadCategoryPermissions(currentRole);
+      } catch (error) {
+        console.error('Error revoking permission:', error);
+        toast(error.message || 'Failed to revoke permission', 'error');
+      }
+    }
+
+    function showAddCategory() {
+      if (!currentRole) {
+        toast('Please select a role first', 'error');
+        return;
+      }
+
+      let stageOptions = '<option value="">-- Select a Project (Stage) --</option>';
+      stages.forEach(stage => {
+        stageOptions += `<option value="${stage.stage_id}">${stage.stage_path}</option>`;
+      });
+
+      let categoryOptions = '<option value="">-- Select a Category --</option>';
+      distinctCategories().forEach(cat => {
+        categoryOptions += `<option value="${cat}">${cat}</option>`;
+      });
+
+      const container = document.getElementById('categories-content');
+      window.previousCategoriesContent = container.innerHTML;
+
+      container.innerHTML = `
+        <div style="padding:20px">
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:8px;font-weight:600">Select Project (Stage):</label>
+            <select id="add-cat-stage-select" class="form-control">${stageOptions}</select>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:8px;font-weight:600">Select Category (Group):</label>
+            <select id="add-cat-category-select" class="form-control">${categoryOptions}</select>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;margin-bottom:8px;font-weight:600">Permissions:</label>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+              <label><input type="checkbox" id="add-cat-view" checked> View</label>
+              <label><input type="checkbox" id="add-cat-create-records"> Create Records</label>
+              <label><input type="checkbox" id="add-cat-edit"> Edit Form</label>
+              <label><input type="checkbox" id="add-cat-delete"> Delete Form</label>
+              <label><input type="checkbox" id="add-cat-edit-records"> Edit Records</label>
+              <label><input type="checkbox" id="add-cat-delete-records"> Delete Records</label>
+              <label><input type="checkbox" id="add-cat-submit"> Submit</label>
+              <label><input type="checkbox" id="add-cat-verify"> Verify</label>
+              <label><input type="checkbox" id="add-cat-cancel"> Cancel</label>
+              <label><input type="checkbox" id="add-cat-amend"> Amend</label>
+              <label><input type="checkbox" id="add-cat-manage"> Manage Perms</label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="addCategoryPermission()">Add Permission</button>
+            <button class="btn btn-secondary" onclick="cancelAddCategory()">Cancel</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function addCategoryPermission() {
+      const stageId = document.getElementById('add-cat-stage-select').value;
+      const category = document.getElementById('add-cat-category-select').value;
+      if (!stageId) {
+        toast('Please select a project (stage)', 'error');
+        return;
+      }
+      if (!category) {
+        toast('Please select a category', 'error');
+        return;
+      }
+
+      const locId = document.getElementById('locationSelect').value || null;
+      const deptId = document.getElementById('departmentSelect').value || null;
+
+      const permissionData = {
+        role_name: currentRole,
+        location_id: locId,
+        department_id: deptId,
+        can_view: document.getElementById('add-cat-view').checked,
+        can_create_records: document.getElementById('add-cat-create-records').checked,
+        can_edit: document.getElementById('add-cat-edit').checked,
+        can_delete: document.getElementById('add-cat-delete').checked,
+        can_edit_records: document.getElementById('add-cat-edit-records').checked,
+        can_delete_records: document.getElementById('add-cat-delete-records').checked,
+        can_submit: document.getElementById('add-cat-submit').checked,
+        can_verify: document.getElementById('add-cat-verify').checked,
+        can_cancel: document.getElementById('add-cat-cancel').checked,
+        can_amend: document.getElementById('add-cat-amend').checked,
+        can_manage_permissions: document.getElementById('add-cat-manage').checked
+      };
+
+      try {
+        await apiFetch(`/api/v1/permissions/stages/${stageId}/categories/${encodeURIComponent(category)}`, {
+          method: 'POST',
+          body: permissionData
+        });
+        toast('Permission added successfully', 'success');
+        loadCategoryPermissions(currentRole);
+      } catch (error) {
+        console.error('Error adding permission:', error);
+        toast(error.message || 'Failed to add permission', 'error');
+      }
+    }
+
+    function cancelAddCategory() {
+      document.getElementById('categories-content').innerHTML = window.previousCategoriesContent;
     }
 
     async function updateStagePermission(stageId) {

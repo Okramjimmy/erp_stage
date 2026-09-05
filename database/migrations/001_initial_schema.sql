@@ -167,6 +167,33 @@ CREATE INDEX idx_form_records_parent ON form_records(parent_record_id);
 
 
 -- =================================================================
+-- 2.7. DEPARTMENTS TABLE
+-- =================================================================
+CREATE TABLE departments (
+    department_id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_departments_name ON departments(name);
+
+-- =================================================================
+-- 2.8. LOCATIONS TABLE
+-- =================================================================
+CREATE TABLE locations (
+    location_id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_locations_name ON locations(name);
+
+
+-- =================================================================
 -- 3. STAGE_PERMISSIONS TABLE
 -- =================================================================
 -- Role-based permissions for stages
@@ -269,30 +296,61 @@ WHERE location_id IS NOT NULL AND department_id IS NOT NULL;
 
 
 -- =================================================================
--- 4.4. DEPARTMENTS TABLE
+-- 4.1. CATEGORY_PERMISSIONS TABLE
 -- =================================================================
-CREATE TABLE departments (
-    department_id VARCHAR(36) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- Role-based permissions scoped to a project (stage) + FormType.group
+-- category. Sits between stage_permissions and form_type_permissions
+-- in the resolution chain: a role's permission on all form types
+-- whose "group" matches `category`, within the stage's subtree.
+-- =================================================================
+CREATE TABLE category_permissions (
+    permission_id BIGSERIAL PRIMARY KEY,
+    stage_id VARCHAR(50) NOT NULL REFERENCES stages(stage_id) ON DELETE CASCADE,
+    category VARCHAR(100) NOT NULL,
+    role_name VARCHAR(100) NOT NULL,
+
+    -- Scoping
+    location_id VARCHAR(36) REFERENCES locations(location_id) ON DELETE CASCADE,
+    department_id VARCHAR(36) REFERENCES departments(department_id) ON DELETE CASCADE,
+
+    -- Permissions
+    can_view BOOLEAN NOT NULL DEFAULT FALSE,
+    can_create_records BOOLEAN NOT NULL DEFAULT FALSE,
+    can_edit BOOLEAN NOT NULL DEFAULT FALSE,
+    can_delete BOOLEAN NOT NULL DEFAULT FALSE,
+    can_edit_records BOOLEAN NOT NULL DEFAULT FALSE,
+    can_delete_records BOOLEAN NOT NULL DEFAULT FALSE,
+    can_submit BOOLEAN NOT NULL DEFAULT FALSE,
+    can_verify BOOLEAN NOT NULL DEFAULT FALSE,
+    can_cancel BOOLEAN NOT NULL DEFAULT FALSE,
+    can_amend BOOLEAN NOT NULL DEFAULT FALSE,
+    can_manage_permissions BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Timestamps
+    granted_by VARCHAR(100),
+    granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_departments_name ON departments(name);
+-- Indexes for category_permissions
+CREATE INDEX idx_category_permissions_stage ON category_permissions(stage_id);
+CREATE INDEX idx_category_permissions_category ON category_permissions(category);
+CREATE INDEX idx_category_permissions_role ON category_permissions(role_name);
+CREATE INDEX idx_category_permissions_location_id ON category_permissions(location_id);
+CREATE INDEX idx_category_permissions_department_id ON category_permissions(department_id);
 
--- =================================================================
--- 4.4.5. LOCATIONS TABLE
--- =================================================================
-CREATE TABLE locations (
-    location_id VARCHAR(36) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- Partial unique indexes to handle NULL values in location_id and department_id
+CREATE UNIQUE INDEX uq_category_role_global ON category_permissions (stage_id, category, role_name)
+WHERE location_id IS NULL AND department_id IS NULL;
 
-CREATE INDEX idx_locations_name ON locations(name);
+CREATE UNIQUE INDEX uq_category_role_location ON category_permissions (stage_id, category, role_name, location_id)
+WHERE department_id IS NULL;
+
+CREATE UNIQUE INDEX uq_category_role_department ON category_permissions (stage_id, category, role_name, department_id)
+WHERE location_id IS NULL;
+
+CREATE UNIQUE INDEX uq_category_role_location_dept ON category_permissions (stage_id, category, role_name, location_id, department_id)
+WHERE location_id IS NOT NULL AND department_id IS NOT NULL;
+
 
 -- =================================================================
 -- 4.5. ROLES TABLE
@@ -331,25 +389,34 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_location_id ON users(location_id);
 
 -- =================================================================
--- 5. USER_ROLES TABLE
+-- 5. USER_PROJECT_ROLES TABLE
 -- =================================================================
--- User to role mapping for permission evaluation
+-- User to project(stage)+role mapping for permission evaluation.
+-- One row per (user, stage, role); stage_id IS NULL means the role is
+-- granted globally (applies everywhere), used for system-wide roles
+-- like 'superadmin'. A user can hold many rows: multiple projects,
+-- multiple roles per project.
 -- =================================================================
-CREATE TABLE user_roles (
+CREATE TABLE user_project_roles (
+    id BIGSERIAL PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    role_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+    stage_id VARCHAR(50) REFERENCES stages(stage_id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
 
     -- Timestamps
     assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    assigned_by VARCHAR(100),
-
-    -- Constraints
-    CONSTRAINT pk_user_roles PRIMARY KEY (user_id)
+    assigned_by VARCHAR(100)
 );
 
--- Indexes for user_roles
-CREATE INDEX idx_user_roles_user ON user_roles(user_id);
-CREATE INDEX idx_user_roles_role_ids ON user_roles USING GIN(role_ids);
+-- Indexes for user_project_roles
+CREATE INDEX idx_upr_user ON user_project_roles(user_id);
+CREATE INDEX idx_upr_stage ON user_project_roles(stage_id);
+CREATE INDEX idx_upr_role ON user_project_roles(role_id);
+
+CREATE UNIQUE INDEX uq_upr_scoped ON user_project_roles (user_id, stage_id, role_id)
+    WHERE stage_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_upr_global ON user_project_roles (user_id, role_id)
+    WHERE stage_id IS NULL;
 
 
 -- =================================================================
@@ -510,53 +577,6 @@ BEGIN
     END IF;
 
     RETURN v_descendants;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to check subtree permission
-CREATE OR REPLACE FUNCTION has_subtree_permission(
-    p_user_id VARCHAR,
-    p_ancestor_stage_id VARCHAR,
-    p_permission VARCHAR
-) RETURNS BOOLEAN AS $$
-DECLARE
-    v_user_roles VARCHAR[];
-    v_has_permission BOOLEAN;
-BEGIN
-    -- Get user roles
-    SELECT ARRAY_AGG(DISTINCT r.role_name)
-    INTO v_user_roles
-    FROM user_roles ur, jsonb_array_elements_text(ur.role_ids) AS rid
-    JOIN roles r ON r.role_id = rid::int
-    WHERE ur.user_id = p_user_id;
-
-    IF NOT FOUND OR CARDINALITY(v_user_roles) = 0 THEN
-        RETURN FALSE;
-    END IF;
-
-    -- Check permission on any stage in subtree using lineage matching
-    SELECT EXISTS(
-        SELECT 1
-        FROM stage_permissions sp
-        JOIN stages s ON sp.stage_id = s.stage_id
-        WHERE sp.role_name = ANY(v_user_roles)
-        AND (
-            s.stage_id = p_ancestor_stage_id
-            OR p_ancestor_stage_id = ANY(s.lineage_path)
-        )
-        AND (
-            CASE p_permission
-                WHEN 'VIEW' THEN sp.can_view
-                WHEN 'CREATE' THEN sp.can_create
-                WHEN 'EDIT' THEN sp.can_edit
-                WHEN 'DELETE' THEN sp.can_delete
-                WHEN 'MANAGE_PERMISSIONS' THEN sp.can_manage_permissions
-                ELSE FALSE
-            END
-        )
-    ) INTO v_has_permission;
-
-    RETURN v_has_permission;
 END;
 $$ LANGUAGE plpgsql;
 

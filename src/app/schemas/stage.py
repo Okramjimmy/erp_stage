@@ -55,6 +55,7 @@ class StageResponse(BaseModel):
     is_leaf: bool
     visibility_scope: str
     wbs_prefix: Optional[str] = None
+    role_set_id: Optional[str] = None
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime

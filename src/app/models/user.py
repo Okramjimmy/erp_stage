@@ -50,8 +50,8 @@ class User(Base):
     )
 
     # Relationships
-    # One user → one UserRole row (role_ids stored as JSONB integer array)
-    roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan", uselist=False)
+    # One user → many UserProjectRole rows (multiple projects, multiple roles per project)
+    roles = relationship("UserProjectRole", back_populates="user", cascade="all, delete-orphan")
     department_rel = relationship("Department", foreign_keys=[dept], lazy="selectin")
     location_rel = relationship("Location", foreign_keys=[location_id], lazy="selectin")
 

@@ -261,35 +261,3 @@ async def get_user_roles(
     service = UserService(db)
     roles = await service.get_user_roles(user_id)
     return {"user_id": user_id, "roles": roles}
-
-
-@router.post("/{user_id}/roles", status_code=200)
-async def assign_roles(
-    user_id: str,
-    role_names: List[str],
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_superadmin),
-):
-    """
-    Assign one or more roles to a user (idempotent).
-    Body: list of role name strings e.g. ["manager", "viewer"]
-    """
-    service = UserService(db)
-    user = await service.get_by_id(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    await service.assign_roles(user_id, role_names)
-    return {"user_id": user_id, "roles": await service.get_user_roles(user_id)}
-
-
-@router.delete("/{user_id}/roles/{role_name}", status_code=200)
-async def revoke_role(
-    user_id: str,
-    role_name: str,
-    db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_superadmin),
-):
-    """Revoke a single role from a user."""
-    service = UserService(db)
-    await service.revoke_role(user_id, role_name)
-    return {"user_id": user_id, "revoked": role_name, "remaining": await service.get_user_roles(user_id)}

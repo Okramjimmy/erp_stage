@@ -1,9 +1,17 @@
-from src.app.models.user import User  # must be imported before UserRole
+from src.app.models.user import User  # must be imported before UserProjectRole
 from src.app.models.department import Department
 from src.app.models.location import Location
 from src.app.models.form_record import FormRecord
 from src.app.models.form_type import FormType
-from src.app.models.permission import FormTypePermission, Role, StagePermission, UserRole
+from src.app.models.permission import (
+    CategoryPermission,
+    FormTypePermission,
+    Role,
+    RoleSet,  # must be imported before Stage (Stage.role_set_id FK)
+    RoleSetRole,
+    StagePermission,
+    UserProjectRole,
+)
 from src.app.models.stage import Stage
 from src.app.models.stage_form_type import StageFormType
 from src.app.models.form_action import FormAction
@@ -22,8 +30,11 @@ __all__ = [
     "WorkflowAssignment",
     "StagePermission",
     "FormTypePermission",
+    "CategoryPermission",
     "Role",
-    "UserRole",
+    "RoleSet",
+    "RoleSetRole",
+    "UserProjectRole",
     "Group",
 ]
 

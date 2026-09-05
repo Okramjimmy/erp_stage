@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.app.models.permission import Role, UserRole
+from src.app.models.permission import Role, UserProjectRole
 from src.app.models.user import User
 from src.app.schemas.user import UserCreate, UserUpdate
 
@@ -48,7 +48,8 @@ class UserService:
         return result.scalar_one_or_none()
 
     async def get_user_with_roles(self, user_id: str) -> Optional[Tuple[User, List[str]]]:
-        """Return (User, [role_names]) by loading the UserRole row and resolving role_ids."""
+        """Return (User, [role_names]) — the union of role names across all of
+        the user's UserProjectRole rows (global + every project)."""
         result = await self.db.execute(
             select(User)
             .options(selectinload(User.roles))
@@ -57,7 +58,8 @@ class UserService:
         user = result.scalar_one_or_none()
         if not user:
             return None
-        role_names = await self._resolve_role_ids(user.roles.role_ids if user.roles else [])
+        role_ids = {r.role_id for r in user.roles}
+        role_names = await self._resolve_role_ids(list(role_ids))
         return user, role_names
 
     async def list_users(self, skip: int = 0, limit: int = 100) -> List[Tuple[User, List[str]]]:
@@ -72,7 +74,7 @@ class UserService:
         users = result.scalars().all()
         out = []
         for u in users:
-            role_ids = u.roles.role_ids if u.roles else []
+            role_ids = list({r.role_id for r in u.roles})
             names = await self._resolve_role_ids(role_ids)
             out.append((u, names))
         return out
@@ -127,9 +129,7 @@ class UserService:
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
-        
-        if data.roles:
-            await self.assign_roles(user.user_id, data.roles, created_by)
+
         logger.info(f"Created user {user.username} (id={user.user_id})")
         return user
 
@@ -230,61 +230,13 @@ class UserService:
     # ------------------------------------------------------------------
 
     async def get_user_roles(self, user_id: str) -> List[str]:
-        """Return all role names for a user by resolving their role_ids array."""
+        """Return all role names for a user — the union across every
+        UserProjectRole row the user holds (global + every project)."""
         result = await self.db.execute(
-            select(UserRole).where(UserRole.user_id == user_id)
+            select(UserProjectRole.role_id).where(UserProjectRole.user_id == user_id).distinct()
         )
-        row = result.scalar_one_or_none()
-        return await self._resolve_role_ids(row.role_ids if row and row.role_ids else [])
-
-    async def assign_roles(self, user_id: str, role_names: List[str], assigned_by: str = "system") -> None:
-        """Add roles to user's role_ids JSONB array by resolving names → IDs (idempotent)."""
-        # Resolve role names to IDs
-        if not role_names:
-            return
-        roles_result = await self.db.execute(
-            select(Role).where(Role.role_name.in_(role_names))
-        )
-        roles = roles_result.scalars().all()
-        missing = set(role_names) - {r.role_name for r in roles}
-        if missing:
-            logger.warning(f"assign_roles: roles not found: {missing}, skipping")
-        if not roles:
-            return
-
-        result = await self.db.execute(
-            select(UserRole).where(UserRole.user_id == user_id)
-        )
-        row = result.scalar_one_or_none()
-        new_ids = {r.role_id for r in roles}
-
-        if row:
-            existing = set(row.role_ids or [])
-            row.role_ids = sorted(existing | new_ids)
-            row.assigned_by = assigned_by
-        else:
-            self.db.add(UserRole(
-                user_id=user_id,
-                role_ids=sorted(new_ids),
-                assigned_by=assigned_by,
-            ))
-        await self.db.commit()
-
-    async def revoke_role(self, user_id: str, role_name: str) -> None:
-        """Remove a role from the user's role_ids JSONB array."""
-        role_result = await self.db.execute(
-            select(Role).where(Role.role_name == role_name)
-        )
-        role = role_result.scalar_one_or_none()
-        if not role:
-            return
-        result = await self.db.execute(
-            select(UserRole).where(UserRole.user_id == user_id)
-        )
-        row = result.scalar_one_or_none()
-        if row and role.role_id in (row.role_ids or []):
-            row.role_ids = [rid for rid in row.role_ids if rid != role.role_id]
-            await self.db.commit()
+        role_ids = [r[0] for r in result.all()]
+        return await self._resolve_role_ids(role_ids)
 
     # ------------------------------------------------------------------
     # Seeding
@@ -294,7 +246,7 @@ class UserService:
         """
         Called at app startup. Creates a default superadmin user if the
         users table is empty. Ensures the 'superadmin' role exists and is
-        assigned to the seeded admin via role_ids JSONB array.
+        assigned to the seeded admin globally (stage_id=None).
         """
         result = await self.db.execute(select(User).limit(1))
         if result.scalar_one_or_none() is not None:
@@ -334,9 +286,10 @@ class UserService:
             is_active=True,
         )
         self.db.add(admin)
-        self.db.add(UserRole(
+        self.db.add(UserProjectRole(
             user_id=admin_id,
-            role_ids=[superadmin_role.role_id],
+            stage_id=None,
+            role_id=superadmin_role.role_id,
             assigned_by="system",
         ))
         await self.db.commit()

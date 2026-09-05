@@ -67,6 +67,10 @@ Builder{% endblock %} {% block content %}
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
             Move
         </button>
+        <button class="btn btn-secondary btn-sm" onclick="openStageInfo()" style="display: inline-flex; align-items: center; gap: 4px;" title="View details for {{ stage.stage_name }}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Info
+        </button>
         <div
             class="navbar-dropdown-container"
             style="position: relative; display: inline-block"
@@ -414,6 +418,8 @@ Builder{% endblock %} {% block content %}
 <div class="tab-pane" id="tab-permissions">
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
         <button class="btn btn-sm btn-primary" id="btn-perm-stage" onclick="switchPermView('stage')">Stage</button>
+        <button class="btn btn-sm btn-secondary" id="btn-perm-members" onclick="switchPermView('members')">Members</button>
+        <button class="btn btn-sm btn-secondary" id="btn-perm-category" onclick="switchPermView('category')">Category</button>
         <button class="btn btn-sm btn-secondary" id="btn-perm-formtypes" onclick="switchPermView('formtypes')">Formtypes</button>
     </div>
 
@@ -428,6 +434,64 @@ Builder{% endblock %} {% block content %}
             <div id="permissions-container-stage">
                 <div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">
                     Loading permissions…
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="perm-view-members" style="display: none;">
+        <div class="card card-sm" style="margin-bottom: 16px;">
+            <div class="card-header">
+                <div class="card-title">Governing Role Set</div>
+            </div>
+            <div style="padding: 12px 16px;">
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <select id="stage-role-set-select" class="form-control" style="max-width: 260px;">
+                        <option value="">-- Inherit from parent --</option>
+                    </select>
+                    <button class="btn btn-sm btn-secondary" onclick="saveStageRoleSet()">Save</button>
+                </div>
+                <div id="stage-effective-roleset" style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">
+                    Loading...
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-sm">
+            <div class="card-header">
+                <div class="card-title">Project Members</div>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-primary" id="btn-add-member" onclick="openAddMemberModal()" style="display: none;">
+                        + Add Member
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="loadStageMembers()">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div id="members-container">
+                <div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">
+                    Loading members…
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="perm-view-category" style="display: none;">
+        <div class="card card-sm">
+            <div class="card-header" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="card-title">Category Role Permissions</div>
+                <select id="category-perm-select" class="form-control" style="max-width: 250px;" onchange="loadCategoryPermissionsView()">
+                    <!-- options populated via JS -->
+                </select>
+                <div style="flex-grow: 1;"></div>
+                <button class="btn btn-sm btn-primary" id="btn-grant-category" onclick="openGrantModal('category')" disabled>
+                    + Grant Permission
+                </button>
+            </div>
+            <div id="permissions-container-category">
+                <div style="color: var(--text-muted); font-size: 13px; padding: 16px; text-align: center;">
+                    Select a category to view permissions...
                 </div>
             </div>
         </div>
@@ -937,6 +1001,12 @@ Builder{% endblock %} {% block content %}
         } else {
             document.querySelectorAll(".stat-grid, .tabs:not(.view-mode-tabs)").forEach((el) => (el.style.display = ""));
             if (driveView) driveView.style.display = "none";
+            // Clear the inline display:none the drive-mode branch set on every
+            // .tab-pane — otherwise it permanently outranks the stylesheet's
+            // .tab-pane.active { display: block } rule and switchTab() below
+            // can toggle the "active" class all it wants without anything
+            // ever becoming visible again.
+            document.querySelectorAll(".tab-pane").forEach((el) => (el.style.display = ""));
             // Also restore active tab pane display
             const activeTabBtn = document.querySelector(".tabs:not(.view-mode-tabs) .tab-btn.active");
             if (activeTabBtn) {
@@ -1528,6 +1598,48 @@ Builder{% endblock %} {% block content %}
     </div>
 </div>
 
+<div class="modal-overlay" id="member-modal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Add Project Member</span>
+            <button
+                class="btn btn-ghost btn-icon"
+                onclick="closeModal('member-modal')"
+            >
+                ✕
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label required">User</label>
+                <select class="form-control" id="member-user-select">
+                    <option value="">-- Select a User --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label required">Role</label>
+                <select class="form-control" id="member-role-select">
+                    <option value="">-- Select a Role --</option>
+                </select>
+            </div>
+            <div class="form-hint">
+                Adds the user as a member of this project with the selected role. Access cascades to every task under this project.
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button
+                class="btn btn-secondary"
+                onclick="closeModal('member-modal')"
+            >
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="addStageMember()">
+                Add Member
+            </button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="delete-preview-modal">
     <div class="modal" style="max-width: 600px">
         <div class="modal-header">
@@ -2016,6 +2128,25 @@ Builder{% endblock %} {% block content %}
         if (name === "assignments") loadAssignments();
     }
 
+    async function openStageInfo() {
+        // Switch out of Drive view into DashView for this stage.
+        await setViewMode('dash');
+
+        // switchTab() only fetches data for whichever tab happens to be
+        // active — Forms/Children/Metadata are already server-rendered, but
+        // Permissions and Assignments are fetched lazily on click. Eagerly
+        // load them here so every tab has real data the moment Info is used,
+        // not just the one the user happens to land on.
+        loadPermissions();
+        loadStageMembers();
+        loadAssignments();
+
+        // Surface the stage's own details (id, path, depth, lineage, etc.)
+        // immediately, since that's what "Info" is for.
+        const metaTabBtn = document.querySelector('[onclick="switchTab(\'meta\', this)"]');
+        if (metaTabBtn) switchTab('meta', metaTabBtn);
+    }
+
     function openModal(id) {
         document.getElementById(id).classList.add("open");
     }
@@ -2349,28 +2480,82 @@ Builder{% endblock %} {% block content %}
 
     function switchPermView(view) {
         document.getElementById('perm-view-stage').style.display = view === 'stage' ? 'block' : 'none';
+        document.getElementById('perm-view-members').style.display = view === 'members' ? 'block' : 'none';
+        document.getElementById('perm-view-category').style.display = view === 'category' ? 'block' : 'none';
         document.getElementById('perm-view-formtypes').style.display = view === 'formtypes' ? 'block' : 'none';
-        
+
         document.getElementById('btn-perm-stage').className = view === 'stage' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        document.getElementById('btn-perm-members').className = view === 'members' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        document.getElementById('btn-perm-category').className = view === 'category' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
         document.getElementById('btn-perm-formtypes').className = view === 'formtypes' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
 
         if (view === 'formtypes') {
             initFormTypeDropdown();
+        } else if (view === 'category') {
+            initCategoryDropdown();
+        } else if (view === 'members') {
+            loadStageMembers();
+            loadStageRoleSetPanel();
+        }
+    }
+
+    let allRoleSetsForStagePanel = [];
+
+    async function loadStageRoleSetPanel() {
+        const select = document.getElementById('stage-role-set-select');
+        const effectiveDiv = document.getElementById('stage-effective-roleset');
+        try {
+            const [roleSets, stage, effective] = await Promise.all([
+                apiFetch('/api/v1/permissions/role-sets'),
+                apiFetch(`/api/v1/stages/${STAGE_ID}`),
+                apiFetch(`/api/v1/stages/${STAGE_ID}/effective-roleset`),
+            ]);
+            allRoleSetsForStagePanel = roleSets;
+
+            select.innerHTML = '<option value="">-- Inherit from parent --</option>' +
+                roleSets.map(rs => `<option value="${rs.role_set_id}">${rs.name}</option>`).join('');
+            select.value = stage.role_set_id || '';
+
+            if (effective.unrestricted) {
+                effectiveDiv.textContent = 'Effective: unrestricted — any role may be assigned here.';
+            } else {
+                const sourceLabel = effective.source_stage_id === STAGE_ID ? 'this stage' : `ancestor stage "${effective.source_stage_id}"`;
+                effectiveDiv.textContent = `Effective: "${effective.role_set_name}" (${(effective.role_names || []).join(', ')}) — governed by ${sourceLabel}.`;
+            }
+        } catch (error) {
+            console.error('Error loading stage role set panel:', error);
+            effectiveDiv.textContent = 'Failed to load.';
+        }
+    }
+
+    async function saveStageRoleSet() {
+        const select = document.getElementById('stage-role-set-select');
+        const roleSetId = select.value || null;
+        try {
+            await apiFetch(`/api/v1/stages/${STAGE_ID}/role-set`, {
+                method: 'PUT',
+                body: { role_set_id: roleSetId },
+            });
+            toast('Governing role set updated', 'success');
+            loadStageRoleSetPanel();
+        } catch (error) {
+            console.error('Error saving stage role set:', error);
+            toast(error.message || 'Failed to update role set', 'error');
         }
     }
 
     function openGrantModal(type = 'stage') {
         currentGrantType = type;
         const modalTitle = document.querySelector('#grant-modal .modal-title');
-        modalTitle.textContent = type === 'stage' ? 'Grant Stage Permission' : 'Grant Formtype Permission';
-        
+        modalTitle.textContent = type === 'stage' ? 'Grant Stage Permission' : (type === 'category' ? 'Grant Category Permission' : 'Grant Formtype Permission');
+
         document.getElementById('grant-role').value = '';
         document.getElementById('perm-view').checked = true;
         document.getElementById('perm-create').checked = false;
         document.getElementById('perm-edit').checked = false;
         document.getElementById('perm-delete').checked = false;
         document.getElementById('perm-manage').checked = false;
-        
+
         // Reset new fields
         document.getElementById('perm-create-records').checked = false;
         document.getElementById('perm-edit-records').checked = false;
@@ -2384,7 +2569,7 @@ Builder{% endblock %} {% block content %}
             document.getElementById('check-edit-records').style.display = 'none';
             document.getElementById('check-delete-records').style.display = 'none';
             document.getElementById('check-submit').style.display = 'none';
-            
+
             document.getElementById('label-edit').textContent = 'Edit';
             document.getElementById('label-delete').textContent = 'Delete';
         } else {
@@ -2393,11 +2578,11 @@ Builder{% endblock %} {% block content %}
             document.getElementById('check-edit-records').style.display = 'block';
             document.getElementById('check-delete-records').style.display = 'block';
             document.getElementById('check-submit').style.display = 'block';
-            
+
             document.getElementById('label-edit').textContent = 'Edit Form';
             document.getElementById('label-delete').textContent = 'Delete Form';
         }
-        
+
         openModal('grant-modal');
     }
 
@@ -2441,6 +2626,303 @@ Builder{% endblock %} {% block content %}
             formTypesLoaded = true;
         }
         loadFormTypePermissions();
+    }
+
+    let categoriesLoaded = false;
+    let cachedCategoryPermissions = [];
+
+    async function initCategoryDropdown() {
+        if (!categoriesLoaded) {
+            const select = document.getElementById('category-perm-select');
+            select.innerHTML = '<option value="">-- Select a Category --</option>';
+
+            // Categories are records in the groups table.
+            let categories = [];
+            try {
+                const groupsList = await apiFetch(`${API}/groups?limit=200`);
+                categories = groupsList.map(g => g.name).sort();
+            } catch(e) {}
+
+            if (categories.length > 0) {
+                categories.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    select.appendChild(opt);
+                });
+            } else {
+                select.innerHTML = '<option value="">-- No Categories (Groups) Defined --</option>';
+                select.disabled = true;
+            }
+            categoriesLoaded = true;
+        }
+        loadCategoryPermissionsView();
+    }
+
+    async function loadCategoryPermissionsView() {
+        const container = document.getElementById("permissions-container-category");
+        const select = document.getElementById('category-perm-select');
+        const grantBtn = document.getElementById('btn-grant-category');
+        const category = select.value;
+
+        if (!category) {
+            container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">Please select a category from the dropdown.</div>`;
+            grantBtn.disabled = true;
+            return;
+        }
+
+        grantBtn.disabled = false;
+        container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">Loading permissions...</div>`;
+
+        try {
+            const data = cachedCategoryPermissions.filter(p => p.category === category);
+
+            if (!data || data.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">
+                        No permissions explicitly configured for this category on this project.
+                    </div>`;
+                return;
+            }
+
+            const canManage = {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].manage_permissions %}true{% else %}false{% endif %};
+
+            let rows = data.map(p => {
+                const checkBadge = '<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">✓</span>';
+                const crossBadge = '<span style="background: rgba(239, 68, 68, 0.15); color: rgb(239, 68, 68); padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px;">✗</span>';
+
+                const viewVal = p.can_view ? checkBadge : crossBadge;
+                const createRecVal = p.can_create_records ? checkBadge : crossBadge;
+                const editVal = p.can_edit ? checkBadge : crossBadge;
+                const deleteVal = p.can_delete ? checkBadge : crossBadge;
+                const editRecVal = p.can_edit_records ? checkBadge : crossBadge;
+                const deleteRecVal = p.can_delete_records ? checkBadge : crossBadge;
+                const manageVal = p.can_manage_permissions ? checkBadge : crossBadge;
+                const submitVal = p.can_submit ? checkBadge : crossBadge;
+
+                const actionButton = canManage
+                    ? `<button class="btn btn-sm btn-ghost" style="color: var(--danger); padding: 2px 8px; font-size: 12px;" onclick="revokeCategoryPermission('${p.role_name}', '${category}')">Revoke</button>`
+                    : '';
+
+                return `
+                    <tr style="border-bottom: 1px solid var(--border-color);">
+                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text-color);">${p.role_name}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${viewVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${createRecVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${deleteVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${editRecVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${deleteRecVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${manageVal}</td>
+                        <td style="padding: 12px 10px; text-align: center;">${submitVal}</td>
+                        <td style="padding: 12px 10px; text-align: right;">${actionButton}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div style="margin-bottom: 12px; font-weight: 500; font-size: 14px; color: var(--primary);">
+                    Permissions for category: <span style="color: var(--text-color);">${category}</span>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--background-sidebar); border-radius: 6px;">
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500;">Role</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">View</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create Records</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit Form</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete Form</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Edit Records</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Delete Records</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Manage</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Submit</th>
+                                <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+                <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted); font-style: italic;">
+                    Sits between Stage and individual Form Type permissions: applies to every form type in this category, within this project's subtree, unless a form type has its own direct permission.
+                </div>
+            `;
+        } catch (e) {
+            container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions: ${e.message}</p>`;
+        }
+    }
+
+    async function revokeCategoryPermission(roleName, category) {
+        if (!confirm(`Are you sure you want to revoke permissions for the role "${roleName}" on category "${category}"?`)) {
+            return;
+        }
+        try {
+            await apiFetch(`${API}/permissions/stages/${STAGE_ID}/categories/${encodeURIComponent(category)}/roles/${encodeURIComponent(roleName)}`, {
+                method: 'DELETE'
+            });
+            toast("Permission revoked successfully", "success");
+            await loadPermissions();
+            loadCategoryPermissionsView();
+        } catch (e) {
+            toast(e.message, "error");
+        }
+    }
+
+    let cachedRolesList = null;
+
+    async function loadStageMembers() {
+        const container = document.getElementById("members-container");
+        container.innerHTML = `<div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">Loading members…</div>`;
+
+        const canManage = {% if user_permissions and user_permissions.stages.get(stage.stage_id) and user_permissions.stages[stage.stage_id].manage_permissions %}true{% else %}false{% endif %};
+        document.getElementById('btn-add-member').style.display = canManage ? 'inline-flex' : 'none';
+
+        try {
+            if (canManage && !cachedRolesList) {
+                cachedRolesList = await apiFetch(`${API}/permissions/roles`);
+            }
+
+            const members = await apiFetch(`${API}/permissions/stages/${STAGE_ID}/members`);
+            if (!members || members.length === 0) {
+                container.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--text-muted); font-size: 13px;">No users have access to this project yet.</div>`;
+                return;
+            }
+
+            const sourceBadge = (m) => {
+                if (m.source === 'direct') return `<span style="background: rgba(34, 197, 94, 0.15); color: rgb(34, 197, 94); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">Direct</span>`;
+                if (m.source === 'inherited') return `<span style="background: rgba(59, 130, 246, 0.15); color: rgb(59, 130, 246); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">Inherited</span>`;
+                return `<span style="background: rgba(148, 163, 184, 0.15); color: rgb(100, 116, 139); padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">Global</span>`;
+            };
+
+            // Group by role — the Role is the dominant grouping unit ("who
+            // fills this role here"), with users listed as chips underneath
+            // it, rather than a flat user-first table.
+            const roleGroups = new Map();
+            members.forEach(m => {
+                if (!roleGroups.has(m.role_name)) roleGroups.set(m.role_name, []);
+                roleGroups.get(m.role_name).push(m);
+            });
+
+            const roleColumns = [...roleGroups.entries()].map(([roleName, roleMembers]) => {
+                const chips = roleMembers.map(m => {
+                    const isDirect = m.source === 'direct';
+                    const isInherited = m.source === 'inherited';
+                    let removeBtn = '';
+                    if (canManage && isDirect) {
+                        removeBtn = `<button class="btn btn-sm btn-ghost" style="color: var(--danger); padding: 0 4px; font-size: 14px; line-height: 1;" title="Remove from this stage" onclick="removeStageMember('${escapeHtml(m.user_id)}', '${escapeHtml(m.role_name)}', '${escapeHtml(m.username || m.user_id)}')">✕</button>`;
+                    } else if (canManage && isInherited && m.granted_from_stage_id) {
+                        removeBtn = `<button class="btn btn-sm btn-ghost" style="color: var(--danger); padding: 0 4px; font-size: 14px; line-height: 1;" title="Remove from source project '${escapeHtml(m.granted_from_stage_id)}'" onclick="removeInheritedStageMember('${escapeHtml(m.user_id)}', '${escapeHtml(m.role_name)}', '${escapeHtml(m.granted_from_stage_id)}', '${escapeHtml(m.username || m.user_id)}')">✕</button>`;
+                    }
+                    return `
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; background: var(--background-sidebar); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;">
+                            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                                <span style="font-weight:600; font-size:13px; color:var(--text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(m.username || m.user_id)}</span>
+                                ${sourceBadge(m)}
+                                ${isInherited && m.granted_from_stage_id ? `<span style="font-size:11px; color:var(--text-muted);">from ${escapeHtml(m.granted_from_stage_id)}</span>` : ''}
+                            </div>
+                            ${removeBtn}
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div style="flex: 1 1 220px; min-width: 220px; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
+                        <div style="background: var(--primary-color, #4f46e5); color: #fff; padding: 10px 14px; font-weight: 700; font-size: 15px; letter-spacing: 0.2px;">
+                            ${escapeHtml(roleName)}
+                            <span style="float:right; font-weight:500; font-size:12px; opacity:0.85;">${roleMembers.length}</span>
+                        </div>
+                        <div style="padding: 10px;">${chips}</div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top: 12px;">
+                    ${roleColumns}
+                </div>
+                <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted); font-style: italic;">
+                    "Inherited" members were granted a role on a parent project and it cascades down to this one — removing them here revokes the assignment at that parent project (and everywhere it cascades from there), not just this stage. "Global" members hold the role everywhere and are managed from the Users page.
+                </div>
+            `;
+        } catch (e) {
+            container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load members: ${e.message}</p>`;
+        }
+    }
+
+    async function openAddMemberModal() {
+        const userSelect = document.getElementById('member-user-select');
+        const roleSelect = document.getElementById('member-role-select');
+
+        userSelect.innerHTML = '<option value="">Loading users…</option>';
+        roleSelect.innerHTML = '<option value="">Loading roles…</option>';
+        openModal('member-modal');
+
+        try {
+            if (!cachedUsers) {
+                const usersResponse = await apiFetch(`${API}/users?limit=200`);
+                cachedUsers = usersResponse.items || usersResponse || [];
+            }
+            if (!cachedRolesList) {
+                cachedRolesList = await apiFetch(`${API}/permissions/roles`);
+            }
+
+            const sortedUsers = [...cachedUsers].sort((a, b) => a.full_name.localeCompare(b.full_name));
+            userSelect.innerHTML = '<option value="">-- Select a User --</option>' +
+                sortedUsers.map(u => `<option value="${escapeHtml(u.user_id)}">${escapeHtml(u.full_name)} (${escapeHtml(u.username)})</option>`).join('');
+
+            roleSelect.innerHTML = '<option value="">-- Select a Role --</option>' +
+                cachedRolesList.map(r => `<option value="${escapeHtml(r.role_name)}">${escapeHtml(r.role_name)}</option>`).join('');
+        } catch (e) {
+            toast(e.message || 'Failed to load users/roles', 'error');
+        }
+    }
+
+    async function addStageMember() {
+        const userId = document.getElementById('member-user-select').value;
+        const roleName = document.getElementById('member-role-select').value;
+        if (!userId || !roleName) {
+            toast('Please select a user and a role', 'error');
+            return;
+        }
+        try {
+            await apiFetch(`${API}/permissions/users/roles`, {
+                method: 'POST',
+                body: { user_id: userId, role_name: roleName, stage_id: STAGE_ID }
+            });
+            toast('Member added', 'success');
+            closeModal('member-modal');
+            loadStageMembers();
+        } catch (e) {
+            toast(e.message || 'Failed to add member', 'error');
+        }
+    }
+
+    async function removeStageMember(userId, roleName, displayName) {
+        if (!confirm(`Remove ${displayName} (role "${roleName}") from this project?`)) return;
+        try {
+            await apiFetch(`${API}/permissions/users/${userId}/roles/${encodeURIComponent(roleName)}?stage_id=${encodeURIComponent(STAGE_ID)}`, {
+                method: 'DELETE'
+            });
+            toast('Member removed', 'success');
+            loadStageMembers();
+        } catch (e) {
+            toast(e.message || 'Failed to remove member', 'error');
+        }
+    }
+
+    async function removeInheritedStageMember(userId, roleName, sourceStageId, displayName) {
+        if (!confirm(`Remove ${displayName} (role "${roleName}") from project '${sourceStageId}'? This revokes their access there and everywhere it cascades from — not just this stage.`)) return;
+        try {
+            await apiFetch(`${API}/permissions/users/${userId}/roles/${encodeURIComponent(roleName)}?stage_id=${encodeURIComponent(sourceStageId)}`, {
+                method: 'DELETE'
+            });
+            toast('Member removed', 'success');
+            loadStageMembers();
+        } catch (e) {
+            toast(e.message || 'Failed to remove member', 'error');
+        }
     }
 
     async function loadFormTypePermissions() {
@@ -2565,6 +3047,7 @@ Builder{% endblock %} {% block content %}
             const responseData = await apiFetch(`${API}/permissions/stages/${STAGE_ID}`);
             
             cachedStagePermissions = responseData.stage_permissions || [];
+            cachedCategoryPermissions = responseData.category_permissions || [];
             cachedFormTypePermissions = responseData.form_type_permissions || [];
 
             const data = cachedStagePermissions;
@@ -2710,6 +3193,19 @@ Builder{% endblock %} {% block content %}
                 toast("Stage permission granted", "success");
                 await loadPermissions();
                 loadFormTypePermissions();
+            } else if (currentGrantType === 'category') {
+                const category = document.getElementById('category-perm-select').value;
+                if (!category) {
+                    toast("Please select a category first", "error");
+                    return;
+                }
+                await apiFetch(`${API}/permissions/stages/${STAGE_ID}/categories/${encodeURIComponent(category)}`, {
+                    method: "POST",
+                    body,
+                });
+                toast("Category permission granted", "success");
+                await loadPermissions();
+                loadCategoryPermissionsView();
             } else {
                 const formTypeId = document.getElementById('formtype-perm-select').value;
                 await apiFetch(`${API}/permissions/form-types/${formTypeId}`, {

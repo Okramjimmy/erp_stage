@@ -95,11 +95,10 @@
                                 onclick="handleDetailsClick(this)">
                                 Details
                             </button>
-                            <button class="btn btn-xs btn-primary" 
+                            <button class="btn btn-xs btn-primary"
                                 data-user-id="{{ user_data.user_id }}"
                                 data-username="{{ user_data.username }}"
-                                data-roles="{{ user_data.roles | join(',') }}"
-                                onclick="openRolesModal(this.dataset.userId, this.dataset.username, this.dataset.roles ? this.dataset.roles.split(',') : [])">
+                                onclick="openRolesModal(this.dataset.userId, this.dataset.username)">
                                 Manage Roles
                             </button>
                         </div>
@@ -210,23 +209,6 @@
                     </select>
                 </div>
 
-                <!-- Section: Roles -->
-                <div style="border-top:1px solid var(--border-light); margin:18px 0 12px"></div>
-                <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:12px">Assign Roles <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
-                <div id="roleCheckboxList" style="display:flex; flex-wrap:wrap; gap:8px; padding:12px; background:var(--bg-light); border-radius:6px; border:1px solid var(--border-light); min-height:44px; align-items:center">
-                    {% for r in all_roles %}
-                    {% if not r.role_name.startswith('_') %}
-                    <label style="display:flex; align-items:center; gap:6px; background:white; border:1px solid var(--border); padding:5px 10px; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; user-select:none">
-                        <input type="checkbox" name="newUserRoles" value="{{ r.role_name }}" style="cursor:pointer;accent-color:var(--primary)" />
-                        {{ r.role_name }}
-                    </label>
-                    {% endif %}
-                    {% endfor %}
-                    {% if not all_roles %}
-                    <span style="color:var(--text-muted); font-size:12px; font-style:italic">No roles available — create roles first on the Roles page</span>
-                    {% endif %}
-                </div>
-
                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px">
                     <button type="button" class="btn btn-secondary" onclick="closeCreateUserModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="createUserSubmitBtn">Create User</button>
@@ -245,11 +227,15 @@
         </div>
         <div class="modal-body">
             <input type="hidden" id="manageRolesUserId" />
-            
+
             <div style="margin-bottom: 20px;">
                 <label class="form-label">Assign New Role</label>
-                <div style="display:flex; gap:8px;">
-                    <select class="form-control" id="roleSelect" style="flex:1">
+                <input type="text" class="form-control" id="stageFilterInput" placeholder="Filter stages by name..." style="margin-bottom:8px" oninput="renderProjectSelectOptions()" />
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <select class="form-control" id="projectSelect" style="flex:1; min-width:180px" onchange="onRolesModalStageChange()">
+                        <option value="">-- Select Stage --</option>
+                    </select>
+                    <select class="form-control" id="roleSelect" style="flex:1; min-width:150px">
                         <option value="">-- Select Role --</option>
                         {% for r in all_roles %}
                         <option value="{{ r.role_name }}">{{ r.role_name }}</option>
@@ -257,11 +243,12 @@
                     </select>
                     <button class="btn btn-primary" onclick="assignRole()">Assign</button>
                 </div>
+                <div id="roleSetHint" style="font-size:12px; color:var(--text-muted); margin-top:4px"></div>
             </div>
 
             <div class="form-group">
-                <label class="form-label">Current Roles</label>
-                <div id="currentRolesList" style="display:flex; flex-wrap:wrap; gap:8px; padding:12px; background:var(--bg-light); border-radius:6px; border:1px solid var(--border-light); min-height:60px; align-items:flex-start">
+                <label class="form-label">Current Roles (by project)</label>
+                <div id="currentRolesList" style="padding:12px; background:var(--bg-light); border-radius:6px; border:1px solid var(--border-light); min-height:60px">
                 </div>
             </div>
             </div>
@@ -438,11 +425,6 @@
             return;
         }
 
-        // Collect selected roles
-        const checkedRoles = Array.from(
-            document.querySelectorAll('input[name="newUserRoles"]:checked')
-        ).map(cb => cb.value);
-
         const submitBtn = document.getElementById("createUserSubmitBtn");
         submitBtn.disabled = true;
         submitBtn.textContent = "Creating...";
@@ -450,10 +432,10 @@
         try {
             const newUser = await apiFetch("/api/v1/users", {
                 method: "POST",
-                body: { username, email, full_name: fullName, password, department, location, phone, manager_id, roles: checkedRoles }
+                body: { username, email, full_name: fullName, password, department, location, phone, manager_id }
             });
 
-            toast(checkedRoles.length > 0 ? `User created and assigned ${checkedRoles.length} role(s)` : "User created successfully", "success");
+            toast("User created successfully", "success");
 
             closeCreateUserModal();
             setTimeout(() => window.location.reload(), 800);
@@ -466,30 +448,49 @@
 
     let currentUserDataForRoles = null;
 
-    function openRolesModal(userId, username, roles) {
-        currentUserDataForRoles = { user_id: userId, username: username, roles: roles.filter(Boolean) };
+    async function openRolesModal(userId, username) {
+        currentUserDataForRoles = { user_id: userId, username: username, projectRoles: [] };
         document.getElementById("manageRolesUserId").value = userId;
         document.getElementById("rolesUsernameDisplay").textContent = username;
-        
-        renderCurrentRoles();
+
         document.getElementById("roles-modal").classList.add("open");
+        await loadUserProjectRoles(userId);
+    }
+
+    async function loadUserProjectRoles(userId) {
+        try {
+            currentUserDataForRoles.projectRoles = await apiFetch(`/api/v1/permissions/users/${userId}/project-roles`);
+        } catch (error) {
+            console.error('Error loading project roles:', error);
+            currentUserDataForRoles.projectRoles = [];
+        }
+        renderCurrentRoles();
     }
 
     function renderCurrentRoles() {
         const container = document.getElementById("currentRolesList");
-        if (!currentUserDataForRoles || !currentUserDataForRoles.roles || currentUserDataForRoles.roles.length === 0) {
+        const rows = (currentUserDataForRoles && currentUserDataForRoles.projectRoles) || [];
+        if (rows.length === 0) {
             container.innerHTML = `<span style="color:var(--text-muted);font-size:13px;font-style:italic">No roles assigned</span>`;
             return;
         }
 
-        container.innerHTML = currentUserDataForRoles.roles.map(r => `
-            <div style="display:flex; align-items:center; background:white; border:1px solid var(--border); padding:4px 10px; border-radius:12px; font-size:13px; font-weight:500;">
-                <span style="margin-right:8px">${r}</span>
-                <button type="button" style="background:none; border:none; cursor:pointer; padding:2px; display:flex; align-items:center; color:var(--danger); border-radius:50%" onclick="revokeRole('${r}')" title="Revoke Role">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-            </div>
-        `).join("");
+        let html = '<table class="table"><thead><tr><th>Project</th><th>Role</th><th>Assigned</th><th></th></tr></thead><tbody>';
+        rows.forEach(r => {
+            const projectLabel = r.stage_id ? stageNameById(r.stage_id) : 'Global (all projects)';
+            html += `
+                <tr>
+                    <td>${projectLabel}</td>
+                    <td><span class="badge badge-blue">${r.role_name}</span></td>
+                    <td style="font-size:12px;color:var(--text-muted)">${r.assigned_at ? new Date(r.assigned_at).toLocaleDateString() : ''}</td>
+                    <td>
+                        <button type="button" class="btn btn-xs btn-danger" onclick="revokeRole('${r.role_name}', ${r.stage_id ? `'${r.stage_id}'` : 'null'})" title="Revoke Role">Revoke</button>
+                    </td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
     }
 
     function generatePassword() {
@@ -534,40 +535,52 @@
 
     async function assignRole() {
         const roleSelect = document.getElementById("roleSelect");
+        const projectSelect = document.getElementById("projectSelect");
         const roleName = roleSelect.value;
+        const stageId = projectSelect.value || null;
         const userId = document.getElementById("manageRolesUserId").value;
 
         if (!roleName) return;
 
-        if (currentUserDataForRoles.roles.includes(roleName)) {
-            toast("User already has this role", "warning");
+        if (!stageId && roleName !== "superadmin") {
+            toast("Select a project — only 'superadmin' can be assigned globally", "warning");
+            return;
+        }
+
+        const alreadyAssigned = currentUserDataForRoles.projectRoles.some(
+            r => r.role_name === roleName && (r.stage_id || null) === stageId
+        );
+        if (alreadyAssigned) {
+            toast("User already has this role for this project", "warning");
             return;
         }
 
         try {
-            await apiFetch(`/api/v1/users/${userId}/roles`, {
+            await apiFetch(`/api/v1/permissions/users/roles`, {
                 method: "POST",
-                body: [roleName] // list of roles
+                body: { user_id: userId, role_name: roleName, stage_id: stageId }
             });
-            currentUserDataForRoles.roles.push(roleName);
-            renderCurrentRoles();
+            await loadUserProjectRoles(userId);
             roleSelect.value = "";
+            projectSelect.value = "";
             toast("Role assigned successfully", "success");
         } catch (error) {
             toast(error.message || "Failed to assign role", "error");
         }
     }
 
-    async function revokeRole(roleName) {
+    async function revokeRole(roleName, stageId) {
         const userId = document.getElementById("manageRolesUserId").value;
-        if (!confirm(`Are you sure you want to revoke the role '${roleName}' from this user?`)) return;
+        const scopeLabel = stageId ? `project '${stagePathById(stageId)}'` : 'globally';
+        if (!confirm(`Are you sure you want to revoke the role '${roleName}' (${scopeLabel}) from this user?`)) return;
 
         try {
-            await apiFetch(`/api/v1/users/${userId}/roles/${encodeURIComponent(roleName)}`, {
+            let url = `/api/v1/permissions/users/${userId}/roles/${encodeURIComponent(roleName)}`;
+            if (stageId) url += `?stage_id=${encodeURIComponent(stageId)}`;
+            await apiFetch(url, {
                 method: "DELETE"
             });
-            currentUserDataForRoles.roles = currentUserDataForRoles.roles.filter(r => r !== roleName);
-            renderCurrentRoles();
+            await loadUserProjectRoles(userId);
             toast("Role revoked successfully", "success");
         } catch (error) {
             toast(error.message || "Failed to revoke role", "error");
@@ -854,10 +867,88 @@
         }
     }
 
+    let allStagesList = [];
+    const allRoleNames = [{% for r in all_roles %}"{{ r.role_name }}"{% if not loop.last %},{% endif %}{% endfor %}];
+
+    async function loadStagesForRolesModal() {
+        try {
+            // /api/v1/stages caps limit at 100 (le=100) — do not raise this past 100.
+            allStagesList = await apiFetch('/api/v1/stages?limit=100');
+            // Sort by stage_path: a hierarchical string ("/System/P1/A1/...")
+            // where a parent's path is always a prefix of its children's, so
+            // this naturally groups every stage under its ancestors.
+            allStagesList.sort((a, b) => a.stage_path.localeCompare(b.stage_path));
+            renderProjectSelectOptions();
+        } catch (error) {
+            console.error('Error loading stages:', error);
+        }
+    }
+
+    function renderProjectSelectOptions() {
+        const select = document.getElementById("projectSelect");
+        if (!select) return;
+        const filterText = (document.getElementById("stageFilterInput")?.value || "").trim().toLowerCase();
+        const previousValue = select.value;
+
+        select.innerHTML = '<option value="">-- Select Stage --</option>';
+        allStagesList
+            // Root ("System", depth 0) isn't a real stage to assign roles at.
+            .filter(s => s.depth_level >= 1)
+            .filter(s => !filterText || s.stage_name.toLowerCase().includes(filterText) || s.stage_path.toLowerCase().includes(filterText))
+            .forEach(s => {
+                const indent = "    ".repeat(s.depth_level - 1);
+                select.innerHTML += `<option value="${s.stage_id}">${indent}${s.stage_name}</option>`;
+            });
+
+        if ([...select.options].some(o => o.value === previousValue)) {
+            select.value = previousValue;
+        }
+    }
+
+    async function onRolesModalStageChange() {
+        const stageId = document.getElementById("projectSelect").value;
+        const roleSelect = document.getElementById("roleSelect");
+        const hint = document.getElementById("roleSetHint");
+        const currentValue = roleSelect.value;
+
+        let roleNames = allRoleNames;
+        hint.textContent = "";
+
+        if (stageId) {
+            try {
+                const effective = await apiFetch(`/api/v1/stages/${stageId}/effective-roleset`);
+                if (!effective.unrestricted) {
+                    roleNames = effective.role_names || [];
+                    hint.textContent = `Governed by RoleSet "${effective.role_set_name}" (from ${stageNameById(effective.source_stage_id)})`;
+                }
+            } catch (error) {
+                console.error('Error loading effective roleset:', error);
+            }
+        }
+
+        roleSelect.innerHTML = '<option value="">-- Select Role --</option>';
+        roleNames.forEach(name => {
+            roleSelect.innerHTML += `<option value="${name}">${name}</option>`;
+        });
+        if (roleNames.includes(currentValue)) {
+            roleSelect.value = currentValue;
+        }
+    }
+
+    function stageNameById(stageId) {
+        const s = allStagesList.find(st => st.stage_id === stageId);
+        return s ? s.stage_name : stageId;
+    }
+    function stagePathById(stageId) {
+        const s = allStagesList.find(st => st.stage_id === stageId);
+        return s ? s.stage_path : stageId;
+    }
+
     // Call initial departments and locations load
     document.addEventListener("DOMContentLoaded", () => {
         loadDepartmentsForDetailsModal();
         loadLocationsForDetailsModal();
+        loadStagesForRolesModal();
     });
 </script>
 {% endblock %}

@@ -41,6 +41,12 @@ class Stage(Base):
     visibility_scope = Column(String(20), default="private")
     wbs_prefix = Column(String(10), nullable=True)
 
+    # Governing RoleSet — NULL means inherit from the nearest ancestor
+    # stage that has one, falling back to unrestricted if none do.
+    role_set_id = Column(
+        String(50), ForeignKey("role_sets.role_set_id", ondelete="SET NULL"), nullable=True
+    )
+
     # Timestamps
     created_by = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -61,6 +67,7 @@ class Stage(Base):
     permissions = relationship(
         "StagePermission", back_populates="stage", cascade="all, delete-orphan"
     )
+    role_set = relationship("RoleSet", lazy="selectin")
 
     def __repr__(self):
         return f"<Stage(id={self.stage_id}, name={self.stage_name}, path={self.stage_path})>"
@@ -80,6 +87,7 @@ class Stage(Base):
             "is_leaf": self.is_leaf,
             "visibility_scope": self.visibility_scope,
             "wbs_prefix": self.wbs_prefix,
+            "role_set_id": self.role_set_id,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

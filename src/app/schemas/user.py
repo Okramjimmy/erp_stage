@@ -20,7 +20,6 @@ class UserCreate(BaseModel):
     location: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=50)
     manager_id: Optional[str] = None
-    roles: Optional[List[str]] = None
 
     @field_validator("password")
     @classmethod
