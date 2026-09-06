@@ -12,6 +12,8 @@ from src.app.cache import cache
 from src.app.models.permission import (
     CategoryPermission,
     FormTypePermission,
+    ProjectMember,
+    ProjectRole,
     Role,
     RoleSet,
     RoleSetRole,
@@ -26,7 +28,11 @@ from src.app.schemas.permission import (
     EffectiveRoleSetResponse,
     FormTypePermissionCreate,
     FormTypePermissionResponse,
+    ProjectMemberAdd,
+    ProjectMemberResponse,
     ProjectRoleAssignmentResponse,
+    ProjectRolesResponse,
+    ProjectRolesUpdate,
     RoleCreate,
     RoleResponse,
     RoleSetCreate,
@@ -570,6 +576,127 @@ class PermissionService:
             raise ValueError(f"Role(s) not found: {', '.join(sorted(missing))}")
         return [roles[name] for name in role_names]
 
+    # ------------------------------------------------------------------
+    # Project rosters — Roles/Members buckets scoping a whole project
+    # ------------------------------------------------------------------
+
+    def _resolve_project_stage_id(self, stage: Stage) -> Optional[str]:
+        """Resolve the owning project (depth-1 Stage) for any stage in its
+        subtree, mirroring the pattern already used at
+        stage_service.py's wbs-prefix ancestor lookup: lineage_path[0] is
+        always the hidden 'stage_system' root, so lineage_path[1] is the
+        project for anything below depth 1. Returns None for the root
+        itself (depth 0) or an orphaned stage with no lineage."""
+        if stage.depth_level == 1:
+            return stage.stage_id
+        if stage.depth_level > 1 and stage.lineage_path and len(stage.lineage_path) > 1:
+            return stage.lineage_path[1]
+        return None
+
+    async def set_project_roles(
+        self, project_stage_id: str, role_names: List[str]
+    ) -> ProjectRolesResponse:
+        """Fully replace a project's Roles roster."""
+        stage = await self._get_project_stage_or_raise(project_stage_id)
+        role_ids = await self._role_ids_for_names(role_names)
+
+        existing_result = await self.db.execute(
+            select(ProjectRole).where(ProjectRole.stage_id == project_stage_id)
+        )
+        for pr in existing_result.scalars().all():
+            await self.db.delete(pr)
+        for role_id in role_ids:
+            self.db.add(ProjectRole(stage_id=project_stage_id, role_id=role_id))
+
+        await self.db.commit()
+        return ProjectRolesResponse(stage_id=project_stage_id, role_names=role_names)
+
+    async def list_project_roles(self, project_stage_id: str) -> List[str]:
+        """List a project's Roles roster (empty = unrestricted)."""
+        result = await self.db.execute(
+            select(Role.role_name)
+            .join(ProjectRole, ProjectRole.role_id == Role.role_id)
+            .where(ProjectRole.stage_id == project_stage_id)
+        )
+        return [r[0] for r in result.all()]
+
+    async def add_project_member(
+        self, project_stage_id: str, user_id: str
+    ) -> Dict[str, str]:
+        """Add a user to a project's Members roster. Idempotent."""
+        await self._get_project_stage_or_raise(project_stage_id)
+        user_result = await self.db.execute(select(User.user_id).where(User.user_id == user_id))
+        if user_result.scalar_one_or_none() is None:
+            raise ValueError(f"User '{user_id}' not found")
+
+        existing = await self.db.execute(
+            select(ProjectMember).where(
+                ProjectMember.stage_id == project_stage_id,
+                ProjectMember.user_id == user_id,
+            )
+        )
+        if not existing.scalar_one_or_none():
+            self.db.add(ProjectMember(stage_id=project_stage_id, user_id=user_id))
+            await self.db.commit()
+        return {"stage_id": project_stage_id, "user_id": user_id}
+
+    async def remove_project_member(
+        self, project_stage_id: str, user_id: str
+    ) -> Dict[str, str]:
+        """Remove a user from a project's Members roster."""
+        result = await self.db.execute(
+            select(ProjectMember).where(
+                ProjectMember.stage_id == project_stage_id,
+                ProjectMember.user_id == user_id,
+            )
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            raise ValueError(f"'{user_id}' is not a member of project '{project_stage_id}'")
+        await self.db.delete(member)
+        await self.db.commit()
+        return {"stage_id": project_stage_id, "user_id": user_id}
+
+    async def list_project_members(self, project_stage_id: str) -> List[ProjectMemberResponse]:
+        """List a project's Members roster (empty = unrestricted)."""
+        result = await self.db.execute(
+            select(ProjectMember.user_id, User.username)
+            .join(User, User.user_id == ProjectMember.user_id)
+            .where(ProjectMember.stage_id == project_stage_id)
+        )
+        return [
+            ProjectMemberResponse(user_id=row.user_id, username=row.username)
+            for row in result.all()
+        ]
+
+    async def list_project_role_sets(self, project_stage_id: str) -> List[RoleSetResponse]:
+        """List the global RoleSets that fit this project: every RoleSet
+        when the project's Roles roster is unrestricted (empty), else only
+        the ones whose member roles are a subset of that roster."""
+        await self._get_project_stage_or_raise(project_stage_id)
+        allowed_roles = set(await self.list_project_roles(project_stage_id))
+
+        result = await self.db.execute(select(RoleSet).order_by(RoleSet.name))
+        role_sets = result.scalars().all()
+        if not allowed_roles:
+            return [RoleSetResponse.model_validate(rs.to_dict()) for rs in role_sets]
+        return [
+            RoleSetResponse.model_validate(rs.to_dict())
+            for rs in role_sets
+            if set(r.role_name for r in rs.roles) <= allowed_roles
+        ]
+
+    async def _get_project_stage_or_raise(self, stage_id: str) -> Stage:
+        result = await self.db.execute(select(Stage).where(Stage.stage_id == stage_id))
+        stage = result.scalar_one_or_none()
+        if not stage:
+            raise ValueError(f"Stage '{stage_id}' not found")
+        if stage.depth_level != 1:
+            raise ValueError(
+                "Only project-level stages (depth 1) can have a Roles/Members roster"
+            )
+        return stage
+
     async def is_superadmin(self, user_id: str) -> bool:
         """Check if user has a TRUE global (stage_id IS NULL) 'superadmin' assignment.
 
@@ -652,9 +779,10 @@ class PermissionService:
 
         if role_data.stage_id is not None:
             stage_result = await self.db.execute(
-                select(Stage.stage_id).where(Stage.stage_id == role_data.stage_id)
+                select(Stage).where(Stage.stage_id == role_data.stage_id)
             )
-            if stage_result.scalar_one_or_none() is None:
+            stage = stage_result.scalar_one_or_none()
+            if stage is None:
                 raise ValueError(f"Stage '{role_data.stage_id}' not found")
 
             effective = await self.get_effective_role_set(role_data.stage_id)
@@ -664,6 +792,23 @@ class PermissionService:
                     f"RoleSet '{effective.role_set_name}' for stage '{role_data.stage_id}' "
                     f"(governed by RoleSet at stage '{effective.source_stage_id}')"
                 )
+
+            project_stage_id = self._resolve_project_stage_id(stage)
+            if project_stage_id:
+                allowed_roles = await self.list_project_roles(project_stage_id)
+                if allowed_roles and role_data.role_name not in allowed_roles:
+                    raise ValueError(
+                        f"Role '{role_data.role_name}' is not in project "
+                        f"'{project_stage_id}'s Roles roster"
+                    )
+                allowed_members = await self.list_project_members(project_stage_id)
+                if allowed_members and role_data.user_id not in {
+                    m.user_id for m in allowed_members
+                }:
+                    raise ValueError(
+                        f"User is not a member of project '{project_stage_id}' — "
+                        "add them to the project's Members roster first"
+                    )
 
         stage_filter = (
             UserProjectRole.stage_id == role_data.stage_id

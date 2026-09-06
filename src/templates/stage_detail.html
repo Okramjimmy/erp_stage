@@ -417,13 +417,162 @@ Builder{% endblock %} {% block content %}
 
 <div class="tab-pane" id="tab-permissions">
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
-        <button class="btn btn-sm btn-primary" id="btn-perm-stage" onclick="switchPermView('stage')">Stage</button>
-        <button class="btn btn-sm btn-secondary" id="btn-perm-members" onclick="switchPermView('members')">Members</button>
+        <button class="btn btn-sm btn-primary" id="btn-perm-members" onclick="switchPermView('members')">Members</button>
+        <button class="btn btn-sm btn-secondary" id="btn-perm-stage" onclick="switchPermView('stage')">Stage</button>
         <button class="btn btn-sm btn-secondary" id="btn-perm-category" onclick="switchPermView('category')">Category</button>
         <button class="btn btn-sm btn-secondary" id="btn-perm-formtypes" onclick="switchPermView('formtypes')">Formtypes</button>
     </div>
 
-    <div id="perm-view-stage">
+    <div id="perm-view-members">
+        <style>
+            .members-access-grid {
+                display: grid; gap: 20px; padding: 16px;
+                grid-template-columns: {% if stage.depth_level == 1 %}minmax(320px, 1fr) minmax(320px, 1fr){% else %}1fr{% endif %};
+            }
+            .members-access-cell { min-width: 0; }
+            .members-access-section-title { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 10px; }
+            .roster-tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border-light); padding-bottom: 12px; }
+            .roster-dropzone {
+                flex: 1 1 240px; min-width: 220px; border: 2px dashed var(--border);
+                border-radius: var(--radius-lg); padding: 12px; min-height: 132px;
+                background: var(--bg); transition: border-color var(--transition), background var(--transition);
+            }
+            .roster-dropzone.roster-dropzone-target { border-style: solid; border-color: var(--primary); background: var(--primary-light); }
+            .roster-dropzone.roster-dragover { border-color: var(--success); background: #eafaf1; box-shadow: var(--shadow-md); }
+            .roster-dropzone-label { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+            .roster-chip {
+                display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border);
+                border-radius: 999px; padding: 6px 8px 6px 14px; margin: 0 6px 8px 0; font-size: 13px; font-weight: 500;
+                color: var(--text); box-shadow: var(--shadow); cursor: grab; user-select: none; transition: box-shadow var(--transition), transform var(--transition);
+            }
+            .roster-chip:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+            .roster-chip.roster-dragging { opacity: 0.4; }
+            .roster-chip-remove {
+                display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%;
+                border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1; flex-shrink: 0;
+            }
+            .roster-chip-remove:hover { background: var(--danger); color: #fff; }
+            .roster-empty-hint { font-size: 12px; color: var(--text-muted); font-style: italic; padding: 6px 2px; }
+            .roster-roleset-card {
+                border: 2px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; min-width: 200px;
+                background: var(--surface); box-shadow: var(--shadow); cursor: pointer; transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+                position: relative;
+            }
+            .roster-roleset-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+            .roster-roleset-card.roster-roleset-selected { border-color: var(--primary); background: var(--primary-light); }
+            .roster-roleset-card-check { position: absolute; top: 10px; right: 12px; color: var(--primary); font-weight: 700; font-size: 14px; }
+            .roster-assign-col { flex: 1 1 200px; min-width: 200px; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); box-shadow: var(--shadow); transition: box-shadow var(--transition); }
+            .roster-assign-col.roster-dragover { box-shadow: var(--shadow-md); outline: 2px solid var(--success); outline-offset: -2px; }
+            .roster-assign-col-header { background: var(--primary); color: #fff; padding: 8px 12px; font-weight: 700; font-size: 13px; }
+            .roster-assign-col-body { padding: 10px; min-height: 64px; }
+            .roster-assign-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--bg); border: 1px solid var(--border-light); border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; font-size: 13px; }
+        </style>
+        <div class="card card-sm">
+            <div class="card-header">
+                <div class="card-title">Members &amp; Access</div>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-primary" id="btn-add-member" onclick="openAddMemberModal()" style="display: none;">
+                        + Add Member
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="loadStageMembers()">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="members-access-grid">
+                {% if stage.depth_level != 1 %}
+                <div class="members-access-cell" style="grid-column: 1 / -1;">
+                    <div class="members-access-section-title">Governing Role Set</div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px;">
+                        Choose which RoleSet governs role assignment on this stage (and every stage below it). Only RoleSets that fit the owning project's Roles roster are offered.
+                    </p>
+                    <div id="stage-effective-roleset" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Loading...</div>
+                    <div id="stage-roleset-chooser-list" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <div style="color: var(--text-muted); font-size: 13px;">Loading...</div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if stage.depth_level == 1 %}
+                <div class="members-access-cell">
+                    <div class="members-access-section-title">Project Rosters</div>
+                    <div class="roster-tabs">
+                        <button class="btn btn-sm btn-primary" id="btn-roster-roles" onclick="switchRosterView('roles')">Roles</button>
+                        <button class="btn btn-sm btn-secondary" id="btn-roster-members" onclick="switchRosterView('members')">Members</button>
+                        <button class="btn btn-sm btn-secondary" id="btn-roster-rolesets" onclick="switchRosterView('rolesets')">RoleSets</button>
+                        <button class="btn btn-sm btn-secondary" id="btn-roster-assign" onclick="switchRosterView('assign')">Assign</button>
+                    </div>
+
+                    <div id="roster-view-roles">
+                        <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px;">
+                            Drag a role into "Project roles" (or click it) to restrict this project — and every stage below it — to it. An empty "Project roles" box means unrestricted: any global role may be used. A project can have many roles.
+                        </p>
+                        <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+                            <div id="roster-roles-available" class="roster-dropzone" ondragover="rosterDragOver(event)" ondragleave="rosterDragLeave(event)" ondrop="rosterRolesDrop(event, false)">
+                                <div class="roster-dropzone-label">Available roles</div>
+                                <div id="roster-roles-available-chips"></div>
+                            </div>
+                            <div id="roster-roles-project" class="roster-dropzone roster-dropzone-target" ondragover="rosterDragOver(event)" ondragleave="rosterDragLeave(event)" ondrop="rosterRolesDrop(event, true)">
+                                <div class="roster-dropzone-label">Project roles</div>
+                                <div id="roster-roles-project-chips"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="roster-view-members" style="display: none;">
+                        <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px;">
+                            Drag a user into "Project members" (or click it) to make them eligible for role assignment anywhere in this project. An empty "Project members" box means unrestricted: any user may be assigned.
+                        </p>
+                        <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+                            <div id="roster-members-available" class="roster-dropzone" ondragover="rosterDragOver(event)" ondragleave="rosterDragLeave(event)" ondrop="rosterMembersDrop(event, false)">
+                                <div class="roster-dropzone-label">Available users</div>
+                                <div id="roster-members-available-chips"></div>
+                            </div>
+                            <div id="roster-members-project" class="roster-dropzone roster-dropzone-target" ondragover="rosterDragOver(event)" ondragleave="rosterDragLeave(event)" ondrop="rosterMembersDrop(event, true)">
+                                <div class="roster-dropzone-label">Project members</div>
+                                <div id="roster-members-project-chips"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="roster-view-rolesets" style="display: none;">
+                        <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px;">
+                            Choose this project's Governing Role Set from the RoleSets that fit its Roles roster. This only narrows which of the project's roles are actually assignable here (and cascades to every stage below) — it never changes the Roles roster itself. Changing it updates who shows up in Effective Members immediately.
+                        </p>
+                        <div id="roster-rolesets-effective" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Loading...</div>
+                        <div id="roster-rolesets-list" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            <div style="color: var(--text-muted); font-size: 13px;">Loading...</div>
+                        </div>
+                    </div>
+
+                    <div id="roster-view-assign" style="display: none;">
+                        <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 10px;">
+                            Drag a project member onto a role column to assign them that role at this project (cascades to every stage below it).
+                        </p>
+                        <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+                            <div id="roster-assign-pool" class="roster-dropzone" style="flex: 0 0 220px;">
+                                <div class="roster-dropzone-label">Project members</div>
+                                <div id="roster-assign-pool-chips"></div>
+                            </div>
+                            <div id="roster-assign-columns" style="flex: 1 1 400px; display: flex; flex-wrap: wrap; gap: 12px;"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="members-access-cell">
+                    <div class="members-access-section-title">Effective Members</div>
+                    <div id="members-container">
+                        <div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">
+                            Loading members…
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="perm-view-stage" style="display: none;">
         <div class="card card-sm">
             <div class="card-header">
                 <div class="card-title">Stage Role Permissions</div>
@@ -434,44 +583,6 @@ Builder{% endblock %} {% block content %}
             <div id="permissions-container-stage">
                 <div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">
                     Loading permissions…
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="perm-view-members" style="display: none;">
-        <div class="card card-sm" style="margin-bottom: 16px;">
-            <div class="card-header">
-                <div class="card-title">Governing Role Set</div>
-            </div>
-            <div style="padding: 12px 16px;">
-                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <select id="stage-role-set-select" class="form-control" style="max-width: 260px;">
-                        <option value="">-- Inherit from parent --</option>
-                    </select>
-                    <button class="btn btn-sm btn-secondary" onclick="saveStageRoleSet()">Save</button>
-                </div>
-                <div id="stage-effective-roleset" style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">
-                    Loading...
-                </div>
-            </div>
-        </div>
-
-        <div class="card card-sm">
-            <div class="card-header">
-                <div class="card-title">Project Members</div>
-                <div class="d-flex gap-1">
-                    <button class="btn btn-sm btn-primary" id="btn-add-member" onclick="openAddMemberModal()" style="display: none;">
-                        + Add Member
-                    </button>
-                    <button class="btn btn-sm btn-secondary" onclick="loadStageMembers()">
-                        Refresh
-                    </button>
-                </div>
-            </div>
-            <div id="members-container">
-                <div style="color: var(--text-muted); font-size: 13px; padding: 8px 0;">
-                    Loading members…
                 </div>
             </div>
         </div>
@@ -571,7 +682,7 @@ Builder{% endblock %} {% block content %}
                 Configure specific user assignments for workflow roles (e.g. Worker, Manager, Reviewer) on this stage.
             </p>
             <div id="assignments-loading" style="padding: 32px; text-align: center; color: var(--text-muted); font-size: 13px;">
-                <div class="spinner" style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 8px;"></div>
+                <div class="spinner" style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 8px;"></div>
                 <div>Loading assignments...</div>
             </div>
             <div id="assignments-content" style="display: none;">
@@ -1820,7 +1931,7 @@ Builder{% endblock %} {% block content %}
                 Configure specific user assignments for workflow roles (e.g. Worker, Manager, Reviewer) for this form type.
             </p>
             <div id="modal-assignments-loading" style="padding: 32px; text-align: center; color: var(--text-muted); font-size: 13px;">
-                <div class="spinner" style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 8px;"></div>
+                <div class="spinner" style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 8px;"></div>
                 <div>Loading assignments...</div>
             </div>
             <div id="modal-assignments-content" style="display: none;">
@@ -2124,7 +2235,7 @@ Builder{% endblock %} {% block content %}
             .forEach((b) => b.classList.remove("active"));
         document.getElementById("tab-" + name).classList.add("active");
         btn.classList.add("active");
-        if (name === "permissions") loadPermissions();
+        if (name === "permissions") { loadPermissions(); switchPermView('members'); }
         if (name === "assignments") loadAssignments();
     }
 
@@ -2139,6 +2250,7 @@ Builder{% endblock %} {% block content %}
         // not just the one the user happens to land on.
         loadPermissions();
         loadStageMembers();
+        loadStageRoleSetPanel();
         loadAssignments();
 
         // Surface the stage's own details (id, path, depth, lineage, etc.)
@@ -2479,13 +2591,13 @@ Builder{% endblock %} {% block content %}
     let cachedFormTypePermissions = [];
 
     function switchPermView(view) {
-        document.getElementById('perm-view-stage').style.display = view === 'stage' ? 'block' : 'none';
         document.getElementById('perm-view-members').style.display = view === 'members' ? 'block' : 'none';
+        document.getElementById('perm-view-stage').style.display = view === 'stage' ? 'block' : 'none';
         document.getElementById('perm-view-category').style.display = view === 'category' ? 'block' : 'none';
         document.getElementById('perm-view-formtypes').style.display = view === 'formtypes' ? 'block' : 'none';
 
-        document.getElementById('btn-perm-stage').className = view === 'stage' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
         document.getElementById('btn-perm-members').className = view === 'members' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        document.getElementById('btn-perm-stage').className = view === 'stage' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
         document.getElementById('btn-perm-category').className = view === 'category' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
         document.getElementById('btn-perm-formtypes').className = view === 'formtypes' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
 
@@ -2496,51 +2608,355 @@ Builder{% endblock %} {% block content %}
         } else if (view === 'members') {
             loadStageMembers();
             loadStageRoleSetPanel();
+            if (STAGE_DEPTH === 1) {
+                switchRosterView(currentRosterView);
+            }
         }
     }
 
-    let allRoleSetsForStagePanel = [];
+    // ------------------------------------------------------------------
+    // Project rosters (Roles / Members / RoleSets / Assign) — depth-1
+    // project stages only. Empty roster = unrestricted at the enforcement
+    // layer, but the Assign matrix deliberately shows NO columns/pool
+    // until the roster is actually populated — no "all roles" fallback,
+    // so an admin can't accidentally assign against an unconfigured
+    // project. Every add/remove works by both drag-and-drop AND a plain
+    // click (the chip itself toggles it), so it never depends on the
+    // browser/webview's drag-and-drop support to be usable.
+    // ------------------------------------------------------------------
+    let currentRosterView = 'roles';
+    let cachedProjectRoleNames = [];
+    let cachedProjectMembers = [];
 
-    async function loadStageRoleSetPanel() {
-        const select = document.getElementById('stage-role-set-select');
-        const effectiveDiv = document.getElementById('stage-effective-roleset');
+    function switchRosterView(view) {
+        currentRosterView = view;
+        ['roles', 'members', 'rolesets', 'assign'].forEach(v => {
+            document.getElementById(`roster-view-${v}`).style.display = v === view ? 'block' : 'none';
+            document.getElementById(`btn-roster-${v}`).className = v === view ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary';
+        });
+        if (view === 'roles') loadRosterRolesBucket();
+        else if (view === 'members') loadRosterMembersBucket();
+        else if (view === 'rolesets') loadRosterRoleSetsBucket();
+        else if (view === 'assign') loadRosterAssignMatrix();
+    }
+
+    function rosterDragOver(ev) {
+        ev.preventDefault();
+        ev.currentTarget.classList.add('roster-dragover');
+    }
+
+    function rosterDragLeave(ev) {
+        ev.currentTarget.classList.remove('roster-dragover');
+    }
+
+    function rosterChipHtml(kind, id, label, onClick, mode) {
+        const icon = mode === 'remove' ? '×' : '+';
+        const title = mode === 'remove' ? 'Remove' : 'Add';
+        return `<div class="roster-chip" draggable="true"
+                     ondragstart="rosterDragStart(event, '${kind}', '${escapeHtml(id)}')"
+                     ondragend="this.classList.remove('roster-dragging')"
+                     onclick="${onClick}">
+                    <span>${escapeHtml(label)}</span>
+                    <button type="button" class="roster-chip-remove" title="${title}" onclick="event.stopPropagation(); ${onClick}">${icon}</button>
+                </div>`;
+    }
+
+    function rosterDragStart(ev, kind, id) {
+        ev.dataTransfer.setData('text/plain', JSON.stringify({ kind, id }));
+        ev.target.classList.add('roster-dragging');
+    }
+
+    function rosterEmptyHint(text) {
+        return `<div class="roster-empty-hint">${text}</div>`;
+    }
+
+    async function loadRosterRolesBucket() {
+        const availableChips = document.getElementById('roster-roles-available-chips');
+        const projectChips = document.getElementById('roster-roles-project-chips');
+        try {
+            if (!cachedRolesList) {
+                cachedRolesList = await apiFetch(`${API}/permissions/roles`);
+            }
+            const projectRoles = await apiFetch(`/api/v1/stages/${STAGE_ID}/project-roles`);
+            cachedProjectRoleNames = projectRoles.role_names || [];
+
+            const available = cachedRolesList.map(r => r.role_name).filter(n => !cachedProjectRoleNames.includes(n));
+            availableChips.innerHTML = available.map(n =>
+                rosterChipHtml('role', n, n, `addProjectRole('${escapeHtml(n)}')`, 'add')
+            ).join('') || rosterEmptyHint('Every global role is already in this project.');
+            projectChips.innerHTML = cachedProjectRoleNames.map(n =>
+                rosterChipHtml('role', n, n, `removeProjectRole('${escapeHtml(n)}')`, 'remove')
+            ).join('') || rosterEmptyHint('Empty — unrestricted. Drag/click a role, or apply a RoleSet from the RoleSets tab.');
+        } catch (e) {
+            toast(e.message || 'Failed to load project roles', 'error');
+        }
+    }
+
+    async function saveProjectRoles(next) {
+        try {
+            await apiFetch(`/api/v1/stages/${STAGE_ID}/project-roles`, {
+                method: 'PUT',
+                body: { role_names: next }
+            });
+            toast('Project roles updated', 'success');
+            loadRosterRolesBucket();
+        } catch (e) {
+            toast(e.message || 'Failed to update project roles', 'error');
+        }
+    }
+
+    function addProjectRole(name) {
+        if (cachedProjectRoleNames.includes(name)) return;
+        saveProjectRoles([...cachedProjectRoleNames, name]);
+    }
+
+    function removeProjectRole(name) {
+        saveProjectRoles(cachedProjectRoleNames.filter(n => n !== name));
+    }
+
+    function rosterRolesDrop(ev, intoProject) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('roster-dragover');
+        let payload;
+        try { payload = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch { return; }
+        if (!payload || payload.kind !== 'role') return;
+        if (intoProject) addProjectRole(payload.id);
+        else removeProjectRole(payload.id);
+    }
+
+    async function loadRosterMembersBucket() {
+        const availableChips = document.getElementById('roster-members-available-chips');
+        const projectChips = document.getElementById('roster-members-project-chips');
+        try {
+            if (!cachedUsers) {
+                const usersResponse = await apiFetch(`${API}/users?limit=200`);
+                cachedUsers = usersResponse.items || usersResponse || [];
+            }
+            cachedProjectMembers = await apiFetch(`/api/v1/stages/${STAGE_ID}/project-members`);
+            const memberIds = new Set(cachedProjectMembers.map(m => m.user_id));
+
+            const available = cachedUsers.filter(u => !memberIds.has(u.user_id));
+            availableChips.innerHTML = available.map(u =>
+                rosterChipHtml('user', u.user_id, u.full_name || u.username, `addProjectMemberFromRoster('${escapeHtml(u.user_id)}')`, 'add')
+            ).join('') || rosterEmptyHint('Every user is already a project member.');
+            projectChips.innerHTML = cachedProjectMembers.map(m =>
+                rosterChipHtml('user', m.user_id, m.username, `removeProjectMemberFromRoster('${escapeHtml(m.user_id)}')`, 'remove')
+            ).join('') || rosterEmptyHint('Empty — unrestricted. Drag/click a user to add them.');
+        } catch (e) {
+            toast(e.message || 'Failed to load project members', 'error');
+        }
+    }
+
+    async function addProjectMemberFromRoster(userId) {
+        try {
+            await apiFetch(`/api/v1/stages/${STAGE_ID}/project-members`, {
+                method: 'POST',
+                body: { user_id: userId }
+            });
+            toast('Project members updated', 'success');
+            loadRosterMembersBucket();
+        } catch (e) {
+            toast(e.message || 'Failed to update project members', 'error');
+        }
+    }
+
+    async function removeProjectMemberFromRoster(userId) {
+        try {
+            await apiFetch(`/api/v1/stages/${STAGE_ID}/project-members/${encodeURIComponent(userId)}`, {
+                method: 'DELETE'
+            });
+            toast('Project members updated', 'success');
+            loadRosterMembersBucket();
+        } catch (e) {
+            toast(e.message || 'Failed to update project members', 'error');
+        }
+    }
+
+    function rosterMembersDrop(ev, intoProject) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('roster-dragover');
+        let payload;
+        try { payload = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch { return; }
+        if (!payload || payload.kind !== 'user') return;
+        if (intoProject) addProjectMemberFromRoster(payload.id);
+        else removeProjectMemberFromRoster(payload.id);
+    }
+
+    function renderRoleSetChooserCards(listEl, effectiveDiv, roleSets, ownRoleSetId, effective) {
+        if (effective.unrestricted) {
+            effectiveDiv.textContent = 'Effective: unrestricted — any role may be assigned here.';
+        } else {
+            const sourceLabel = effective.source_stage_id === STAGE_ID ? 'this stage' : `ancestor stage "${effective.source_stage_id}"`;
+            effectiveDiv.textContent = `Effective: "${effective.role_set_name}" (${(effective.role_names || []).join(', ')}) — governed by ${sourceLabel}.`;
+        }
+
+        const inheritSelected = !ownRoleSetId ? ' roster-roleset-selected' : '';
+        let cardsHtml = `
+            <div class="roster-roleset-card${inheritSelected}" onclick="selectStageRoleSet(null)">
+                ${!ownRoleSetId ? '<span class="roster-roleset-card-check">✓</span>' : ''}
+                <div style="font-weight: 700; font-size: 13px;">Inherit from parent</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin: 4px 0;">Unrestricted, unless an ancestor stage governs this one.</div>
+            </div>
+        `;
+        cardsHtml += roleSets.map(rs => {
+            const selected = ownRoleSetId === rs.role_set_id ? ' roster-roleset-selected' : '';
+            return `
+                <div class="roster-roleset-card${selected}" onclick="selectStageRoleSet('${escapeHtml(rs.role_set_id)}')">
+                    ${selected ? '<span class="roster-roleset-card-check">✓</span>' : ''}
+                    <div style="font-weight: 700; font-size: 13px;">${escapeHtml(rs.name)}</div>
+                    <div style="font-size: 12px; color: var(--text-muted); margin: 4px 0;">${escapeHtml((rs.role_names || []).join(', ') || 'No roles')}</div>
+                </div>
+            `;
+        }).join('');
+        listEl.innerHTML = cardsHtml;
+    }
+
+    async function loadRosterRoleSetsBucket() {
+        const list = document.getElementById('roster-rolesets-list');
+        const effectiveDiv = document.getElementById('roster-rolesets-effective');
+        list.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">Loading...</div>';
         try {
             const [roleSets, stage, effective] = await Promise.all([
-                apiFetch('/api/v1/permissions/role-sets'),
+                apiFetch(`/api/v1/stages/${STAGE_ID}/project-role-sets`),
                 apiFetch(`/api/v1/stages/${STAGE_ID}`),
                 apiFetch(`/api/v1/stages/${STAGE_ID}/effective-roleset`),
             ]);
-            allRoleSetsForStagePanel = roleSets;
-
-            select.innerHTML = '<option value="">-- Inherit from parent --</option>' +
-                roleSets.map(rs => `<option value="${rs.role_set_id}">${rs.name}</option>`).join('');
-            select.value = stage.role_set_id || '';
-
-            if (effective.unrestricted) {
-                effectiveDiv.textContent = 'Effective: unrestricted — any role may be assigned here.';
-            } else {
-                const sourceLabel = effective.source_stage_id === STAGE_ID ? 'this stage' : `ancestor stage "${effective.source_stage_id}"`;
-                effectiveDiv.textContent = `Effective: "${effective.role_set_name}" (${(effective.role_names || []).join(', ')}) — governed by ${sourceLabel}.`;
-            }
-        } catch (error) {
-            console.error('Error loading stage role set panel:', error);
-            effectiveDiv.textContent = 'Failed to load.';
+            renderRoleSetChooserCards(list, effectiveDiv, roleSets, stage.role_set_id || '', effective);
+        } catch (e) {
+            list.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load RoleSets: ${e.message}</p>`;
         }
     }
 
-    async function saveStageRoleSet() {
-        const select = document.getElementById('stage-role-set-select');
-        const roleSetId = select.value || null;
+    async function selectStageRoleSet(roleSetId) {
         try {
             await apiFetch(`/api/v1/stages/${STAGE_ID}/role-set`, {
                 method: 'PUT',
-                body: { role_set_id: roleSetId },
+                body: { role_set_id: roleSetId }
             });
-            toast('Governing role set updated', 'success');
-            loadStageRoleSetPanel();
+            toast('Governing Role Set updated', 'success');
+            if (STAGE_DEPTH === 1) loadRosterRoleSetsBucket();
+            else loadStageRoleSetPanel();
+            loadStageMembers();
+        } catch (e) {
+            toast(e.message || 'Failed to set Governing Role Set', 'error');
+        }
+    }
+
+    async function loadRosterAssignMatrix() {
+        const poolChips = document.getElementById('roster-assign-pool-chips');
+        const columns = document.getElementById('roster-assign-columns');
+        try {
+            const [projectRoles, projectMembers, stageMembers, effective] = await Promise.all([
+                apiFetch(`/api/v1/stages/${STAGE_ID}/project-roles`),
+                apiFetch(`/api/v1/stages/${STAGE_ID}/project-members`),
+                apiFetch(`${API}/permissions/stages/${STAGE_ID}/members`),
+                apiFetch(`/api/v1/stages/${STAGE_ID}/effective-roleset`),
+            ]);
+            cachedProjectMembers = projectMembers;
+
+            // Assignable here = in the project's Roles roster AND (if this
+            // project has a Governing Role Set in effect) in that RoleSet
+            // too — the same two checks assign_user_role enforces server
+            // side, so a role that would be rejected never appears as a
+            // column to begin with.
+            const rosterRoles = projectRoles.role_names || [];
+            cachedProjectRoleNames = effective.unrestricted
+                ? rosterRoles
+                : rosterRoles.filter(n => (effective.role_names || []).includes(n));
+
+            if (!rosterRoles.length) {
+                poolChips.innerHTML = '';
+                columns.innerHTML = `<p style="color:var(--text-muted);font-size:13px; padding: 8px 0;">This project has no Roles roster yet — set one in the Roles tab before assigning members to roles.</p>`;
+                return;
+            }
+            if (!cachedProjectRoleNames.length) {
+                poolChips.innerHTML = '';
+                columns.innerHTML = `<p style="color:var(--text-muted);font-size:13px; padding: 8px 0;">This project's Governing Role Set ("${escapeHtml(effective.role_set_name || '')}") excludes every role in the Roles roster — widen the RoleSet in the RoleSets tab, or the Roles roster, before assigning members.</p>`;
+                return;
+            }
+            if (!cachedProjectMembers.length) {
+                poolChips.innerHTML = '';
+                columns.innerHTML = `<p style="color:var(--text-muted);font-size:13px; padding: 8px 0;">This project has no Members roster yet — add members in the Members tab before assigning them to roles.</p>`;
+                return;
+            }
+
+            const directHere = stageMembers.filter(m => m.source === 'direct');
+
+            poolChips.innerHTML = cachedProjectMembers.map(m =>
+                `<div class="roster-chip" draggable="true" ondragstart="rosterDragStart(event, 'assignee', '${escapeHtml(m.user_id)}')" ondragend="this.classList.remove('roster-dragging')">
+                    <span>${escapeHtml(m.username)}</span>
+                </div>`
+            ).join('');
+
+            columns.innerHTML = cachedProjectRoleNames.map(roleName => {
+                const chips = directHere.filter(m => m.role_name === roleName).map(m => `
+                    <div class="roster-assign-chip">
+                        <span>${escapeHtml(m.username || m.user_id)}</span>
+                        <button class="roster-chip-remove" title="Remove" onclick="removeStageMember('${escapeHtml(m.user_id)}', '${escapeHtml(roleName)}', '${escapeHtml(m.username || m.user_id)}')">×</button>
+                    </div>
+                `).join('');
+                return `
+                    <div class="roster-assign-col" ondragover="rosterDragOver(event)" ondragleave="rosterDragLeave(event)" ondrop="rosterAssignDrop(event, '${escapeHtml(roleName)}')">
+                        <div class="roster-assign-col-header">${escapeHtml(roleName)}</div>
+                        <div class="roster-assign-col-body">${chips || '<div class="roster-empty-hint">Drop a member here</div>'}</div>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            columns.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load assignment matrix: ${e.message}</p>`;
+        }
+    }
+
+    async function rosterAssignDrop(ev, roleName) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('roster-dragover');
+        let payload;
+        try { payload = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch { return; }
+        if (!payload || payload.kind !== 'assignee') return;
+        try {
+            await apiFetch(`${API}/permissions/users/roles`, {
+                method: 'POST',
+                body: { user_id: payload.id, role_name: roleName, stage_id: STAGE_ID }
+            });
+            toast('Role assigned', 'success');
+            loadRosterAssignMatrix();
+        } catch (e) {
+            toast(e.message || 'Failed to assign role', 'error');
+        }
+    }
+
+    // Child (non-project) stages choose their Governing Role Set the same
+    // clickable-card way project stages do in the RoleSets tab — never a
+    // plain <select>. The choices offered are the RoleSets that fit the
+    // *owning project's* Roles roster (mirroring _resolve_project_stage_id
+    // on the backend: lineage_path[0] is always the hidden 'stage_system'
+    // root, so lineage_path[1] is the owning project for anything deeper).
+    async function loadStageRoleSetPanel() {
+        const list = document.getElementById('stage-roleset-chooser-list');
+        const effectiveDiv = document.getElementById('stage-effective-roleset');
+        if (!list || !effectiveDiv) return;
+        try {
+            const [stage, effective] = await Promise.all([
+                apiFetch(`/api/v1/stages/${STAGE_ID}`),
+                apiFetch(`/api/v1/stages/${STAGE_ID}/effective-roleset`),
+            ]);
+
+            let roleSets = [];
+            const projectStageId = STAGE_DEPTH > 1 && stage.lineage_path && stage.lineage_path.length > 1
+                ? stage.lineage_path[1]
+                : null;
+            if (projectStageId) {
+                roleSets = await apiFetch(`/api/v1/stages/${projectStageId}/project-role-sets`);
+            } else {
+                // No owning project found (e.g. this stage sits directly
+                // under the hidden root) — fall back to every RoleSet.
+                roleSets = await apiFetch('/api/v1/permissions/role-sets');
+            }
+
+            renderRoleSetChooserCards(list, effectiveDiv, roleSets, stage.role_set_id || '', effective);
         } catch (error) {
-            console.error('Error saving stage role set:', error);
-            toast(error.message || 'Failed to update role set', 'error');
+            console.error('Error loading stage role set panel:', error);
+            list.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load RoleSets: ${error.message}</p>`;
         }
     }
 
@@ -2705,8 +3121,8 @@ Builder{% endblock %} {% block content %}
                     : '';
 
                 return `
-                    <tr style="border-bottom: 1px solid var(--border-color);">
-                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text-color);">${p.role_name}</td>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text);">${p.role_name}</td>
                         <td style="padding: 12px 10px; text-align: center;">${viewVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${createRecVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
@@ -2722,12 +3138,12 @@ Builder{% endblock %} {% block content %}
 
             container.innerHTML = `
                 <div style="margin-bottom: 12px; font-weight: 500; font-size: 14px; color: var(--primary);">
-                    Permissions for category: <span style="color: var(--text-color);">${category}</span>
+                    Permissions for category: <span style="color: var(--text);">${category}</span>
                 </div>
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <thead>
-                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--background-sidebar); border-radius: 6px;">
+                            <tr style="border-bottom: 1px solid var(--border); text-align: left; background-color: var(--bg); border-radius: 6px;">
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500;">Role</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">View</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create Records</th>
@@ -2816,9 +3232,9 @@ Builder{% endblock %} {% block content %}
                         removeBtn = `<button class="btn btn-sm btn-ghost" style="color: var(--danger); padding: 0 4px; font-size: 14px; line-height: 1;" title="Remove from source project '${escapeHtml(m.granted_from_stage_id)}'" onclick="removeInheritedStageMember('${escapeHtml(m.user_id)}', '${escapeHtml(m.role_name)}', '${escapeHtml(m.granted_from_stage_id)}', '${escapeHtml(m.username || m.user_id)}')">✕</button>`;
                     }
                     return `
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; background: var(--background-sidebar); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px;">
                             <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                                <span style="font-weight:600; font-size:13px; color:var(--text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(m.username || m.user_id)}</span>
+                                <span style="font-weight:600; font-size:13px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(m.username || m.user_id)}</span>
                                 ${sourceBadge(m)}
                                 ${isInherited && m.granted_from_stage_id ? `<span style="font-size:11px; color:var(--text-muted);">from ${escapeHtml(m.granted_from_stage_id)}</span>` : ''}
                             </div>
@@ -2828,8 +3244,8 @@ Builder{% endblock %} {% block content %}
                 }).join('');
 
                 return `
-                    <div style="flex: 1 1 220px; min-width: 220px; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
-                        <div style="background: var(--primary-color, #4f46e5); color: #fff; padding: 10px 14px; font-weight: 700; font-size: 15px; letter-spacing: 0.2px;">
+                    <div style="flex: 1 1 220px; min-width: 220px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+                        <div style="background: var(--primary); color: #fff; padding: 10px 14px; font-weight: 700; font-size: 15px; letter-spacing: 0.2px;">
                             ${escapeHtml(roleName)}
                             <span style="float:right; font-weight:500; font-size:12px; opacity:0.85;">${roleMembers.length}</span>
                         </div>
@@ -2972,8 +3388,8 @@ Builder{% endblock %} {% block content %}
                     : '';
 
                 return `
-                    <tr style="border-bottom: 1px solid var(--border-color);">
-                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text-color);">${p.role_name}</td>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text);">${p.role_name}</td>
                         <td style="padding: 12px 10px; text-align: center;">${viewVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${createRecVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
@@ -3012,12 +3428,12 @@ Builder{% endblock %} {% block content %}
 
             container.innerHTML = `
                 <div style="margin-bottom: 12px; font-weight: 500; font-size: 14px; color: var(--primary);">
-                    Permissions for: <span style="color: var(--text-color);">${formName}</span>
+                    Permissions for: <span style="color: var(--text);">${formName}</span>
                 </div>
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <thead>
-                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--background-sidebar); border-radius: 6px;">
+                            <tr style="border-bottom: 1px solid var(--border); text-align: left; background-color: var(--bg); border-radius: 6px;">
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500;">Role</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">View</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create Records</th>
@@ -3042,13 +3458,23 @@ Builder{% endblock %} {% block content %}
     }
 
     async function loadPermissions() {
+        // The "Stage" permissions tab (StagePermission grant/revoke UI) was
+        // removed — roles and their allowed capabilities are now managed
+        // through the Roster/RoleSet buckets instead. This function still
+        // runs on every Permissions-tab load because the Category and
+        // Formtypes sub-views read cachedCategoryPermissions/
+        // cachedFormTypePermissions, which only this single combined
+        // fetch populates — hence the container-existence guard below
+        // rather than deleting the fetch entirely.
         const container = document.getElementById("permissions-container-stage");
         try {
             const responseData = await apiFetch(`${API}/permissions/stages/${STAGE_ID}`);
-            
+
             cachedStagePermissions = responseData.stage_permissions || [];
             cachedCategoryPermissions = responseData.category_permissions || [];
             cachedFormTypePermissions = responseData.form_type_permissions || [];
+
+            if (!container) return;
 
             const data = cachedStagePermissions;
 
@@ -3077,8 +3503,8 @@ Builder{% endblock %} {% block content %}
                     : '';
 
                 return `
-                    <tr style="border-bottom: 1px solid var(--border-color);">
-                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text-color);">${p.role_name}</td>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 12px 10px; font-weight: 500; color: var(--text);">${p.role_name}</td>
                         <td style="padding: 12px 10px; text-align: center;">${viewVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${createVal}</td>
                         <td style="padding: 12px 10px; text-align: center;">${editVal}</td>
@@ -3093,7 +3519,7 @@ Builder{% endblock %} {% block content %}
                 <div style="overflow-x: auto; margin-top: 12px;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <thead>
-                            <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--background-sidebar); border-radius: 6px;">
+                            <tr style="border-bottom: 1px solid var(--border); text-align: left; background-color: var(--bg); border-radius: 6px;">
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500;">Role</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">View</th>
                                 <th style="padding: 10px; color: var(--text-muted); font-weight: 500; text-align: center;">Create</th>
@@ -3122,7 +3548,7 @@ Builder{% endblock %} {% block content %}
                 </div>
             `;
         } catch (e) {
-            container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions: ${e.message}</p>`;
+            if (container) container.innerHTML = `<p style="color:var(--text-muted);font-size:13px">Could not load permissions: ${e.message}</p>`;
         }
     }
 
@@ -3254,9 +3680,9 @@ Builder{% endblock %} {% block content %}
             const roles = getRolesFromWorkflow(ft.workflow_data);
             
             let html = `
-                <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
                     <thead>
-                        <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--bg-hover);">
+                        <tr style="border-bottom: 1px solid var(--border); text-align: left; background-color: var(--bg-hover);">
                             <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 30%;">Workflow Role</th>
                             <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 45%;">Target Assigned User</th>
                             <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 25%;">Status</th>
@@ -3281,10 +3707,10 @@ Builder{% endblock %} {% block content %}
                     : `<span style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">⚠ Unassigned</span>`;
                 
                 html += `
-                    <tr style="border-bottom: 1px solid var(--border-color);">
-                        <td style="padding: 12px 16px; font-weight: 500; color: var(--text-color);">${escapeHtml(role)}</td>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 12px 16px; font-weight: 500; color: var(--text);">${escapeHtml(role)}</td>
                         <td style="padding: 12px 16px;">
-                            <select class="form-control" style="width: 100%; padding: 6px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg);" 
+                            <select class="form-control" style="width: 100%; padding: 6px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg);" 
                                     data-assignment-id="${escapeHtml(assignmentId)}"
                                     onfocus="this.oldValue = this.value;"
                                     onchange="handleAssignmentChange('${escapeHtml(formTypeId)}', '${escapeHtml(role)}', this)"
@@ -3365,16 +3791,16 @@ Builder{% endblock %} {% block content %}
                 const roles = getRolesFromWorkflow(ft.workflow_data);
                 
                 html += `
-                    <div style="margin-bottom: 24px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
-                        <div style="padding: 12px 16px; background-color: var(--background-sidebar); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                            <div style="font-weight: 600; color: var(--text-color); font-size: 14px;">
+                    <div style="margin-bottom: 24px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--card-bg);">
+                        <div style="padding: 12px 16px; background-color: var(--bg); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: 600; color: var(--text); font-size: 14px;">
                                 ${escapeHtml(ft.form_name)} <span style="font-weight: normal; color: var(--text-muted); font-size: 12px; margin-left: 8px;">(${escapeHtml(ft.form_type_id)})</span>
                             </div>
                         </div>
                         <div style="overflow-x: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                                 <thead>
-                                    <tr style="border-bottom: 1px solid var(--border-color); text-align: left; background-color: var(--bg-hover);">
+                                    <tr style="border-bottom: 1px solid var(--border); text-align: left; background-color: var(--bg-hover);">
                                         <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 30%;">Workflow Role</th>
                                         <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 45%;">Target Assigned User</th>
                                         <th style="padding: 10px 16px; color: var(--text-muted); font-weight: 500; width: 25%;">Status</th>
@@ -3399,10 +3825,10 @@ Builder{% endblock %} {% block content %}
                         : `<span style="background: rgba(245, 158, 11, 0.15); color: rgb(245, 158, 11); padding: 4px 8px; border-radius: 6px; font-weight: 500; font-size: 11px;">⚠ Unassigned</span>`;
                     
                     html += `
-                        <tr style="border-bottom: 1px solid var(--border-color);">
-                            <td style="padding: 12px 16px; font-weight: 500; color: var(--text-color);">${escapeHtml(role)}</td>
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <td style="padding: 12px 16px; font-weight: 500; color: var(--text);">${escapeHtml(role)}</td>
                             <td style="padding: 12px 16px;">
-                                <select class="form-control" style="width: 100%; padding: 6px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg);" 
+                                <select class="form-control" style="width: 100%; padding: 6px 10px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg);" 
                                         data-assignment-id="${escapeHtml(assignmentId)}"
                                         onfocus="this.oldValue = this.value;"
                                         onchange="handleAssignmentChange('${escapeHtml(ft.form_type_id)}', '${escapeHtml(role)}', this)"

@@ -7,7 +7,15 @@ from src.app.core.auth import get_current_user, get_current_user_optional
 from src.app.database import get_db
 from src.app.models.user import User
 from src.app.models.stage import StageFile
-from src.app.schemas.permission import EffectiveRoleSetResponse, StageRoleSetAssign
+from src.app.schemas.permission import (
+    EffectiveRoleSetResponse,
+    ProjectMemberAdd,
+    ProjectMemberResponse,
+    ProjectRolesResponse,
+    ProjectRolesUpdate,
+    RoleSetResponse,
+    StageRoleSetAssign,
+)
 from src.app.schemas.stage import (
     StageCreate,
     StageMoveRequest,
@@ -520,3 +528,97 @@ async def get_effective_role_set(stage_id: str, db: AsyncSession = Depends(get_d
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
     return await perm_service.get_effective_role_set(stage_id)
+
+
+# Project rosters — Roles/Members buckets scoping a whole project (depth-1
+# stage) and every stage below it.
+
+@router.put("/{stage_id}/project-roles", response_model=ProjectRolesResponse)
+async def set_project_roles(
+    stage_id: str,
+    data: ProjectRolesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fully replace a project's Roles roster. Empty = unrestricted."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    has_perm = await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_manage_permissions")
+    if not has_perm:
+        raise HTTPException(status_code=403, detail="Permission denied to manage this project's Roles roster.")
+    try:
+        return await perm_service.set_project_roles(stage_id, data.role_names)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{stage_id}/project-roles", response_model=ProjectRolesResponse)
+async def get_project_roles(stage_id: str, db: AsyncSession = Depends(get_db)):
+    """Get a project's current Roles roster."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    try:
+        role_names = await perm_service.list_project_roles(stage_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return ProjectRolesResponse(stage_id=stage_id, role_names=role_names)
+
+
+@router.post("/{stage_id}/project-members", status_code=201)
+async def add_project_member(
+    stage_id: str,
+    data: ProjectMemberAdd,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a user to a project's Members roster."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    has_perm = await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_manage_permissions")
+    if not has_perm:
+        raise HTTPException(status_code=403, detail="Permission denied to manage this project's Members roster.")
+    try:
+        return await perm_service.add_project_member(stage_id, data.user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/{stage_id}/project-members/{user_id}")
+async def remove_project_member(
+    stage_id: str,
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a user from a project's Members roster."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    has_perm = await perm_service.check_stage_permission(current_user.user_id, stage_id, "can_manage_permissions")
+    if not has_perm:
+        raise HTTPException(status_code=403, detail="Permission denied to manage this project's Members roster.")
+    try:
+        return await perm_service.remove_project_member(stage_id, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{stage_id}/project-members", response_model=List[ProjectMemberResponse])
+async def list_project_members(stage_id: str, db: AsyncSession = Depends(get_db)):
+    """List a project's Members roster."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    try:
+        return await perm_service.list_project_members(stage_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{stage_id}/project-role-sets", response_model=List[RoleSetResponse])
+async def list_project_role_sets(stage_id: str, db: AsyncSession = Depends(get_db)):
+    """List the global RoleSets that fit this project's Roles roster."""
+    from src.app.services.permission_service import PermissionService
+    perm_service = PermissionService(db)
+    try:
+        return await perm_service.list_project_role_sets(stage_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

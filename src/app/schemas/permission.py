@@ -247,6 +247,32 @@ class EffectiveRoleSetResponse(BaseModel):
     role_names: Optional[List[str]] = None
 
 
+class ProjectRolesUpdate(BaseModel):
+    """Schema for fully replacing a project's Roles roster."""
+
+    role_names: List[str] = Field(default_factory=list)
+
+
+class ProjectRolesResponse(BaseModel):
+    """Schema for a project's current Roles roster."""
+
+    stage_id: str
+    role_names: List[str]
+
+
+class ProjectMemberAdd(BaseModel):
+    """Schema for adding a user to a project's Members roster."""
+
+    user_id: str = Field(..., min_length=1, max_length=100)
+
+
+class ProjectMemberResponse(BaseModel):
+    """Schema for a user in a project's Members roster."""
+
+    user_id: str
+    username: str
+
+
 class UserProjectRoleCreate(BaseModel):
     """Schema for assigning a role to a user, scoped to a project (stage).
 

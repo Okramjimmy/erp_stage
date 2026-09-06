@@ -6,6 +6,8 @@ from src.app.models.form_type import FormType
 from src.app.models.permission import (
     CategoryPermission,
     FormTypePermission,
+    ProjectMember,
+    ProjectRole,
     Role,
     RoleSet,  # must be imported before Stage (Stage.role_set_id FK)
     RoleSetRole,
@@ -34,6 +36,8 @@ __all__ = [
     "Role",
     "RoleSet",
     "RoleSetRole",
+    "ProjectRole",
+    "ProjectMember",
     "UserProjectRole",
     "Group",
 ]

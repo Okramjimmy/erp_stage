@@ -210,6 +210,42 @@ class RoleSetRole(Base):
         return f"<RoleSetRole(role_set_id={self.role_set_id}, role_id={self.role_id})>"
 
 
+class ProjectRole(Base):
+    """A project's (depth-1 Stage) Roles roster: which global roles this
+    project uses at all. Every stage below the project is restricted to
+    these roles when assigning a UserProjectRole. Empty = unrestricted."""
+
+    __tablename__ = "project_roles"
+
+    stage_id = Column(
+        String(50), ForeignKey("stages.stage_id", ondelete="CASCADE"), primary_key=True
+    )
+    role_id = Column(
+        Integer, ForeignKey("roles.role_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    def __repr__(self):
+        return f"<ProjectRole(stage_id={self.stage_id}, role_id={self.role_id})>"
+
+
+class ProjectMember(Base):
+    """A project's (depth-1 Stage) Members roster: which users belong to
+    this project's team. Every stage below the project is restricted to
+    these users when assigning a UserProjectRole. Empty = unrestricted."""
+
+    __tablename__ = "project_members"
+
+    stage_id = Column(
+        String(50), ForeignKey("stages.stage_id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True
+    )
+
+    def __repr__(self):
+        return f"<ProjectMember(stage_id={self.stage_id}, user_id={self.user_id})>"
+
+
 class UserProjectRole(Base):
     """
     One row per (user, project/stage, role) assignment.
