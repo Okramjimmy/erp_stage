@@ -1175,6 +1175,13 @@ function renderProps(f){
         ${ftOpts}
       </select>
       ${noForms ? `<div class="form-hint" style="color:var(--warning)">No form types found. <a href="#" onclick="reloadFTDropdown(${f._id});return false">Reload</a></div>` : '<div class="form-hint">Form Type this field links to</div>'}
+    </div>
+    <div class="form-group">
+      <label class="form-check">
+        <input type="checkbox" ${f.same_project_only===false?'':'checked'} onchange="fieldUpd(${f._id},'same_project_only',this.checked)">
+        <span>Restrict to same project</span>
+      </label>
+      <div class="form-hint">Only offer/accept records that belong to the same project as this one</div>
     </div>`;
     if (f.options === 'Empty Table') {
       optField += `<div class="form-group" style="margin-top:10px">

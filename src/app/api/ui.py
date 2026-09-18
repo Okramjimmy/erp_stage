@@ -304,6 +304,7 @@ async def new_form_view(
     from src.app.services.permission_service import PermissionService
     perm_service = PermissionService(db)
     user_permissions = await perm_service.get_user_permissions(user.user_id)
+    project_stage_id = StageService.resolve_project_stage_id(stage) if stage else None
     return templates.TemplateResponse(
         "form_view.html",
         {
@@ -311,6 +312,7 @@ async def new_form_view(
             "form_type": form_type,
             "stage": stage,
             "record": None,
+            "project_stage_id": project_stage_id,
             "current_user": user,
             "current_user_roles": roles,
             "user_permissions": user_permissions,
@@ -348,6 +350,7 @@ async def edit_form_view(
             "form_type": form_type,
             "stage": stage,
             "record": record,
+            "project_stage_id": record.project_stage_id,
             "current_user": user,
             "current_user_roles": roles,
             "user_permissions": user_permissions,

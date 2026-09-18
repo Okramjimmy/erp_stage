@@ -22,6 +22,7 @@ class FormRecordResponse(BaseModel):
     record_id: str
     form_type_id: str
     stage_id: Optional[str]
+    project_stage_id: Optional[str] = None
     docname: str
     status: str
     assigned_role: Optional[str] = None

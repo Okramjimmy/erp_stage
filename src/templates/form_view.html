@@ -918,6 +918,7 @@
     const PARENT_RECORD_ID = {% if record and record.parent_record_id %}"{{ record.parent_record_id }}"{% else %}null{% endif %};
     const PARENT_FORM_TYPE_ID = {% if record and record.parent_form_type_id %}"{{ record.parent_form_type_id }}"{% else %}null{% endif %};
     const PARENT_FIELD_NAME = {% if record and record.parent_field_name %}"{{ record.parent_field_name }}"{% else %}null{% endif %};
+    const PROJECT_STAGE_ID = {% if project_stage_id %}"{{ project_stage_id }}"{% else %}null{% endif %};
     const STATUS = "{{ status }}";
     
     {% set js_perms = user_permissions.form_types.get(form_type.form_type_id, {}) if user_permissions else {} %}
@@ -1116,6 +1117,68 @@
       }
     }
 
+    // ── Link field: search-and-select existing records ──────────────────────────
+    const linkFormTypeIdCache = {};
+    const linkSearchTimers = {};
+
+    async function resolveLinkFormTypeId(formTypeName) {
+      if (linkFormTypeIdCache[formTypeName]) return linkFormTypeIdCache[formTypeName];
+      const fts = await apiFetch(`${API}/form-types/search?q=${encodeURIComponent(formTypeName)}&limit=5`);
+      const ft = fts.find(f => f.form_name === formTypeName);
+      if (ft) linkFormTypeIdCache[formTypeName] = ft.form_type_id;
+      return ft ? ft.form_type_id : null;
+    }
+
+    function onLinkSearchInput(fieldname, formTypeName, term) {
+      clearTimeout(linkSearchTimers[fieldname]);
+      linkSearchTimers[fieldname] = setTimeout(() => runLinkSearch(fieldname, formTypeName, term), 250);
+    }
+
+    async function runLinkSearch(fieldname, formTypeName, term) {
+      const dropdown = document.getElementById(`link-dropdown-${fieldname}`);
+      if (!dropdown) return;
+      const formTypeId = await resolveLinkFormTypeId(formTypeName);
+      if (!formTypeId) {
+        dropdown.style.display = 'none';
+        return;
+      }
+      const f = (SCHEMA.fields || []).find(x => x.fieldname === fieldname);
+      const sameProjectOnly = !f || f.same_project_only !== false;
+      let url = `${API}/form-records?form_type_id=${encodeURIComponent(formTypeId)}&limit=20`;
+      if (term) url += `&q=${encodeURIComponent(term)}`;
+      if (sameProjectOnly && PROJECT_STAGE_ID) url += `&project_stage_id=${encodeURIComponent(PROJECT_STAGE_ID)}`;
+      let res;
+      try {
+        res = await apiFetch(url);
+      } catch (e) {
+        dropdown.style.display = 'none';
+        return;
+      }
+      const items = (res.items || []).filter(r => r.record_id !== RECORD_ID);
+      if (items.length === 0) {
+        dropdown.innerHTML = `<div style="padding:8px 12px;color:var(--text-muted);font-size:13px;">No matching records${sameProjectOnly && PROJECT_STAGE_ID ? ' in this project' : ''}</div>`;
+      } else {
+        dropdown.innerHTML = items.map(r => `
+          <div class="link-dropdown-item" style="padding:8px 12px;cursor:pointer;font-size:13px;"
+               onmouseover="this.style.background='var(--bg-hover, #f3f4f6)'" onmouseout="this.style.background=''"
+               onmousedown="selectLinkOption('${fieldname}','${esc(r.docname)}')">
+            ${esc(r.docname)}
+          </div>`).join('');
+      }
+      dropdown.style.display = 'block';
+    }
+
+    function selectLinkOption(fieldname, docname) {
+      setVal(fieldname, docname);
+      closeLinkDropdown(fieldname);
+      renderForm();
+    }
+
+    function closeLinkDropdown(fieldname) {
+      const dropdown = document.getElementById(`link-dropdown-${fieldname}`);
+      if (dropdown) dropdown.style.display = 'none';
+    }
+
     // ── render form from schema ──────────────────────────────────────────────────
     const LAYOUT = new Set(['Section Break','Column Break','Tab Break','Heading','HTML','Field Group','Field Group End']);
 
@@ -1145,9 +1208,15 @@
               return `<div class="form-control" style="background:var(--bg);min-height:34px;padding-top:7px">—</div>`;
             }
             const arrowBtnId = `link-arrow-${f.fieldname}`;
-            return `<div style="display:flex;align-items:center;width:100%;gap:8px;">
-              <input type="text" class="form-control" style="pointer-events:none;opacity:0.65" placeholder="Not Linked" readonly>
-              <button type="button" class="btn btn-ghost btn-xs" style="padding:6px 10px;color:var(--primary);border:1px solid var(--border);border-radius:4px;background:var(--bg);margin:0;display:flex;align-items:center;justify-content:center;" onclick="addNewLinkedRecord('${f.options}', '${f.fieldname}')" id="${arrowBtnId}" title="Create a new ${esc(f.options)}">
+            const inputId = `link-search-${f.fieldname}`;
+            const dropdownId = `link-dropdown-${f.fieldname}`;
+            return `<div style="position:relative;display:flex;align-items:center;width:100%;gap:8px;">
+              <input type="text" class="form-control" id="${inputId}" placeholder="Search ${esc(f.options)}…" autocomplete="off"
+                oninput="onLinkSearchInput('${f.fieldname}', '${esc(f.options)}', this.value)"
+                onfocus="onLinkSearchInput('${f.fieldname}', '${esc(f.options)}', this.value)"
+                onblur="setTimeout(()=>closeLinkDropdown('${f.fieldname}'), 150)">
+              <div id="${dropdownId}" class="link-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:44px;z-index:50;background:var(--bg);border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);max-height:220px;overflow-y:auto;"></div>
+              <button type="button" class="btn btn-ghost btn-xs" style="padding:6px 10px;color:var(--primary);border:1px solid var(--border);border-radius:4px;background:var(--bg);margin:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;" onclick="addNewLinkedRecord('${f.options}', '${f.fieldname}')" id="${arrowBtnId}" title="Create a new ${esc(f.options)}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </button>
             </div>`;
@@ -1567,7 +1636,8 @@
         }
 
         // 3. Read Only (Read Only Depends On)
-        const isReadOnly = IS_READONLY || f.read_only || f.fieldtype === 'Link' || (f.read_only_depends_on && evalExpr(f.read_only_depends_on, docContext));
+        const isLinkedValue = f.fieldtype === 'Link' && !!docContext[f.fieldname];
+        const isReadOnly = IS_READONLY || f.read_only || isLinkedValue || (f.read_only_depends_on && evalExpr(f.read_only_depends_on, docContext));
         if (inputEl) {
           if (isReadOnly) {
             inputEl.setAttribute('readonly', 'true');

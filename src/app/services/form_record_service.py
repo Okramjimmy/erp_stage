@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.app.models.form_record import FormRecord
 from src.app.models.form_type import FormType
 from src.app.models.form_action import FormAction
+from src.app.models.stage import Stage
+from src.app.services.stage_service import StageService
 from src.app.schemas.form_record import (
     FormRecordCreate,
     FormRecordResponse,
@@ -59,6 +61,7 @@ class FormRecordService:
             "record_id": record.record_id,
             "form_type_id": record.form_type_id,
             "stage_id": record.stage_id,
+            "project_stage_id": record.project_stage_id,
             "docname": record.docname,
             "status": record.status,
             "assigned_role": record.assigned_role,
@@ -183,6 +186,7 @@ class FormRecordService:
                             record_id=child_record_id,
                             form_type_id=child_ft.form_type_id,
                             stage_id=parent_record.stage_id,
+                            project_stage_id=parent_record.project_stage_id,
                             docname=child_docname,
                             status="Draft",
                             assigned_role="worker",
@@ -237,6 +241,7 @@ class FormRecordService:
                         record_id=child_record_id,
                         form_type_id=child_ft.form_type_id,
                         stage_id=parent_record.stage_id,
+                        project_stage_id=parent_record.project_stage_id,
                         docname=child_docname,
                         status="Draft",
                         assigned_role="worker",
@@ -278,6 +283,16 @@ class FormRecordService:
                         )
                         existing_child = result.scalars().first()
                         if existing_child:
+                            same_project_only = field.get("same_project_only") is not False
+                            if (
+                                same_project_only
+                                and parent_record.project_stage_id
+                                and existing_child.project_stage_id
+                                and existing_child.project_stage_id != parent_record.project_stage_id
+                            ):
+                                raise ValueError(
+                                    f"'{val}' belongs to a different project and cannot be linked from '{fieldname}'"
+                                )
                             existing_child.parent_record_id = parent_record.record_id
                             existing_child.parent_form_type_id = parent_record.form_type_id
                             existing_child.parent_field_name = fieldname
@@ -515,10 +530,17 @@ class FormRecordService:
         # Process attachments
         processed_data = self._process_attachments(ft, payload.data, record_id)
 
+        project_stage_id = None
+        if payload.stage_id:
+            stage = await self.db.get(Stage, payload.stage_id)
+            if stage:
+                project_stage_id = StageService.resolve_project_stage_id(stage)
+
         record = FormRecord(
             record_id=record_id,
             form_type_id=payload.form_type_id,
             stage_id=payload.stage_id,
+            project_stage_id=project_stage_id,
             docname=docname,
             status="Draft",
             assigned_role="worker",
@@ -533,6 +555,10 @@ class FormRecordService:
             parent_field_name=payload.parent_field_name,
         )
         self.db.add(record)
+        # Flush so `record.record_id` exists as a valid FK target before
+        # _save_child_records below can point an existing linked record's
+        # parent_record_id back at it.
+        await self.db.flush()
 
         # Update parent record's data if present
         if payload.parent_record_id and payload.parent_field_name:
@@ -569,9 +595,18 @@ class FormRecordService:
         return self._parse(record, populated_data)
 
     async def list_by_form_type(
-        self, form_type_id: str, skip: int = 0, limit: int = 50
+        self,
+        form_type_id: str,
+        skip: int = 0,
+        limit: int = 50,
+        q_docname: Optional[str] = None,
+        project_stage_id: Optional[str] = None,
     ) -> tuple[List[FormRecordResponse], int]:
         q = select(FormRecord).where(FormRecord.form_type_id == form_type_id)
+        if q_docname:
+            q = q.where(FormRecord.docname.ilike(f"%{q_docname}%"))
+        if project_stage_id:
+            q = q.where(FormRecord.project_stage_id == project_stage_id)
         total_res = await self.db.execute(
             select(func.count()).select_from(q.subquery())
         )

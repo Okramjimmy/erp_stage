@@ -582,16 +582,9 @@ class PermissionService:
 
     def _resolve_project_stage_id(self, stage: Stage) -> Optional[str]:
         """Resolve the owning project (depth-1 Stage) for any stage in its
-        subtree, mirroring the pattern already used at
-        stage_service.py's wbs-prefix ancestor lookup: lineage_path[0] is
-        always the hidden 'stage_system' root, so lineage_path[1] is the
-        project for anything below depth 1. Returns None for the root
-        itself (depth 0) or an orphaned stage with no lineage."""
-        if stage.depth_level == 1:
-            return stage.stage_id
-        if stage.depth_level > 1 and stage.lineage_path and len(stage.lineage_path) > 1:
-            return stage.lineage_path[1]
-        return None
+        subtree. Delegates to StageService so the rule lives in one place."""
+        from src.app.services.stage_service import StageService
+        return StageService.resolve_project_stage_id(stage)
 
     async def set_project_roles(
         self, project_stage_id: str, role_names: List[str]

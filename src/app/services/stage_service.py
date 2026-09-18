@@ -46,6 +46,19 @@ class StageService:
         return "".join(random.choices(string.ascii_lowercase + string.digits, k=3))
 
     @staticmethod
+    def resolve_project_stage_id(stage: Stage) -> Optional[str]:
+        """Resolve the owning project (depth-1 Stage) for any stage in its
+        subtree: lineage_path[0] is always the hidden 'stage_system' root, so
+        lineage_path[1] is the project for anything below depth 1. Returns
+        None for the root itself (depth 0) or an orphaned stage with no
+        lineage."""
+        if stage.depth_level == 1:
+            return stage.stage_id
+        if stage.depth_level > 1 and stage.lineage_path and len(stage.lineage_path) > 1:
+            return stage.lineage_path[1]
+        return None
+
+    @staticmethod
     def extract_base_name(stage_name: str, prefix: Optional[str]) -> str:
         """Extract the raw base name of a stage, removing the WBS prefix and outline formatting if present."""
         if not stage_name:

@@ -17,6 +17,9 @@ class FormRecord(Base):
         index=True,
     )
     stage_id = Column(String(50), nullable=True)
+    project_stage_id = Column(
+        String(50), ForeignKey("stages.stage_id"), nullable=True, index=True
+    )
     docname = Column(String(255), nullable=False, index=True)
     status = Column(String(20), nullable=False, default="Draft")
     assigned_role = Column(String(50), nullable=True)

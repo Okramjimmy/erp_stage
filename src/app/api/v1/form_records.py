@@ -58,10 +58,14 @@ async def list_records(
     form_type_id: str = Query(...),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    q: Optional[str] = Query(None, description="Filter by docname substring (for Link pickers)"),
+    project_stage_id: Optional[str] = Query(None, description="Restrict to records belonging to this project"),
     db: AsyncSession = Depends(get_db),
 ):
     svc = FormRecordService(db)
-    items, total = await svc.list_by_form_type(form_type_id, skip=skip, limit=limit)
+    items, total = await svc.list_by_form_type(
+        form_type_id, skip=skip, limit=limit, q_docname=q, project_stage_id=project_stage_id
+    )
     return FormRecordList(items=items, total=total)
 
 
